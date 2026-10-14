@@ -39,7 +39,6 @@ jobs:
   owasp:
     name: OWASP Dependency Check
     runs-on: ubuntu-latest
-    if: ${{ secrets.NVD_API_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -48,6 +47,7 @@ jobs:
           java-version: "25"
           cache: maven
       - name: Dependency scan (OWASP)
+        if: ${{ secrets.NVD_API_KEY != '' }}
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: mvn -B -Dnvd.api.key=$NVD_API_KEY org.owasp:dependency-check-maven:check
