@@ -25,6 +25,8 @@ updates:
       interval: "weekly"
     open-pull-requests-limit: 5
     ignore:
+      - dependency-name: "actions/checkout"
+        versions: [">=8"]
       - dependency-name: "actions/setup-node"
         versions: [">=7"]
       - dependency-name: "actions/setup-java"
