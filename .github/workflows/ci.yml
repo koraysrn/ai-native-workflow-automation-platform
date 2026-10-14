@@ -27,9 +27,6 @@ jobs:
       - name: Format check (Spotless)
         run: mvn -B spotless:check
         working-directory: backend
-      - name: Dependency scan (OWASP)
-        run: mvn -B org.owasp:dependency-check-maven:check
-        working-directory: backend
       - name: Generate SBOM
         run: mvn -B org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom
         working-directory: backend
@@ -39,14 +36,29 @@ jobs:
           name: sbom-backend
           path: backend/target/bom.json
 
+  owasp:
+    name: OWASP Dependency Check
+    runs-on: ubuntu-latest
+    if: ${{ secrets.NVD_API_KEY != '' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+      - name: Dependency scan (OWASP)
+        env:
+          NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+        run: mvn -B -Dnvd.api.key=$NVD_API_KEY org.owasp:dependency-check-maven:check
+        working-directory: backend
+
   frontend:
-    name: Frontend (TypeScript 7.0.2 / Next.js 16)
+    name: Frontend (TypeScript 6.x / Next.js 16)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-        with:
-          version: 12
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -59,9 +71,12 @@ jobs:
       - name: Build
         run: pnpm build
         working-directory: frontend
+      - name: Lint
+        run: pnpm lint
+        working-directory: frontend
 
   ai-layer:
-    name: AI Layer (Python 3.15 / FastAPI)
+    name: AI Layer (Python 3.14 / FastAPI)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -80,7 +95,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Scan filesystem
-        uses: aquasecurity/trivy-action@0.28.0
+        uses: aquasecurity/trivy-action@0.36.0
         with:
           scan-type: fs
           scan-ref: .
