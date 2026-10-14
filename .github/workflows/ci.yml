@@ -47,10 +47,14 @@ jobs:
           java-version: "25"
           cache: maven
       - name: Dependency scan (OWASP)
-        if: ${{ secrets.NVD_API_KEY != '' }}
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
-        run: mvn -B -Dnvd.api.key=$NVD_API_KEY org.owasp:dependency-check-maven:check
+        run: |
+          if [ -n "$NVD_API_KEY" ]; then
+            mvn -B -Dnvd.api.key="$NVD_API_KEY" org.owasp:dependency-check-maven:check
+          else
+            echo "NVD_API_KEY not configured; skipping OWASP Dependency Check."
+          fi
         working-directory: backend
 
   frontend:
