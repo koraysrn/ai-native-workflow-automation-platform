@@ -35,6 +35,7 @@
         <spotless.version>3.10.4</spotless.version>
         <maven-checkstyle-plugin.version>3.6.0</maven-checkstyle-plugin.version>
         <pitest.version>1.30.1</pitest.version>
+        <maven-enforcer-plugin.version>3.6.3</maven-enforcer-plugin.version>
         <pitest-junit5.version>1.2.3</pitest-junit5.version>
         <jacoco.version>0.8.15</jacoco.version>
     </properties>
@@ -178,7 +179,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-enforcer-plugin</artifactId>
-                <version>3.5.0</version>
+                <version>${maven-enforcer-plugin.version}</version>
                 <executions>
                     <execution>
                         <id>enforce</id>
