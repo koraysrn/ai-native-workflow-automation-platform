@@ -58,6 +58,7 @@ jobs:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
           if [ -n "$NVD_API_KEY" ]; then
+            mvn -B -DskipTests install
             mvn -B -Dnvd.api.key="$NVD_API_KEY" org.owasp:dependency-check-maven:check
           else
             echo "NVD_API_KEY not configured; skipping OWASP Dependency Check."
