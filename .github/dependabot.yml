@@ -11,8 +11,24 @@ updates:
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 10
+    ignore:
+      - dependency-name: "typescript"
+        versions: ["7.x"]
+      - dependency-name: "@types/node"
+        versions: [">=26"]
+      - dependency-name: "eslint"
+        versions: [">=10"]
 
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
+    ignore:
+      - dependency-name: "actions/setup-node"
+        versions: [">=7"]
+      - dependency-name: "actions/upload-artifact"
+        versions: [">=7"]
+      - dependency-name: "docker/login-action"
+        versions: [">=4"]
+      - dependency-name: "docker/build-push-action"
+        versions: [">=7"]
