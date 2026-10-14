@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: awap-backend
+  namespace: awap
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: awap-backend
+  template:
+    metadata:
+      labels:
+        app: awap-backend
+    spec:
+      containers:
+        - name: backend
+          image: ghcr.io/awap/awap-backend:latest
+          ports:
+            - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+          livenessProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: awap-backend
+  namespace: awap
+spec:
+  selector:
+    app: awap-backend
+  ports:
+    - port: 8080
+      targetPort: 8080

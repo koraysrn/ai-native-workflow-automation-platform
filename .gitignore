@@ -1,0 +1,42 @@
+# ===== Temporary compatibility test artifacts =====
+compat-test/
+
+# ===== Java / Maven =====
+backend/**/target/
+*.class
+*.jar
+.mvn/timing.properties
+
+# ===== Node / Next.js =====
+node_modules/
+.next/
+out/
+dist/
+.pnpm-store/
+*.tsbuildinfo
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+.venv/
+.conda/
+.ruff_cache/
+*.egg-info/
+
+# ===== IDE =====
+.idea/
+.vscode/
+*.iml
+
+# ===== OS =====
+.DS_Store
+Thumbs.db
+
+# ===== Environment & secrets =====
+.env
+.env.*
+!.env.example
+secrets/
+
+# ===== Logs =====
+*.log

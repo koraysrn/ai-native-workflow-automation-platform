@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: awap-frontend
+  namespace: awap
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: awap-frontend
+  template:
+    metadata:
+      labels:
+        app: awap-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: ghcr.io/awap/awap-frontend:latest
+          ports:
+            - containerPort: 3000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: awap-frontend
+  namespace: awap
+spec:
+  selector:
+    app: awap-frontend
+  ports:
+    - port: 3000
+      targetPort: 3000

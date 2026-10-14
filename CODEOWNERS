@@ -1,0 +1,9 @@
+# Code owners for the AWAP monorepo.
+# Replace the placeholder teams with the actual GitHub teams/usernames.
+
+*               @awap-maintainers
+/backend/       @awap-maintainers
+/frontend/      @awap-maintainers
+/ai-layer/      @awap-maintainers
+/infra/         @awap-maintainers
+/docs/          @awap-maintainers

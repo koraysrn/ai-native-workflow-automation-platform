@@ -1,0 +1,19 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "lockFileMaintenance": {
+    "enabled": true
+  },
+  "packageRules": [
+    {
+      "matchDatasources": ["maven"],
+      "matchPackagePatterns": ["^org.springframework.boot:"],
+      "groupName": "Spring Boot"
+    },
+    {
+      "matchDatasources": ["pypi"],
+      "enabled": false
+    }
+  ],
+  "labels": ["dependencies"]
+}
