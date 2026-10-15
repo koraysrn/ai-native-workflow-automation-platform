@@ -8,4 +8,8 @@ import org.springframework.data.jpa.repository.JpaRepository;
 public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID> {
 
   Optional<RefreshToken> findByTokenHash(String tokenHash);
+
+  @org.springframework.data.jpa.repository.Query(
+      value = "SELECT * FROM awap_find_refresh_token(:tokenHash)", nativeQuery = true)
+  Optional<RefreshToken> findByTokenHashRls(String tokenHash);
 }

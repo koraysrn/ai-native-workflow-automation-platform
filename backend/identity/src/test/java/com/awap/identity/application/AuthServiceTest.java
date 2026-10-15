@@ -16,6 +16,7 @@ import com.awap.identity.infrastructure.TenantRepository;
 import com.awap.identity.infrastructure.UserRepository;
 import com.awap.identity.infrastructure.security.JwtService;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -50,8 +51,8 @@ class AuthServiceTest {
   void loginReturnsTokenPairForValidCredentials() {
     Tenant tenant = new Tenant("acme", "Acme", "FREE", 10, 5, 100);
     User user = new User(tenant.getId(), "admin@acme.com", "hash", "Admin", Role.TENANT_ADMIN);
-    when(tenantRepository.findBySlug("acme")).thenReturn(Optional.of(tenant));
-    when(userRepository.findByTenantIdAndEmail(tenant.getId(), "admin@acme.com"))
+    when(tenantRepository.findBySlugRls("acme")).thenReturn(Optional.of(tenant));
+    when(userRepository.findByTenantIdAndEmailRls(tenant.getId(), "admin@acme.com"))
         .thenReturn(Optional.of(user));
     when(passwordEncoder.matches("secret123", "hash")).thenReturn(true);
     when(jwtService.generateAccessToken(
@@ -72,8 +73,8 @@ class AuthServiceTest {
   void loginRejectsWrongPassword() {
     Tenant tenant = new Tenant("acme", "Acme", "FREE", 10, 5, 100);
     User user = new User(tenant.getId(), "admin@acme.com", "hash", "Admin", Role.TENANT_ADMIN);
-    when(tenantRepository.findBySlug("acme")).thenReturn(Optional.of(tenant));
-    when(userRepository.findByTenantIdAndEmail(tenant.getId(), "admin@acme.com"))
+    when(tenantRepository.findBySlugRls("acme")).thenReturn(Optional.of(tenant));
+    when(userRepository.findByTenantIdAndEmailRls(tenant.getId(), "admin@acme.com"))
         .thenReturn(Optional.of(user));
     when(passwordEncoder.matches("wrong", "hash")).thenReturn(false);
 
@@ -85,8 +86,10 @@ class AuthServiceTest {
   void refreshRotatesValidToken() {
     Tenant tenant = new Tenant("acme", "Acme", "FREE", 10, 5, 100);
     User user = new User(tenant.getId(), "admin@acme.com", "hash", "Admin", Role.TENANT_ADMIN);
-    RefreshToken stored = new RefreshToken(tenant.getId(), user.getId(), "hash", java.time.Instant.now().plusSeconds(60));
-    when(refreshTokenRepository.findByTokenHash(any(String.class))).thenReturn(Optional.of(stored));
+    RefreshToken stored =
+        new RefreshToken(tenant.getId(), user.getId(), "hash", Instant.now().plusSeconds(60));
+    when(refreshTokenRepository.findByTokenHashRls(any(String.class)))
+        .thenReturn(Optional.of(stored));
     when(userRepository.findById(user.getId())).thenReturn(Optional.of(user));
     when(jwtService.generateAccessToken(
             user.getId(), tenant.getId(), user.getEmail(), user.getRole()))

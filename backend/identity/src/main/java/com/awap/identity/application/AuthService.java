@@ -51,10 +51,10 @@ public class AuthService {
 
   @Transactional
   public TokenPair login(String tenantSlug, String email, String password) {
-    Tenant tenant = tenantRepository.findBySlug(tenantSlug).orElseThrow(this::invalidCredentials);
+    Tenant tenant = tenantRepository.findBySlugRls(tenantSlug).orElseThrow(this::invalidCredentials);
     User user =
         userRepository
-            .findByTenantIdAndEmail(tenant.getId(), email)
+            .findByTenantIdAndEmailRls(tenant.getId(), email)
             .orElseThrow(this::invalidCredentials);
     if (user.isLocked()) {
       throw lockedAccount();
@@ -72,7 +72,7 @@ public class AuthService {
   public TokenPair refresh(String rawRefreshToken) {
     RefreshToken stored =
         refreshTokenRepository
-            .findByTokenHash(hashToken(rawRefreshToken))
+            .findByTokenHashRls(hashToken(rawRefreshToken))
             .filter(token -> !token.isRevoked())
             .filter(token -> token.getExpiresAt().isAfter(Instant.now()))
             .orElseThrow(this::invalidRefreshToken);
