@@ -24,7 +24,9 @@ public class TenantContextTransactionAspect {
     this.dataSource = dataSource;
   }
 
-  @Before("@annotation(org.springframework.transaction.annotation.Transactional)")
+  @Before(
+      "execution(* *(..)) && (@annotation(org.springframework.transaction.annotation.Transactional)"
+          + " || @within(org.springframework.transaction.annotation.Transactional))")
   public void applyTenantContext() {
     TenantContext.current().ifPresent(this::setLocalTenant);
   }
