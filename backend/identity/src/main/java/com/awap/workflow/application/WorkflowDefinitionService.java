@@ -27,14 +27,17 @@ public class WorkflowDefinitionService {
   private final WorkflowDefinitionRepository definitionRepository;
   private final WorkflowVersionRepository versionRepository;
   private final ObjectMapper objectMapper;
+  private final SpelExpressionService spelExpressionService;
 
   public WorkflowDefinitionService(
       WorkflowDefinitionRepository definitionRepository,
       WorkflowVersionRepository versionRepository,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      SpelExpressionService spelExpressionService) {
     this.definitionRepository = definitionRepository;
     this.versionRepository = versionRepository;
     this.objectMapper = objectMapper;
+    this.spelExpressionService = spelExpressionService;
   }
 
   @Transactional
@@ -58,6 +61,17 @@ public class WorkflowDefinitionService {
 
   public WorkflowDefinitionResponse get(UUID tenantId, UUID id) {
     return toResponse(find(tenantId, id));
+  }
+
+  public WorkflowDefinition getPublished(UUID tenantId, UUID id) {
+    WorkflowDefinition definition = find(tenantId, id);
+    if (definition.getStatus() != WorkflowStatus.PUBLISHED) {
+      throw new AwapException(
+          ErrorCode.VALIDATION_FAILED,
+          HttpStatus.BAD_REQUEST,
+          "Workflow definition is not published.");
+    }
+    return definition;
   }
 
   @Transactional
@@ -121,6 +135,14 @@ public class WorkflowDefinitionService {
         String type = node.path("type").asText(null);
         if (type == null || !isSupportedType(type)) {
           throw invalidDefinition();
+        }
+        String expression = node.path("expression").asText(null);
+        if (expression != null) {
+          spelExpressionService.validate(expression);
+        }
+        String condition = node.path("condition").asText(null);
+        if (condition != null) {
+          spelExpressionService.validate(condition);
         }
       }
     } catch (JsonProcessingException ex) {

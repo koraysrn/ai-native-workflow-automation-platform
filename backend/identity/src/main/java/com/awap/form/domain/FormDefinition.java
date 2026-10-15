@@ -26,6 +26,9 @@ public class FormDefinition {
   private String schemaJson;
 
   @Column(nullable = false)
+  private int version;
+
+  @Column(nullable = false)
   private Instant createdAt;
 
   @Column(nullable = false)
@@ -41,6 +44,7 @@ public class FormDefinition {
     this.tenantId = tenantId;
     this.name = name;
     this.schemaJson = schemaJson;
+    this.version = 1;
     this.createdAt = Instant.now();
     this.updatedAt = Instant.now();
     this.deleted = false;
@@ -60,6 +64,10 @@ public class FormDefinition {
 
   public String getSchemaJson() {
     return schemaJson;
+  }
+
+  public int getVersion() {
+    return version;
   }
 
   public Instant getCreatedAt() {

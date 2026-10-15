@@ -5,4 +5,4 @@ import java.util.UUID;
 
 /** Public representation of a form definition. */
 public record FormDefinitionResponse(
-    UUID id, UUID tenantId, String name, String schemaJson, Instant createdAt) {}
+    UUID id, UUID tenantId, String name, String schemaJson, int version, Instant createdAt) {}

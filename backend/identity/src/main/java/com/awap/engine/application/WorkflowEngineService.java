@@ -10,9 +10,8 @@ import com.awap.engine.infrastructure.WorkflowInstanceRepository;
 import com.awap.engine.interfaces.dto.ExecutionLogResponse;
 import com.awap.engine.interfaces.dto.StartWorkflowRequest;
 import com.awap.engine.interfaces.dto.WorkflowInstanceResponse;
+import com.awap.workflow.application.WorkflowDefinitionService;
 import com.awap.workflow.domain.WorkflowDefinition;
-import com.awap.workflow.domain.WorkflowStatus;
-import com.awap.workflow.infrastructure.WorkflowDefinitionRepository;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -25,15 +24,15 @@ public class WorkflowEngineService {
 
   private final WorkflowInstanceRepository instanceRepository;
   private final ExecutionLogRepository executionLogRepository;
-  private final WorkflowDefinitionRepository definitionRepository;
+  private final WorkflowDefinitionService workflowDefinitionService;
 
   public WorkflowEngineService(
       WorkflowInstanceRepository instanceRepository,
       ExecutionLogRepository executionLogRepository,
-      WorkflowDefinitionRepository definitionRepository) {
+      WorkflowDefinitionService workflowDefinitionService) {
     this.instanceRepository = instanceRepository;
     this.executionLogRepository = executionLogRepository;
-    this.definitionRepository = definitionRepository;
+    this.workflowDefinitionService = workflowDefinitionService;
   }
 
   @Transactional
@@ -47,20 +46,7 @@ public class WorkflowEngineService {
     }
 
     WorkflowDefinition definition =
-        definitionRepository
-            .findByIdAndTenantIdAndDeletedFalse(request.workflowDefinitionId(), tenantId)
-            .orElseThrow(
-                () ->
-                    new AwapException(
-                        ErrorCode.RESOURCE_NOT_FOUND,
-                        HttpStatus.NOT_FOUND,
-                        "Workflow definition not found."));
-    if (definition.getStatus() != WorkflowStatus.PUBLISHED) {
-      throw new AwapException(
-          ErrorCode.VALIDATION_FAILED,
-          HttpStatus.BAD_REQUEST,
-          "Workflow definition is not published.");
-    }
+        workflowDefinitionService.getPublished(tenantId, request.workflowDefinitionId());
 
     WorkflowInstance instance =
         new WorkflowInstance(

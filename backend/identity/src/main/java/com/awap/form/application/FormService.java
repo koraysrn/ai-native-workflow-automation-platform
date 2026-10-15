@@ -147,6 +147,7 @@ public class FormService {
         definition.getTenantId(),
         definition.getName(),
         definition.getSchemaJson(),
+        definition.getVersion(),
         definition.getCreatedAt());
   }
 

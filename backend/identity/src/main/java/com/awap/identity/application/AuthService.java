@@ -46,15 +46,21 @@ public class AuthService {
     this.passwordEncoder = passwordEncoder;
   }
 
+  @Transactional
   public TokenPair login(String tenantSlug, String email, String password) {
     Tenant tenant = tenantRepository.findBySlug(tenantSlug).orElseThrow(this::invalidCredentials);
     User user =
         userRepository
             .findByTenantIdAndEmail(tenant.getId(), email)
             .orElseThrow(this::invalidCredentials);
+    if (user.isLocked()) {
+      throw lockedAccount();
+    }
     if (!passwordEncoder.matches(password, user.getPasswordHash())) {
+      user.registerFailedLogin();
       throw invalidCredentials();
     }
+    user.resetFailedLogin();
     return issueTokens(user);
   }
 
@@ -129,5 +135,10 @@ public class AuthService {
         ErrorCode.REFRESH_TOKEN_INVALID,
         HttpStatus.UNAUTHORIZED,
         "Refresh token is invalid or expired.");
+  }
+
+  private AwapException lockedAccount() {
+    return new AwapException(
+        ErrorCode.ACCOUNT_LOCKED, HttpStatus.LOCKED, "Account is temporarily locked.");
   }
 }

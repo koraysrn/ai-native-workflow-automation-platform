@@ -10,7 +10,8 @@ public enum ErrorCode {
   INVALID_CREDENTIALS("AWAP-IDN-0001", "Invalid credentials."),
   TENANT_ALREADY_EXISTS("AWAP-IDN-0002", "A tenant with this slug already exists."),
   REFRESH_TOKEN_INVALID("AWAP-IDN-0003", "The refresh token is invalid or expired."),
-  TENANT_NOT_FOUND("AWAP-IDN-0004", "The tenant was not found.");
+  TENANT_NOT_FOUND("AWAP-IDN-0004", "The tenant was not found."),
+  ACCOUNT_LOCKED("AWAP-IDN-0005", "Account is temporarily locked.");
 
   private final String code;
   private final String defaultTitle;

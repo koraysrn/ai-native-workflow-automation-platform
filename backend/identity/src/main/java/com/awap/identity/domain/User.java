@@ -6,6 +6,7 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
@@ -40,6 +41,12 @@ public class User {
   @Column(nullable = false)
   private Instant updatedAt;
 
+  @Column(name = "failed_login_attempts", nullable = false)
+  private int failedLoginAttempts;
+
+  @Column(name = "locked_until")
+  private Instant lockedUntil;
+
   @Column(nullable = false)
   private boolean deleted;
 
@@ -55,6 +62,25 @@ public class User {
     this.createdAt = Instant.now();
     this.updatedAt = Instant.now();
     this.deleted = false;
+    this.failedLoginAttempts = 0;
+    this.lockedUntil = null;
+  }
+
+  public boolean isLocked() {
+    return lockedUntil != null && lockedUntil.isAfter(Instant.now());
+  }
+
+  public void registerFailedLogin() {
+    failedLoginAttempts++;
+    if (failedLoginAttempts >= 5) {
+      lockedUntil = Instant.now().plus(Duration.ofMinutes(15));
+      failedLoginAttempts = 0;
+    }
+  }
+
+  public void resetFailedLogin() {
+    failedLoginAttempts = 0;
+    lockedUntil = null;
   }
 
   public UUID getId() {
