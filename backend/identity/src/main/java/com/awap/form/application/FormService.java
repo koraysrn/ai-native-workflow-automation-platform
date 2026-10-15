@@ -45,6 +45,14 @@ public class FormService {
     return toResponse(definition);
   }
 
+  @Transactional
+  public FormDefinitionResponse update(UUID tenantId, UUID id, FormDefinitionRequest request) {
+    validateSchema(request.schemaJson());
+    FormDefinition definition = find(tenantId, id);
+    definition.updateSchema(request.name(), request.schemaJson());
+    return toResponse(definition);
+  }
+
   public List<FormDefinitionResponse> list(UUID tenantId) {
     return definitionRepository.findByTenantIdAndDeletedFalse(tenantId).stream()
         .map(this::toResponse)

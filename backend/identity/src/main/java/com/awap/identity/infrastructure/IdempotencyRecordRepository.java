@@ -7,5 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 /** Data access for idempotency records. */
 public interface IdempotencyRecordRepository extends JpaRepository<IdempotencyRecord, UUID> {
 
-  boolean existsByTenantIdAndIdempotencyKey(UUID tenantId, String idempotencyKey);
+  java.util.Optional<IdempotencyRecord> findByTenantIdAndIdempotencyKey(
+      UUID tenantId, String idempotencyKey);
 }

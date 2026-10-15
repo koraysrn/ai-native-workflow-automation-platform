@@ -16,6 +16,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -46,6 +47,12 @@ public class FormController {
   @GetMapping("/{id}")
   public ResponseEntity<FormDefinitionResponse> get(@PathVariable UUID id) {
     return ResponseEntity.ok(formService.get(currentTenantId(), id));
+  }
+
+  @PutMapping("/{id}")
+  public ResponseEntity<FormDefinitionResponse> update(
+      @PathVariable UUID id, @Valid @RequestBody FormDefinitionRequest request) {
+    return ResponseEntity.ok(formService.update(currentTenantId(), id, request));
   }
 
   @PostMapping("/{id}/submissions")

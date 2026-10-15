@@ -50,6 +50,13 @@ public class FormDefinition {
     this.deleted = false;
   }
 
+  public void updateSchema(String name, String schemaJson) {
+    this.name = name;
+    this.schemaJson = schemaJson;
+    this.version++;
+    this.updatedAt = Instant.now();
+  }
+
   public UUID getId() {
     return id;
   }

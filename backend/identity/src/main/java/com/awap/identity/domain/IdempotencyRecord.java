@@ -22,6 +22,15 @@ public class IdempotencyRecord {
   @Column(name = "idempotency_key", nullable = false)
   private String idempotencyKey;
 
+  @Column(name = "response_status", nullable = false)
+  private int responseStatus;
+
+  @Column(name = "response_body", columnDefinition = "TEXT")
+  private String responseBody;
+
+  @Column(name = "response_content_type")
+  private String responseContentType;
+
   @Column(nullable = false)
   private Instant createdAt;
 
@@ -31,7 +40,14 @@ public class IdempotencyRecord {
     this.id = UUID.randomUUID();
     this.tenantId = tenantId;
     this.idempotencyKey = idempotencyKey;
+    this.responseStatus = 0;
     this.createdAt = Instant.now();
+  }
+
+  public void setResponse(int status, String body, String contentType) {
+    this.responseStatus = status;
+    this.responseBody = body;
+    this.responseContentType = contentType;
   }
 
   public UUID getId() {
@@ -48,5 +64,17 @@ public class IdempotencyRecord {
 
   public Instant getCreatedAt() {
     return createdAt;
+  }
+
+  public int getResponseStatus() {
+    return responseStatus;
+  }
+
+  public String getResponseBody() {
+    return responseBody;
+  }
+
+  public String getResponseContentType() {
+    return responseContentType;
   }
 }

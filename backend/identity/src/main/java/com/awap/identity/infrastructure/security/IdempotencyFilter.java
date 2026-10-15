@@ -7,13 +7,16 @@ import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
+import org.springframework.web.util.ContentCachingResponseWrapper;
 
-/** Rejects duplicate mutating requests carrying an already-used Idempotency-Key header. */
+/** Replays a previous response for a duplicate Idempotency-Key; otherwise caches the response. */
 @Component
 public class IdempotencyFilter extends OncePerRequestFilter {
 
@@ -41,19 +44,51 @@ public class IdempotencyFilter extends OncePerRequestFilter {
     String key = request.getHeader("Idempotency-Key");
     UUID tenantId = TenantContext.current().get().tenantId();
 
-    if (idempotencyRecordRepository.existsByTenantIdAndIdempotencyKey(tenantId, key)) {
-      writeConflict(response);
+    Optional<IdempotencyRecord> existing =
+        idempotencyRecordRepository.findByTenantIdAndIdempotencyKey(tenantId, key);
+    if (existing.isPresent()) {
+      replay(existing.get(), response);
       return;
     }
 
+    IdempotencyRecord record = new IdempotencyRecord(tenantId, key);
     try {
-      idempotencyRecordRepository.save(new IdempotencyRecord(tenantId, key));
+      idempotencyRecordRepository.save(record);
     } catch (DataIntegrityViolationException ex) {
-      writeConflict(response);
+      Optional<IdempotencyRecord> raced =
+          idempotencyRecordRepository.findByTenantIdAndIdempotencyKey(tenantId, key);
+      if (raced.isPresent()) {
+        replay(raced.get(), response);
+      } else {
+        writeConflict(response);
+      }
       return;
     }
 
-    filterChain.doFilter(request, response);
+    ContentCachingResponseWrapper wrapper = new ContentCachingResponseWrapper(response);
+    try {
+      filterChain.doFilter(request, wrapper);
+    } finally {
+      byte[] body = wrapper.getContentAsByteArray();
+      record.setResponse(
+          wrapper.getStatus(), new String(body, StandardCharsets.UTF_8), wrapper.getContentType());
+      idempotencyRecordRepository.save(record);
+      wrapper.copyBodyToResponse();
+    }
+  }
+
+  private void replay(IdempotencyRecord record, HttpServletResponse response) throws IOException {
+    if (record.getResponseStatus() == 0) {
+      writeConflict(response);
+      return;
+    }
+    response.setStatus(record.getResponseStatus());
+    if (record.getResponseContentType() != null) {
+      response.setContentType(record.getResponseContentType());
+    }
+    if (record.getResponseBody() != null) {
+      response.getWriter().write(record.getResponseBody());
+    }
   }
 
   private void writeConflict(HttpServletResponse response) throws IOException {
