@@ -3,12 +3,15 @@ package com.awap.identity;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.persistence.autoconfigure.EntityScan;
+import org.springframework.core.Ordered;
 import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
+import org.springframework.transaction.annotation.EnableTransactionManagement;
 
 /** Entry point of the AWAP Backend application (modular monolith). */
 @SpringBootApplication(scanBasePackages = "com.awap")
 @EntityScan(basePackages = "com.awap")
 @EnableJpaRepositories(basePackages = "com.awap")
+@EnableTransactionManagement(order = Ordered.LOWEST_PRECEDENCE - 10)
 public class IdentityApplication {
 
   public static void main(String[] args) {

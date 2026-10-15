@@ -89,6 +89,7 @@ public class AuthService {
     refreshTokenRepository.findByTokenHash(hashToken(rawRefreshToken)).ifPresent(RefreshToken::revoke);
   }
 
+  @Transactional(readOnly = true)
   public User me(UUID userId) {
     return userRepository
         .findById(userId)
