@@ -6,7 +6,11 @@ public enum ErrorCode {
   VALIDATION_FAILED("AWAP-COMMON-0002", "Request validation failed."),
   RESOURCE_NOT_FOUND("AWAP-COMMON-0003", "The requested resource was not found."),
   UNAUTHORIZED("AWAP-COMMON-0004", "Authentication is required."),
-  FORBIDDEN("AWAP-COMMON-0005", "Access to the requested resource is forbidden.");
+  FORBIDDEN("AWAP-COMMON-0005", "Access to the requested resource is forbidden."),
+  INVALID_CREDENTIALS("AWAP-IDN-0001", "Invalid credentials."),
+  TENANT_ALREADY_EXISTS("AWAP-IDN-0002", "A tenant with this slug already exists."),
+  REFRESH_TOKEN_INVALID("AWAP-IDN-0003", "The refresh token is invalid or expired."),
+  TENANT_NOT_FOUND("AWAP-IDN-0004", "The tenant was not found.");
 
   private final String code;
   private final String defaultTitle;

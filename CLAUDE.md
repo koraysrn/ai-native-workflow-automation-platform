@@ -4,7 +4,7 @@ This document contains the binding rules for all human developers and AI agents 
 
 Rules cannot be violated.
 
-**Document Version:** 2.0.0
+**Document Version:** 2.1.0
 
 **Change Procedure:** This document can only be changed via a PR accompanied by an ADR (Architecture Decision Record). Every change is versioned with semver (MAJOR.MINOR.PATCH).
 
@@ -18,9 +18,9 @@ The language and platform versions to be used throughout the project are fixed a
 |---|---|
 | Java | Java 25 (LTS) |
 | Spring Boot | 4.1.1 (fixed version) |
-| Python | Python 3.15.0 |
-| TypeScript | TypeScript 7.0.2 |
-| Node.js | The current LTS version supported by TypeScript 7.0.2 and Next.js |
+| Python | Python 3.14 (conda) |
+| TypeScript | TypeScript 6.x (ESLint-compatible) |
+| Node.js | The current LTS version supported by TypeScript 6.x and Next.js |
 
 Mandatory rules to prevent version incompatibilities:
 
@@ -29,8 +29,8 @@ Mandatory rules to prevent version incompatibilities:
 3. On every version upgrade, OWASP Dependency Scan and `mvn verify` / `npm run build` / `uv sync` must pass without errors.
 4. Any PR containing an incompatible version is automatically rejected (CI fail).
 5. `--release 25` is used for the `Java 25` build; bytecode compiled with higher/earlier versions is not accepted.
-6. For `Python 3.15.0`, the LangChain/LangGraph/FastAPI dependencies cannot be merged without verifying 3.15 compatibility.
-7. For `TypeScript 7.0.2`, the compatibility of Next.js, React, and all `@types/*` packages is verified with `npm run typecheck`.
+6. For `Python 3.14`, the LangChain/LangGraph/FastAPI dependencies cannot be merged without verifying 3.14 compatibility.
+7. For `TypeScript 6.x`, the compatibility of Next.js, React, and all `@types/*` packages is verified with `pnpm typecheck`.
 8. Every version change is recorded in the `COMPATIBILITY.md` compatibility matrix.
 9. An SBOM (Software Bill of Materials) is generated for every release.
 10. Multiple versions of the same library cannot exist in the dependency tree (dependency convergence).
@@ -178,7 +178,7 @@ Script execution (SCRIPT node) is performed inside a sandbox, with limited privi
 
 # AI Rules
 
-The AI Layer will be developed with Python 3.15.0.
+The AI Layer will be developed with Python 3.14 (conda).
 
 Prompts will be versioned.
 
@@ -342,7 +342,7 @@ All CI gates (build, test, static analysis, dependency scan) must pass before a 
 
 # Frontend Rules
 
-TypeScript 7.0.2 will be used.
+TypeScript 6.x (ESLint-compatible) will be used.
 
 TypeScript strict mode is mandatory.
 

@@ -38,6 +38,7 @@
         <maven-enforcer-plugin.version>3.6.3</maven-enforcer-plugin.version>
         <pitest-junit5.version>1.2.3</pitest-junit5.version>
         <jacoco.version>0.8.15</jacoco.version>
+        <jjwt.version>0.12.6</jjwt.version>
     </properties>
 
     <dependencyManagement>
