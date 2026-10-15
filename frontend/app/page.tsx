@@ -17,7 +17,7 @@ export default function Home() {
       const tokens = await login(tenantSlug, email, password);
       localStorage.setItem("awap_access_token", tokens.accessToken);
       localStorage.setItem("awap_refresh_token", tokens.refreshToken);
-      setMessage("Login successful");
+      window.location.href = "/dashboard";
     } catch {
       setMessage("Login failed");
     }

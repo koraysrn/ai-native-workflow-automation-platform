@@ -23,11 +23,15 @@ public class SecurityConfig {
 
   private final JwtAuthenticationFilter jwtAuthenticationFilter;
   private final AuthRateLimitFilter authRateLimitFilter;
+  private final IdempotencyFilter idempotencyFilter;
 
   public SecurityConfig(
-      JwtAuthenticationFilter jwtAuthenticationFilter, AuthRateLimitFilter authRateLimitFilter) {
+      JwtAuthenticationFilter jwtAuthenticationFilter,
+      AuthRateLimitFilter authRateLimitFilter,
+      IdempotencyFilter idempotencyFilter) {
     this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     this.authRateLimitFilter = authRateLimitFilter;
+    this.idempotencyFilter = idempotencyFilter;
   }
 
   @Bean
@@ -58,7 +62,8 @@ public class SecurityConfig {
                     .anyRequest()
                     .authenticated())
         .addFilterBefore(authRateLimitFilter, UsernamePasswordAuthenticationFilter.class)
-        .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+        .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+        .addFilterAfter(idempotencyFilter, UsernamePasswordAuthenticationFilter.class);
     return http.build();
   }
 }

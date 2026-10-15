@@ -17,6 +17,8 @@ import java.time.Instant;
 import java.util.Base64;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -25,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AuthService {
 
+  private static final Logger LOGGER = LoggerFactory.getLogger(AuthService.class);
   private static final SecureRandom SECURE_RANDOM = new SecureRandom();
 
   private final TenantRepository tenantRepository;
@@ -58,6 +61,7 @@ public class AuthService {
     }
     if (!passwordEncoder.matches(password, user.getPasswordHash())) {
       user.registerFailedLogin();
+      LOGGER.warn("Login failed for tenant '{}' user '{}'", tenantSlug, mask(email));
       throw invalidCredentials();
     }
     user.resetFailedLogin();
@@ -128,6 +132,14 @@ public class AuthService {
   private AwapException invalidCredentials() {
     return new AwapException(
         ErrorCode.INVALID_CREDENTIALS, HttpStatus.UNAUTHORIZED, "Invalid credentials.");
+  }
+
+  private String mask(String email) {
+    int at = email.indexOf('@');
+    if (at <= 0) {
+      return "***";
+    }
+    return email.charAt(0) + "***" + email.substring(at);
   }
 
   private AwapException invalidRefreshToken() {

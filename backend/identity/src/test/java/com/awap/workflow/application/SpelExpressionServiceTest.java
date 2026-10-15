@@ -34,6 +34,12 @@ class SpelExpressionServiceTest {
     assertThat(result).isEqualTo(11);
   }
 
+  @Test
+  void evaluatesWhitelistedFunction() {
+    Object result = service.evaluate("hasRole('manager', 'manager')", new SpelFunctions());
+    assertThat(result).isEqualTo(true);
+  }
+
   static final class Holder {
     public final int amount;
 
