@@ -5,7 +5,7 @@
 Frontend
 
 - Next.js
-- TypeScript 7.0.2
+- TypeScript 6.x
 - React Query
 - React Flow
 - Tailwind
@@ -21,7 +21,7 @@ Backend
 
 AI Layer
 
-- Python 3.15.0
+- Python 3.14 (conda)
 - FastAPI
 - LangGraph
 - LangChain
@@ -51,25 +51,25 @@ Deployment
 | Java | Java 25 | Compiled with `--release 25` |
 | Spring Boot | 4.1.1 | Fixed version |
 | Spring Modulith | Latest stable version compatible with Boot 4.1.1 | Managed via Boot BOM |
-| Python | Python 3.15.0 | Pinned with `uv` |
-| FastAPI | Latest version supporting 3.15 | Pinned with `uv.lock` |
-| LangChain / LangGraph | Version verified for 3.15 compatibility | Pinned with `uv.lock` |
-| TypeScript | TypeScript 7.0.2 | Native compiler version |
-| Node.js | Current LTS | Compatible with TS 7.0.2 + Next.js |
-| Next.js | Version compatible with TS 7.0.2 | Pinned with `package-lock.json` |
-| React / @types/* | Version compatible with TS 7.0.2 | Verified with `npm run typecheck` |
+| Python | Python 3.14 (conda) | Pinned with `environment.yml` |
+| FastAPI | Latest version supporting 3.14 | Pinned with `environment.yml` |
+| LangChain / LangGraph | Version verified for 3.14 compatibility | Pinned with `environment.yml` (pip) |
+| TypeScript | TypeScript 6.x | ESLint-compatible version |
+| Node.js | Current LTS | Compatible with TS 6.x + Next.js |
+| Next.js | Version compatible with TS 6.x | Pinned with `pnpm-lock.yaml` |
+| React / @types/* | Version compatible with TS 6.x | Verified with `pnpm typecheck` |
 
 Mandatory measures against version incompatibility:
 
 - All libraries are selected from their latest stable versions.
-- All dependencies are pinned with lock files: Maven BOM (`pom.xml`), `package-lock.json`/`pnpm-lock.yaml`, `uv.lock`.
+- All dependencies are pinned with lock files: Maven BOM (`pom.xml`), `pnpm-lock.yaml`, `environment.yml` (conda).
 - Version upgrades are performed only with Renovate/Dependabot + CI verification.
-- On every PR: `mvn verify`, `npm run build`, `npm run typecheck`, `uv sync`, and OWASP Dependency Scan are run.
+- On every PR: `mvn verify`, `pnpm build`, `pnpm typecheck`, `conda env create -f environment.yml` (or `conda env update`), and OWASP Dependency Scan are run.
 - A PR containing an incompatible version is automatically rejected (CI fail).
 - An SBOM is generated for every release.
 - Multiple versions of the same library cannot exist in the dependency tree (dependency convergence).
 - This matrix is updated on every version change.
-- Python 3.15.0 ecosystem risk: Before starting development, a pilot `uv sync` + build/compatibility test of the AI libraries (including C-based dependencies) is performed; detection of incompatible libraries is reported early.
+- Python 3.14 ecosystem risk: Before starting development, a pilot `conda env create -f environment.yml` + build/compatibility test of the AI libraries (including C-based dependencies) is performed; detection of incompatible libraries is reported early.
 - Spring Boot 4.x compatibility: The third-party Spring ecosystem plugins used (Spring Security, Spring Data, Modulith, Kafka, etc.) are continuously tracked against the Boot 4.1.1 compatibility matrix.
 
 ---

@@ -1,0 +1,7 @@
+extends:
+  - "spectral:oas"
+rules:
+  operation-operationId: error
+  operation-description: warn
+  path-params: error
+  openapi-tags: warn

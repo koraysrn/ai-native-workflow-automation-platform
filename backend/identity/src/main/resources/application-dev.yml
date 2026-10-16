@@ -1,3 +1,8 @@
+awap:
+  security:
+    jwt:
+      secret: dev-only-secret-0123456789abcdef0123456789abcdef
+
 logging:
   level:
     com.awap: DEBUG

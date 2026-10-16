@@ -1,0 +1,49 @@
+-- Enforce tenant isolation: remove the safe-rollout fallback so RLS is mandatory.
+-- When awap.tenant_id is not set, the predicate evaluates to null -> no rows.
+
+DROP POLICY tenants_isolation ON tenants;
+DROP POLICY users_isolation ON users;
+DROP POLICY refresh_tokens_isolation ON refresh_tokens;
+DROP POLICY workflow_definitions_isolation ON workflow_definitions;
+DROP POLICY workflow_versions_isolation ON workflow_versions;
+DROP POLICY tasks_isolation ON tasks;
+DROP POLICY form_definitions_isolation ON form_definitions;
+DROP POLICY form_submissions_isolation ON form_submissions;
+DROP POLICY workflow_instances_isolation ON workflow_instances;
+DROP POLICY execution_logs_isolation ON execution_logs;
+DROP POLICY companies_isolation ON companies;
+DROP POLICY departments_isolation ON departments;
+DROP POLICY teams_isolation ON teams;
+DROP POLICY positions_isolation ON positions;
+DROP POLICY organization_users_isolation ON organization_users;
+
+CREATE POLICY tenants_isolation ON tenants
+    USING (id = current_setting('awap.tenant_id', true)::uuid);
+CREATE POLICY users_isolation ON users
+    USING (tenant_id = current_setting('awap.tenant_id', true)::uuid);
+CREATE POLICY refresh_tokens_isolation ON refresh_tokens
+    USING (tenant_id = current_setting('awap.tenant_id', true)::uuid);
+CREATE POLICY workflow_definitions_isolation ON workflow_definitions
+    USING (tenant_id = current_setting('awap.tenant_id', true)::uuid);
+CREATE POLICY workflow_versions_isolation ON workflow_versions
+    USING (tenant_id = current_setting('awap.tenant_id', true)::uuid);
+CREATE POLICY tasks_isolation ON tasks
+    USING (tenant_id = current_setting('awap.tenant_id', true)::uuid);
+CREATE POLICY form_definitions_isolation ON form_definitions
+    USING (tenant_id = current_setting('awap.tenant_id', true)::uuid);
+CREATE POLICY form_submissions_isolation ON form_submissions
+    USING (tenant_id = current_setting('awap.tenant_id', true)::uuid);
+CREATE POLICY workflow_instances_isolation ON workflow_instances
+    USING (tenant_id = current_setting('awap.tenant_id', true)::uuid);
+CREATE POLICY execution_logs_isolation ON execution_logs
+    USING (tenant_id = current_setting('awap.tenant_id', true)::uuid);
+CREATE POLICY companies_isolation ON companies
+    USING (tenant_id = current_setting('awap.tenant_id', true)::uuid);
+CREATE POLICY departments_isolation ON departments
+    USING (tenant_id = current_setting('awap.tenant_id', true)::uuid);
+CREATE POLICY teams_isolation ON teams
+    USING (tenant_id = current_setting('awap.tenant_id', true)::uuid);
+CREATE POLICY positions_isolation ON positions
+    USING (tenant_id = current_setting('awap.tenant_id', true)::uuid);
+CREATE POLICY organization_users_isolation ON organization_users
+    USING (tenant_id = current_setting('awap.tenant_id', true)::uuid);

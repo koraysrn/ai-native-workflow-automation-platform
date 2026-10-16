@@ -4,6 +4,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
@@ -132,7 +133,6 @@ jobs:
   sonarqube:
     name: SonarQube analysis
     runs-on: ubuntu-latest
-    if: ${{ secrets.SONAR_TOKEN != '' }}
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-java@v6
@@ -143,5 +143,10 @@ jobs:
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        run: mvn -B sonar:sonar -Dsonar.projectKey=awap -Dsonar.host.url="$SONAR_HOST_URL"
+        run: |
+          if [ -n "$SONAR_TOKEN" ]; then
+            mvn -B sonar:sonar -Dsonar.projectKey=awap -Dsonar.host.url="$SONAR_HOST_URL"
+          else
+            echo "SONAR_TOKEN not configured; skipping SonarQube analysis."
+          fi
         working-directory: backend
