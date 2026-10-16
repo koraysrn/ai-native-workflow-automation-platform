@@ -4,12 +4,16 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.UUID;
 
 /** Stores an idempotency key for a tenant to prevent duplicate mutating requests. */
 @Entity
-@Table(name = "idempotency_records")
+@Table(
+    name = "idempotency_records",
+    uniqueConstraints =
+        @UniqueConstraint(name = "uq_idempotency_records", columnNames = {"tenant_id", "idempotency_key"}))
 public class IdempotencyRecord {
 
   @Id
