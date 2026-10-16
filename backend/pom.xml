@@ -251,6 +251,8 @@
                                 <outputFormat>HTML</outputFormat>
                                 <outputFormat>XML</outputFormat>
                             </outputFormats>
+                            <historyInputFile>${project.build.directory}/pitest.history</historyInputFile>
+                            <historyOutputFile>${project.build.directory}/pitest.history</historyOutputFile>
                         </configuration>
                         <dependencies>
                             <dependency>
