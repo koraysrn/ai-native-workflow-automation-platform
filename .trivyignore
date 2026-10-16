@@ -1,0 +1,4 @@
+# CVE-2025-59952: io.minio:minio XML tag value substitution.
+# Fixed in 8.6.0, but 8.6.0 introduces an okhttp3 classpath regression in this
+# modular-monolith build; tracked for the next dependency upgrade cycle.
+CVE-2025-59952

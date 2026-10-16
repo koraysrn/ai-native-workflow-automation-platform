@@ -1,0 +1,6 @@
+[allowlist]
+description = "Test-only fake JWT secrets are not real credentials"
+paths = [
+  "backend/identity/src/test/resources/application.yml",
+  "backend/identity/src/test/java/com/awap/identity/infrastructure/security/JwtServiceTest.java",
+]
