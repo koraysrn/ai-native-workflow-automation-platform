@@ -1,0 +1,38 @@
+{
+  "consumer": {
+    "name": "awap-frontend"
+  },
+  "provider": {
+    "name": "awap-identity"
+  },
+  "interactions": [
+    {
+      "description": "a health check",
+      "type": "Synchronous/HTTP",
+      "request": {
+        "method": "GET",
+        "path": "/actuator/health"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "$.headers.Content-Type": {
+            "match": "regex",
+            "regex": "application/.*json.*"
+          }
+        },
+        "body": {
+          "status": "UP"
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "pactSpecification": {
+      "version": "4.0"
+    }
+  }
+}
