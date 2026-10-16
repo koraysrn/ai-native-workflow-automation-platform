@@ -39,8 +39,7 @@ public enum Role {
           Permission.TASK_MANAGE,
           Permission.FORM_MANAGE,
           Permission.FILE_UPLOAD)),
-  EMPLOYEE(
-      Set.of(Permission.INSTANCE_READ, Permission.TASK_MANAGE, Permission.FORM_MANAGE));
+  EMPLOYEE(Set.of(Permission.INSTANCE_READ, Permission.TASK_MANAGE, Permission.FORM_MANAGE));
 
   private final Set<Permission> permissions;
 

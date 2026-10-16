@@ -37,11 +37,7 @@ public class FormSubmission {
   protected FormSubmission() {}
 
   public FormSubmission(
-      UUID tenantId,
-      UUID formId,
-      UUID workflowInstanceId,
-      String dataJson,
-      UUID submittedBy) {
+      UUID tenantId, UUID formId, UUID workflowInstanceId, String dataJson, UUID submittedBy) {
     this.id = UUID.randomUUID();
     this.tenantId = tenantId;
     this.formId = formId;

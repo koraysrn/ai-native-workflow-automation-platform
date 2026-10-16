@@ -12,6 +12,7 @@ public interface TenantRepository extends JpaRepository<Tenant, UUID> {
   boolean existsBySlug(String slug);
 
   @org.springframework.data.jpa.repository.Query(
-      value = "SELECT * FROM awap_find_tenant_by_slug(:slug)", nativeQuery = true)
+      value = "SELECT * FROM awap_find_tenant_by_slug(:slug)",
+      nativeQuery = true)
   Optional<Tenant> findBySlugRls(String slug);
 }

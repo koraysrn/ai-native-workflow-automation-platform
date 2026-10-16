@@ -58,8 +58,7 @@ public class OrganizationController {
   }
 
   @GetMapping("/departments")
-  public ResponseEntity<List<DepartmentResponse>> listDepartments(
-      @RequestParam UUID companyId) {
+  public ResponseEntity<List<DepartmentResponse>> listDepartments(@RequestParam UUID companyId) {
     return ResponseEntity.ok(organizationService.listDepartments(currentTenantId(), companyId));
   }
 

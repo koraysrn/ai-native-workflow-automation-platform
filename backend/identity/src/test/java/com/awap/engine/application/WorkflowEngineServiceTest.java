@@ -60,7 +60,8 @@ class WorkflowEngineServiceTest {
                 HttpStatus.BAD_REQUEST,
                 "Workflow definition is not published."));
 
-    assertThatThrownBy(() -> service.start(tenantId, new StartWorkflowRequest(definitionId, null, null)))
+    assertThatThrownBy(
+            () -> service.start(tenantId, new StartWorkflowRequest(definitionId, null, null)))
         .isInstanceOf(AwapException.class);
   }
 }

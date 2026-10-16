@@ -12,6 +12,7 @@ public interface UserRepository extends JpaRepository<User, UUID> {
   Optional<User> findByIdAndTenantId(UUID id, UUID tenantId);
 
   @org.springframework.data.jpa.repository.Query(
-      value = "SELECT * FROM awap_find_user_by_email(:tenantId, :email)", nativeQuery = true)
+      value = "SELECT * FROM awap_find_user_by_email(:tenantId, :email)",
+      nativeQuery = true)
   Optional<User> findByTenantIdAndEmailRls(UUID tenantId, String email);
 }

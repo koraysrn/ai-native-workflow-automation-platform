@@ -15,8 +15,7 @@ class JwtServiceTest {
   @Test
   void generateAndParseAccessTokenRoundTrip() {
     JwtService service =
-        new JwtService(
-            new JwtProperties(SECRET, Duration.ofMinutes(15), Duration.ofDays(7)));
+        new JwtService(new JwtProperties(SECRET, Duration.ofMinutes(15), Duration.ofDays(7)));
     UUID userId = UUID.randomUUID();
     UUID tenantId = UUID.randomUUID();
 

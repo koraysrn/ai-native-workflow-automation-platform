@@ -141,10 +141,7 @@ public class WorkflowEngineService {
                         HttpStatus.NOT_FOUND,
                         "Node execution not found."));
     completeNode(
-        event.tenantId(),
-        event.workflowInstanceId(),
-        execution.getNodeId(),
-        event.outputJson());
+        event.tenantId(), event.workflowInstanceId(), execution.getNodeId(), event.outputJson());
   }
 
   @Transactional
@@ -264,8 +261,7 @@ public class WorkflowEngineService {
         || transition.getConditionExpression().isBlank()) {
       return true;
     }
-    Object result =
-        spelExpressionService.evaluate(transition.getConditionExpression(), variables);
+    Object result = spelExpressionService.evaluate(transition.getConditionExpression(), variables);
     return Boolean.TRUE.equals(result);
   }
 
@@ -326,13 +322,10 @@ public class WorkflowEngineService {
   }
 
   private void log(
-      WorkflowInstance instance,
-      String nodeId,
-      String nodeType,
-      String action,
-      String payload) {
+      WorkflowInstance instance, String nodeId, String nodeType, String action, String payload) {
     ExecutionLog log =
-        new ExecutionLog(instance.getTenantId(), instance.getId(), nodeId, nodeType, action, payload);
+        new ExecutionLog(
+            instance.getTenantId(), instance.getId(), nodeId, nodeType, action, payload);
     executionLogRepository.save(log);
   }
 

@@ -16,9 +16,9 @@ import java.security.SecureRandom;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.UUID;
-import org.springframework.http.HttpStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -51,7 +51,8 @@ public class AuthService {
 
   @Transactional
   public TokenPair login(String tenantSlug, String email, String password) {
-    Tenant tenant = tenantRepository.findBySlugRls(tenantSlug).orElseThrow(this::invalidCredentials);
+    Tenant tenant =
+        tenantRepository.findBySlugRls(tenantSlug).orElseThrow(this::invalidCredentials);
     User user =
         userRepository
             .findByTenantIdAndEmailRls(tenant.getId(), email)
@@ -86,7 +87,9 @@ public class AuthService {
     if (rawRefreshToken == null || rawRefreshToken.isBlank()) {
       return;
     }
-    refreshTokenRepository.findByTokenHash(hashToken(rawRefreshToken)).ifPresent(RefreshToken::revoke);
+    refreshTokenRepository
+        .findByTokenHash(hashToken(rawRefreshToken))
+        .ifPresent(RefreshToken::revoke);
   }
 
   @Transactional(readOnly = true)

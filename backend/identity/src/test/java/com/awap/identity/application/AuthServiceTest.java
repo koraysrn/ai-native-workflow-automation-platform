@@ -40,11 +40,7 @@ class AuthServiceTest {
   void setUp() {
     authService =
         new AuthService(
-            tenantRepository,
-            userRepository,
-            refreshTokenRepository,
-            jwtService,
-            passwordEncoder);
+            tenantRepository, userRepository, refreshTokenRepository, jwtService, passwordEncoder);
   }
 
   @Test

@@ -51,8 +51,7 @@ public class NodeExecution {
 
   protected NodeExecution() {}
 
-  public NodeExecution(
-      UUID tenantId, UUID workflowInstanceId, String nodeId, String nodeType) {
+  public NodeExecution(UUID tenantId, UUID workflowInstanceId, String nodeId, String nodeType) {
     this.id = UUID.randomUUID();
     this.tenantId = tenantId;
     this.workflowInstanceId = workflowInstanceId;

@@ -14,9 +14,6 @@ public class MinioConfig {
       @Value("${awap.minio.endpoint:http://localhost:9000}") String endpoint,
       @Value("${awap.minio.access-key:awapadmin}") String accessKey,
       @Value("${awap.minio.secret-key:awapadmin123}") String secretKey) {
-    return MinioClient.builder()
-        .endpoint(endpoint)
-        .credentials(accessKey, secretKey)
-        .build();
+    return MinioClient.builder().endpoint(endpoint).credentials(accessKey, secretKey).build();
   }
 }

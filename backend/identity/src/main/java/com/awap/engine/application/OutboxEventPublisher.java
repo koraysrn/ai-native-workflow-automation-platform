@@ -30,8 +30,7 @@ public class OutboxEventPublisher {
   public void publish(
       UUID tenantId, String aggregateType, UUID aggregateId, String eventType, Object payload) {
     OutboxEvent event =
-        new OutboxEvent(
-            tenantId, aggregateType, aggregateId, eventType, toJson(payload));
+        new OutboxEvent(tenantId, aggregateType, aggregateId, eventType, toJson(payload));
     repository.save(event);
     applicationEventPublisher.publishEvent(payload);
   }

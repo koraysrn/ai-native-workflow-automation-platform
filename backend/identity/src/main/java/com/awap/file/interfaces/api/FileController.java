@@ -30,7 +30,8 @@ public class FileController {
   }
 
   @PostMapping
-  public ResponseEntity<Map<String, Object>> createUpload(@Valid @RequestBody CreateFileRequest request) {
+  public ResponseEntity<Map<String, Object>> createUpload(
+      @Valid @RequestBody CreateFileRequest request) {
     FileService.UploadSlot slot =
         fileService.createUpload(
             currentTenantId(), request.name(), request.contentType(), request.size());
@@ -56,7 +57,5 @@ public class FileController {
 
   /** Request to create a presigned upload slot. */
   public record CreateFileRequest(
-      @NotBlank String name,
-      String contentType,
-      @PositiveOrZero long size) {}
+      @NotBlank String name, String contentType, @PositiveOrZero long size) {}
 }

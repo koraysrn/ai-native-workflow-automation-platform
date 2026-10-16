@@ -6,8 +6,7 @@ import java.util.UUID;
 
 /** Request to create an organization user. */
 public record OrgUserRequest(
-    @NotBlank(message = "email is required")
-        @Email(message = "email must be a valid email address")
+    @NotBlank(message = "email is required") @Email(message = "email must be a valid email address")
         String email,
     @NotBlank(message = "fullName is required") String fullName,
     UUID teamId,

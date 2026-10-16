@@ -64,8 +64,7 @@ public class WorkflowDefinitionController {
   }
 
   @PostMapping("/{id}/versions/{version}/archive")
-  public ResponseEntity<Void> archiveVersion(
-      @PathVariable UUID id, @PathVariable int version) {
+  public ResponseEntity<Void> archiveVersion(@PathVariable UUID id, @PathVariable int version) {
     service.archiveVersion(currentTenantId(), id, version);
     return ResponseEntity.noContent().build();
   }

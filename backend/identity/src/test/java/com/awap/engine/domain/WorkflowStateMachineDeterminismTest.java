@@ -32,8 +32,9 @@ class WorkflowStateMachineDeterminismTest {
 
   @Test
   void terminalStateCannotTransitionDeterministically() {
-    WorkflowInstance completed = new WorkflowInstance(
-        UUID.randomUUID(), UUID.randomUUID(), 1, WorkflowState.COMPLETED, null, "{}");
+    WorkflowInstance completed =
+        new WorkflowInstance(
+            UUID.randomUUID(), UUID.randomUUID(), 1, WorkflowState.COMPLETED, null, "{}");
 
     assertThat(completed.getState()).isEqualTo(WorkflowState.COMPLETED);
     Assertions.assertThrows(

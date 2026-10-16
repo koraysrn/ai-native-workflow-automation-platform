@@ -13,7 +13,9 @@ import java.util.UUID;
 @Table(
     name = "idempotency_records",
     uniqueConstraints =
-        @UniqueConstraint(name = "uq_idempotency_records", columnNames = {"tenant_id", "idempotency_key"}))
+        @UniqueConstraint(
+            name = "uq_idempotency_records",
+            columnNames = {"tenant_id", "idempotency_key"}))
 public class IdempotencyRecord {
 
   @Id

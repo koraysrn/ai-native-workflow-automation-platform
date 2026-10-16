@@ -53,7 +53,9 @@ class FormServiceTest {
     UUID formId = UUID.randomUUID();
     FormDefinition definition =
         new FormDefinition(
-            tenantId, "Form", "{\"fields\":[{\"id\":\"name\",\"type\":\"TEXT\",\"required\":true}]}");
+            tenantId,
+            "Form",
+            "{\"fields\":[{\"id\":\"name\",\"type\":\"TEXT\",\"required\":true}]}");
     when(definitionRepository.findByIdAndTenantIdAndDeletedFalse(formId, tenantId))
         .thenReturn(Optional.of(definition));
 
