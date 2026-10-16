@@ -2,7 +2,7 @@
 
 **Design, run and optimize business processes — visually, reliably and with AI.**
 
-AWAP is a no-code workflow automation platform for the AI era. Teams model business
+AWAP is a no-code workflow automation platform. Teams model business
 processes once in a visual designer, and the platform takes care of the rest:
 intelligent task routing, approvals, forms, deadlines, audit trails and agentic AI
 assistance. It replaces manual, email-driven and spreadsheet-based processes with a
