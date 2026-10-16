@@ -1,0 +1,38 @@
+{
+  "consumer": {
+    "name": "awap-frontend"
+  },
+  "interactions": [
+    {
+      "description": "a health check request",
+      "request": {
+        "method": "GET",
+        "path": "/actuator/health"
+      },
+      "response": {
+        "body": {
+          "status": "UP"
+        },
+        "headers": {
+          "Content-Type": "application/vnd.spring-boot.actuator.v3+json"
+        },
+        "status": 200
+      }
+    }
+  ],
+  "metadata": {
+    "pact-js": {
+      "version": "17.1.4"
+    },
+    "pactRust": {
+      "ffi": "0.5.8",
+      "models": "1.3.16"
+    },
+    "pactSpecification": {
+      "version": "3.0.0"
+    }
+  },
+  "provider": {
+    "name": "awap-identity"
+  }
+}

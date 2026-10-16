@@ -6,7 +6,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: https://github.com/awap/awap.git
+    repoURL: https://github.com/koraysrn/ai-native-workflow-automation-platform.git
     path: infra/k8s
     targetRevision: main
   destination:
