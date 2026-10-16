@@ -2,6 +2,7 @@ package com.awap.architecture;
 
 import static com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses;
 
+import com.tngtech.archunit.base.DescribedPredicate;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
@@ -16,8 +17,14 @@ class ModularArchitectureTest {
           .that()
           .resideInAPackage("..domain..")
           .should()
-          .dependOnClassesThat()
-          .resideInAnyPackage("org.springframework..");
+          .dependOnClassesThat(
+              DescribedPredicate.describe(
+                  "reside in org.springframework.. (excluding data annotations)",
+                  javaClass ->
+                      javaClass.getName().startsWith("org.springframework.")
+                          && !javaClass
+                              .getName()
+                              .startsWith("org.springframework.data.annotation.")));
 
   @ArchTest
   static final ArchRule modules_do_not_access_other_infrastructure =

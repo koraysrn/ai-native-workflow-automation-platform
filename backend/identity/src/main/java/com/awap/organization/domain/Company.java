@@ -6,6 +6,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.LastModifiedBy;
 
 /** Top-level node of the organization hierarchy. */
 @Entity
@@ -27,6 +29,14 @@ public class Company {
 
   @Column(nullable = false)
   private Instant updatedAt;
+
+  @CreatedBy
+  @Column(name = "created_by")
+  private UUID createdBy;
+
+  @LastModifiedBy
+  @Column(name = "updated_by")
+  private UUID updatedBy;
 
   @Column(nullable = false)
   private boolean deleted;

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import com.awap.common.api.AwapException;
+import com.awap.identity.application.QuotaService;
 import com.awap.workflow.infrastructure.NodeDefinitionRepository;
 import com.awap.workflow.infrastructure.TransitionDefinitionRepository;
 import com.awap.workflow.infrastructure.WorkflowDefinitionRepository;
@@ -27,6 +28,7 @@ class WorkflowDefinitionServiceTest {
   @Mock private TransitionDefinitionRepository transitionDefinitionRepository;
   @Mock private WorkflowVariableRepository workflowVariableRepository;
   @Mock private SpelExpressionService spelExpressionService;
+  @Mock private QuotaService quotaService;
 
   private WorkflowDefinitionService service;
 
@@ -40,7 +42,8 @@ class WorkflowDefinitionServiceTest {
             transitionDefinitionRepository,
             workflowVariableRepository,
             new ObjectMapper(),
-            spelExpressionService);
+            spelExpressionService,
+            quotaService);
   }
 
   @Test

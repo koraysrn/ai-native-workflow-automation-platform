@@ -339,7 +339,7 @@ Workflow JSON Format
 }
 ```
 
-Expression Language: SpEL (Spring Expression Language) is used in condition and decision nodes; expressions are restricted to whitelisted functions.
+Expression Language: SpEL (Spring Expression Language) is used in condition and decision nodes; expressions are restricted to whitelisted functions. The whitelisted functions (`hasRole`, `hasAnyRole`, `matches`, `length`, `isEmpty`, `size`) are exposed through the `#fn` namespace, e.g. `#fn.hasRole(role, 'MANAGER')`, inside a read-only, time-boxed sandbox with a denylist for `T(...)`, `new`, `System`, `Runtime`, `reflect` and `exec`.
 
 ---
 

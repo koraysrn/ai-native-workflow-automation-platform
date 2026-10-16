@@ -2,10 +2,14 @@ package com.awap.file.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.LastModifiedBy;
 
 /** Metadata for a file stored in MinIO, with an antivirus scan status. */
 @Entity
@@ -34,11 +38,20 @@ public class FileRecord {
   @Column(name = "object_key", nullable = false)
   private String objectKey;
 
+  @Enumerated(EnumType.STRING)
   @Column(nullable = false)
-  private String status;
+  private FileScanStatus status;
 
   @Column(nullable = false)
   private Instant createdAt;
+
+  @CreatedBy
+  @Column(name = "created_by")
+  private UUID createdBy;
+
+  @LastModifiedBy
+  @Column(name = "updated_by")
+  private UUID updatedBy;
 
   protected FileRecord() {}
 
@@ -51,11 +64,11 @@ public class FileRecord {
     this.size = size;
     this.bucket = bucket;
     this.objectKey = objectKey;
-    this.status = "PENDING";
+    this.status = FileScanStatus.PENDING;
     this.createdAt = Instant.now();
   }
 
-  public void markScanResult(String status) {
+  public void markScanResult(FileScanStatus status) {
     this.status = status;
   }
 
@@ -87,7 +100,7 @@ public class FileRecord {
     return objectKey;
   }
 
-  public String getStatus() {
+  public FileScanStatus getStatus() {
     return status;
   }
 

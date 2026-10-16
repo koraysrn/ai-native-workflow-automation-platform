@@ -3,6 +3,7 @@ package com.awap.file.application;
 import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
 import com.awap.file.domain.FileRecord;
+import com.awap.file.domain.FileScanStatus;
 import com.awap.file.infrastructure.FileRecordRepository;
 import io.minio.BucketExistsArgs;
 import io.minio.GetPresignedObjectUrlArgs;
@@ -23,10 +24,13 @@ public class FileService {
 
   private final FileRecordRepository repository;
   private final MinioClient minioClient;
+  private final ClamAvScanner clamAvScanner;
 
-  public FileService(FileRecordRepository repository, MinioClient minioClient) {
+  public FileService(
+      FileRecordRepository repository, MinioClient minioClient, ClamAvScanner clamAvScanner) {
     this.repository = repository;
     this.minioClient = minioClient;
+    this.clamAvScanner = clamAvScanner;
   }
 
   @Transactional
@@ -47,6 +51,15 @@ public class FileService {
                 () ->
                     new AwapException(
                         ErrorCode.RESOURCE_NOT_FOUND, HttpStatus.NOT_FOUND, "File not found."));
+
+    if (record.getStatus() == FileScanStatus.PENDING) {
+      FileScanStatus result = clamAvScanner.scan(record.getBucket(), record.getObjectKey());
+      record.markScanResult(result);
+    }
+    if (record.getStatus() == FileScanStatus.INFECTED) {
+      throw new AwapException(
+          ErrorCode.FORBIDDEN, HttpStatus.FORBIDDEN, "File was rejected by antivirus scanning.");
+    }
     return presignedUrl(record.getObjectKey(), Method.GET);
   }
 

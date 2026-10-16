@@ -96,6 +96,6 @@ class AuthServiceTest {
     TokenPair pair = authService.refresh("raw-refresh-token");
 
     assertThat(pair.accessToken()).isEqualTo("new-access");
-    assertThat(stored.isRevoked()).isTrue();
+    verify(refreshTokenRepository).revokeByTokenHash(any(String.class));
   }
 }

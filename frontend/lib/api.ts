@@ -2,12 +2,6 @@ function apiBase(): string {
   return process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8080";
 }
 
-export interface LoginResponse {
-  accessToken: string;
-  refreshToken: string;
-  expiresIn: number;
-}
-
 export interface TaskDto {
   id: string;
   title: string;
@@ -47,6 +41,20 @@ export interface CreateWorkflowPayload {
   definitionJson: string;
 }
 
+export interface CompanyDto {
+  id: string;
+  name: string;
+}
+
+/** Reads the XSRF-TOKEN cookie written by Spring's CookieCsrfTokenRepository. */
+function csrfToken(): string | undefined {
+  if (typeof document === "undefined") {
+    return undefined;
+  }
+  const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : undefined;
+}
+
 /** Calls the public actuator health endpoint used by the shared consumer contract. */
 export async function healthCheck(): Promise<HealthDto> {
   const response = await fetch(`${apiBase()}/actuator/health`);
@@ -56,61 +64,71 @@ export async function healthCheck(): Promise<HealthDto> {
   return (await response.json()) as HealthDto;
 }
 
+export interface RegisterTenantPayload {
+  slug: string;
+  name: string;
+  adminEmail: string;
+  adminPassword: string;
+  adminFullName: string;
+}
+
+export async function registerTenant(payload: RegisterTenantPayload): Promise<void> {
+  const response = await fetch(`${apiBase()}/api/v1/tenants`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) {
+    throw new Error("Registration failed");
+  }
+}
+
 export async function login(
   tenantSlug: string,
   email: string,
   password: string,
-): Promise<LoginResponse> {
+): Promise<void> {
   const response = await fetch(`${apiBase()}/api/v1/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({ tenantSlug, email, password }),
   });
-
   if (!response.ok) {
     throw new Error("Login failed");
   }
-
-  return (await response.json()) as LoginResponse;
 }
 
 async function refreshAccessToken(): Promise<boolean> {
-  const refreshToken = localStorage.getItem("awap_refresh_token");
-  if (!refreshToken) {
-    return false;
-  }
   try {
     const response = await fetch(`${apiBase()}/api/v1/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
+      credentials: "include",
+      body: "{}",
     });
-    if (!response.ok) {
-      return false;
-    }
-    const tokens = (await response.json()) as {
-      accessToken: string;
-      refreshToken: string;
-    };
-    localStorage.setItem("awap_access_token", tokens.accessToken);
-    localStorage.setItem("awap_refresh_token", tokens.refreshToken);
-    return true;
+    return response.ok;
   } catch {
     return false;
   }
 }
 
 function redirectToLogin(): never {
-  localStorage.removeItem("awap_access_token");
-  localStorage.removeItem("awap_refresh_token");
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload re-runs the middleware auth check
   window.location.href = "/";
   throw new Error("Unauthorized");
 }
 
 async function authFetch<T>(path: string, retried = false): Promise<T> {
-  const accessToken = localStorage.getItem("awap_access_token");
+  const headers: Record<string, string> = {};
+  const token = csrfToken();
+  if (token) {
+    headers["X-XSRF-TOKEN"] = token;
+  }
   const response = await fetch(`${apiBase()}${path}`, {
-    headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
+    headers,
+    credentials: "include",
   });
 
   if (response.status === 401 && !retried && (await refreshAccessToken())) {
@@ -119,11 +137,34 @@ async function authFetch<T>(path: string, retried = false): Promise<T> {
   if (response.status === 401) {
     redirectToLogin();
   }
-
   if (!response.ok) {
     throw new Error(`Request failed with status ${response.status}`);
   }
+  return (await response.json()) as T;
+}
 
+async function authPost<T>(path: string, body: unknown, retried = false): Promise<T> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const token = csrfToken();
+  if (token) {
+    headers["X-XSRF-TOKEN"] = token;
+  }
+  const response = await fetch(`${apiBase()}${path}`, {
+    method: "POST",
+    headers,
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+
+  if (response.status === 401 && !retried && (await refreshAccessToken())) {
+    return authPost<T>(path, body, true);
+  }
+  if (response.status === 401) {
+    redirectToLogin();
+  }
+  if (!response.ok) {
+    throw new Error(`Request failed with status ${response.status}`);
+  }
   return (await response.json()) as T;
 }
 
@@ -137,31 +178,6 @@ export function listWorkflowDefinitions(): Promise<WorkflowDefinitionDto[]> {
 
 export function listWorkflowInstances(): Promise<WorkflowInstanceDto[]> {
   return authFetch<WorkflowInstanceDto[]>("/api/v1/workflow-instances");
-}
-
-async function authPost<T>(path: string, body: unknown, retried = false): Promise<T> {
-  const accessToken = localStorage.getItem("awap_access_token");
-  const response = await fetch(`${apiBase()}${path}`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
-    },
-    body: JSON.stringify(body),
-  });
-
-  if (response.status === 401 && !retried && (await refreshAccessToken())) {
-    return authPost<T>(path, body, true);
-  }
-  if (response.status === 401) {
-    redirectToLogin();
-  }
-
-  if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
-  }
-
-  return (await response.json()) as T;
 }
 
 export function createWorkflowDefinition(
@@ -187,17 +203,42 @@ export function rejectTask(id: string): Promise<TaskDto> {
 
 export function startWorkflowInstance(
   workflowDefinitionId: string,
+  contextJson = "{}",
 ): Promise<WorkflowInstanceDto> {
   return authPost<WorkflowInstanceDto>("/api/v1/workflow-instances", {
     workflowDefinitionId,
+    contextJson,
   });
-}
-
-export interface CompanyDto {
-  id: string;
-  name: string;
 }
 
 export function listCompanies(): Promise<CompanyDto[]> {
   return authFetch<CompanyDto[]>("/api/v1/organizations/companies");
+}
+
+export interface OrgUserDto {
+  id: string;
+  email: string;
+  fullName: string;
+}
+
+export interface TeamTreeDto {
+  id: string;
+  name: string;
+  users: OrgUserDto[];
+}
+
+export interface DepartmentTreeDto {
+  id: string;
+  name: string;
+  teams: TeamTreeDto[];
+}
+
+export interface CompanyTreeDto {
+  id: string;
+  name: string;
+  departments: DepartmentTreeDto[];
+}
+
+export function fetchOrganizationTree(): Promise<CompanyTreeDto[]> {
+  return authFetch<CompanyTreeDto[]>("/api/v1/organizations/tree");
 }

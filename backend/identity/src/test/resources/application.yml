@@ -10,6 +10,14 @@ spring:
     open-in-view: false
   flyway:
     enabled: false
+  cloud:
+    vault:
+      enabled: false
+
+management:
+  health:
+    redis:
+      enabled: false
 
 awap:
   security:

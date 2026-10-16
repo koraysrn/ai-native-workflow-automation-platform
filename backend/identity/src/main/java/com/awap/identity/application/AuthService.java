@@ -49,7 +49,7 @@ public class AuthService {
     this.passwordEncoder = passwordEncoder;
   }
 
-  @Transactional
+  @Transactional(noRollbackFor = AwapException.class)
   public TokenPair login(String tenantSlug, String email, String password) {
     Tenant tenant =
         tenantRepository.findBySlugRls(tenantSlug).orElseThrow(this::invalidCredentials);
@@ -61,23 +61,24 @@ public class AuthService {
       throw lockedAccount();
     }
     if (!passwordEncoder.matches(password, user.getPasswordHash())) {
-      user.registerFailedLogin();
+      userRepository.recordFailedLogin(user.getId());
       LOGGER.warn("Login failed for tenant '{}' user '{}'", tenantSlug, mask(email));
       throw invalidCredentials();
     }
-    user.resetFailedLogin();
+    userRepository.resetFailedLogin(user.getId());
     return issueTokens(user);
   }
 
   @Transactional
   public TokenPair refresh(String rawRefreshToken) {
+    String tokenHash = hashToken(rawRefreshToken);
     RefreshToken stored =
         refreshTokenRepository
-            .findByTokenHashRls(hashToken(rawRefreshToken))
+            .findByTokenHashRls(tokenHash)
             .filter(token -> !token.isRevoked())
             .filter(token -> token.getExpiresAt().isAfter(Instant.now()))
             .orElseThrow(this::invalidRefreshToken);
-    stored.revoke();
+    refreshTokenRepository.revokeByTokenHash(tokenHash);
     User user = userRepository.findById(stored.getUserId()).orElseThrow(this::invalidRefreshToken);
     return issueTokens(user);
   }
@@ -87,9 +88,7 @@ public class AuthService {
     if (rawRefreshToken == null || rawRefreshToken.isBlank()) {
       return;
     }
-    refreshTokenRepository
-        .findByTokenHash(hashToken(rawRefreshToken))
-        .ifPresent(RefreshToken::revoke);
+    refreshTokenRepository.revokeByTokenHash(hashToken(rawRefreshToken));
   }
 
   @Transactional(readOnly = true)

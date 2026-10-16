@@ -1,9 +1,12 @@
 "use client";
 
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
 import { login } from "../lib/api";
 
 export default function Home() {
+  const router = useRouter();
   const [tenantSlug, setTenantSlug] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -14,10 +17,9 @@ export default function Home() {
     setMessage("");
 
     try {
-      const tokens = await login(tenantSlug, email, password);
-      localStorage.setItem("awap_access_token", tokens.accessToken);
-      localStorage.setItem("awap_refresh_token", tokens.refreshToken);
-      window.location.href = "/dashboard";
+      await login(tenantSlug, email, password);
+      router.push("/dashboard");
+      router.refresh();
     } catch {
       setMessage("Login failed");
     }
@@ -54,6 +56,10 @@ export default function Home() {
         />
         <button type="submit">Sign in</button>
       </form>
+
+      <p style={{ marginTop: 16 }}>
+        <Link href="/register">Create a tenant</Link>
+      </p>
 
       {message && <p aria-live="polite">{message}</p>}
     </main>

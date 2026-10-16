@@ -48,6 +48,7 @@ class TaskServiceTest {
     when(taskRepository.findByIdAndTenantIdAndDeletedFalse(id, tenantId))
         .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.approve(tenantId, id)).isInstanceOf(AwapException.class);
+    assertThatThrownBy(() -> service.approve(tenantId, id, UUID.randomUUID(), "EMPLOYEE"))
+        .isInstanceOf(AwapException.class);
   }
 }

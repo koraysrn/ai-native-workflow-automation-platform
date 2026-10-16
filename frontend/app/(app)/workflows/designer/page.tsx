@@ -72,7 +72,7 @@ export default function DesignerPage() {
     try {
       const definitionJson = JSON.stringify({
         nodes: nodes.map((n) => ({ id: n.id, type: n.data.label })),
-        edges: edges.map((e) => ({ from: e.source, to: e.target })),
+        transitions: edges.map((e) => ({ from: e.source, to: e.target })),
       });
       await createWorkflowDefinition({ name, definitionJson });
       setMessage("Draft saved");

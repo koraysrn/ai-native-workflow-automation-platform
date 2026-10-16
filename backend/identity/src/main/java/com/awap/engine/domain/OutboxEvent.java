@@ -6,6 +6,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.data.annotation.CreatedBy;
 
 /** Durable domain event for reliable, outbox-style publication. */
 @Entity
@@ -36,6 +37,10 @@ public class OutboxEvent {
 
   @Column(nullable = false)
   private boolean published;
+
+  @CreatedBy
+  @Column(name = "created_by")
+  private UUID createdBy;
 
   protected OutboxEvent() {}
 

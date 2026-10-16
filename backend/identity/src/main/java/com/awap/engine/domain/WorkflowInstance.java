@@ -73,10 +73,11 @@ public class WorkflowInstance {
   }
 
   public void transitionTo(WorkflowState target) {
-    if (state == WorkflowState.COMPLETED
-        || state == WorkflowState.CANCELLED
-        || state == WorkflowState.FAILED) {
+    if (state == WorkflowState.COMPLETED || state == WorkflowState.CANCELLED) {
       throw new IllegalStateException("Terminal state " + state + " cannot transition.");
+    }
+    if (state == WorkflowState.FAILED && target != WorkflowState.RUNNING) {
+      throw new IllegalStateException("Failed workflow can only transition to RUNNING (retry).");
     }
     this.state = target;
     this.updatedAt = Instant.now();

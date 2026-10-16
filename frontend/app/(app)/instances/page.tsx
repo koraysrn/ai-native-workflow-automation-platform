@@ -1,16 +1,22 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { listWorkflowInstances, type WorkflowInstanceDto } from "../../../lib/api";
+import { useQuery } from "@tanstack/react-query";
+import { listWorkflowInstances } from "../../../lib/api";
+
+const stateColors: Record<string, string> = {
+  COMPLETED: "#16a34a",
+  FAILED: "#e11d48",
+  RUNNING: "#2563eb",
+  WAITING: "#f59e0b",
+  CANCELLED: "#6b7280",
+};
 
 export default function InstancesPage() {
-  const [instances, setInstances] = useState<WorkflowInstanceDto[]>([]);
-
-  useEffect(() => {
-    listWorkflowInstances()
-      .then(setInstances)
-      .catch(() => {});
-  }, []);
+  const { data: instances = [] } = useQuery({
+    queryKey: ["instances"],
+    queryFn: listWorkflowInstances,
+    refetchInterval: 5000,
+  });
 
   return (
     <div>
@@ -18,7 +24,10 @@ export default function InstancesPage() {
       <ul>
         {instances.map((instance) => (
           <li key={instance.id}>
-            {instance.workflowDefinitionId} — {instance.state}
+            {instance.workflowDefinitionId} —{" "}
+            <span style={{ color: stateColors[instance.state] ?? "#111827", fontWeight: 600 }}>
+              {instance.state}
+            </span>
           </li>
         ))}
       </ul>

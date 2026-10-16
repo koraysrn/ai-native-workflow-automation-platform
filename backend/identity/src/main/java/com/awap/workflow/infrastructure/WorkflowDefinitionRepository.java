@@ -12,4 +12,6 @@ public interface WorkflowDefinitionRepository extends JpaRepository<WorkflowDefi
   List<WorkflowDefinition> findByTenantIdAndDeletedFalse(UUID tenantId);
 
   Optional<WorkflowDefinition> findByIdAndTenantIdAndDeletedFalse(UUID id, UUID tenantId);
+
+  long countByTenantIdAndDeletedFalse(UUID tenantId);
 }

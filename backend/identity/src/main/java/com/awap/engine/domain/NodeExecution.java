@@ -8,6 +8,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.LastModifiedBy;
 
 /** Exactly-once record of a node's execution; guarded by a unique instance+node constraint. */
 @Entity
@@ -48,6 +50,14 @@ public class NodeExecution {
 
   @Column(name = "completed_at")
   private Instant completedAt;
+
+  @CreatedBy
+  @Column(name = "created_by")
+  private UUID createdBy;
+
+  @LastModifiedBy
+  @Column(name = "updated_by")
+  private UUID updatedBy;
 
   protected NodeExecution() {}
 
