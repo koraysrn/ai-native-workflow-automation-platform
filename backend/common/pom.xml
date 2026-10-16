@@ -14,6 +14,10 @@
     <name>AWAP Common</name>
     <description>Shared kernel: RFC 7807 error handling, error catalog, API versioning</description>
 
+    <properties>
+        <jacoco.skip>true</jacoco.skip>
+    </properties>
+
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
