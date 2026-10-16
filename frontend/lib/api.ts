@@ -1,4 +1,6 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8080";
+function apiBase(): string {
+  return process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:8080";
+}
 
 export interface LoginResponse {
   accessToken: string;
@@ -35,10 +37,23 @@ export interface FormDefinitionDto {
   version: number;
 }
 
+export interface HealthDto {
+  status: string;
+}
+
 export interface CreateWorkflowPayload {
   name: string;
   description?: string;
   definitionJson: string;
+}
+
+/** Calls the public actuator health endpoint used by the shared consumer contract. */
+export async function healthCheck(): Promise<HealthDto> {
+  const response = await fetch(`${apiBase()}/actuator/health`);
+  if (!response.ok) {
+    throw new Error(`Health check failed with status ${response.status}`);
+  }
+  return (await response.json()) as HealthDto;
 }
 
 export async function login(
@@ -46,7 +61,7 @@ export async function login(
   email: string,
   password: string,
 ): Promise<LoginResponse> {
-  const response = await fetch(`${API_BASE}/api/v1/auth/login`, {
+  const response = await fetch(`${apiBase()}/api/v1/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ tenantSlug, email, password }),
@@ -61,7 +76,7 @@ export async function login(
 
 async function authFetch<T>(path: string): Promise<T> {
   const accessToken = localStorage.getItem("awap_access_token");
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(`${apiBase()}${path}`, {
     headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : {},
   });
 
@@ -91,7 +106,7 @@ export function listWorkflowInstances(): Promise<WorkflowInstanceDto[]> {
 
 async function authPost<T>(path: string, body: unknown): Promise<T> {
   const accessToken = localStorage.getItem("awap_access_token");
-  const response = await fetch(`${API_BASE}${path}`, {
+  const response = await fetch(`${apiBase()}${path}`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

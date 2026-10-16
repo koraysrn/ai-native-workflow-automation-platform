@@ -9,7 +9,9 @@
     "lint": "eslint",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "jest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "pact:generate": "jest --runInBand lib/__tests__/api.pact.spec.ts",
+    "pact:copy": "node scripts/copy-pact.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.9.0",
@@ -26,6 +28,7 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
+    "@pact-foundation/pact": "^17.1.4",
     "@playwright/test": "^1.64.0",
     "@tailwindcss/turbopack": "^4",
     "@testing-library/jest-dom": "^7.0.1",
@@ -43,5 +46,8 @@
     "tailwindcss": "^4",
     "typescript": "^6.0.3"
   },
-  "packageManager": "pnpm@12.11.2"
+  "packageManager": "pnpm@12.11.2",
+  "pnpm": {
+    "ignoredBuiltDependencies": ["@scarf/scarf"]
+  }
 }
