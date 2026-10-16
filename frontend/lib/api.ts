@@ -176,3 +176,28 @@ export function createFormDefinition(
 ): Promise<FormDefinitionDto> {
   return authPost<FormDefinitionDto>("/api/v1/forms", { name, schemaJson });
 }
+
+export function approveTask(id: string): Promise<TaskDto> {
+  return authPost<TaskDto>(`/api/v1/tasks/${id}/approve`, {});
+}
+
+export function rejectTask(id: string): Promise<TaskDto> {
+  return authPost<TaskDto>(`/api/v1/tasks/${id}/reject`, {});
+}
+
+export function startWorkflowInstance(
+  workflowDefinitionId: string,
+): Promise<WorkflowInstanceDto> {
+  return authPost<WorkflowInstanceDto>("/api/v1/workflow-instances", {
+    workflowDefinitionId,
+  });
+}
+
+export interface CompanyDto {
+  id: string;
+  name: string;
+}
+
+export function listCompanies(): Promise<CompanyDto[]> {
+  return authFetch<CompanyDto[]>("/api/v1/organizations/companies");
+}

@@ -78,6 +78,14 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      - name: Generate consumer contract (Pact)
+        run: pnpm pact:generate
+        working-directory: frontend
+      - name: Upload pact artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: pact
+          path: frontend/pacts
       - name: Type check
         run: pnpm typecheck
         working-directory: frontend

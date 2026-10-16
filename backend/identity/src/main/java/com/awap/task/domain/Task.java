@@ -157,6 +157,11 @@ public class Task {
     this.updatedAt = Instant.now();
   }
 
+  public void markEscalationDue() {
+    this.escalated = true;
+    this.updatedAt = Instant.now();
+  }
+
   private void requireOpenForDecision() {
     if (status != TaskStatus.IN_PROGRESS && status != TaskStatus.ASSIGNED) {
       throw new IllegalStateException("Task cannot be decided in status " + status);
