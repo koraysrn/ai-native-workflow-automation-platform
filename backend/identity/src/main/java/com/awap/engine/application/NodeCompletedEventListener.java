@@ -1,0 +1,35 @@
+package com.awap.engine.application;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.stereotype.Component;
+
+/**
+ * Consumes node-completion events from Kafka and drives the workflow engine. Consumption is
+ * idempotent because {@link WorkflowEngineService#onNodeCompleted} ignores already-completed nodes.
+ */
+@Component
+@ConditionalOnProperty(name = "awap.kafka.enabled", havingValue = "true")
+public class NodeCompletedEventListener {
+
+  private final ObjectMapper objectMapper;
+  private final WorkflowEngineService workflowEngineService;
+
+  public NodeCompletedEventListener(
+      ObjectMapper objectMapper, WorkflowEngineService workflowEngineService) {
+    this.objectMapper = objectMapper;
+    this.workflowEngineService = workflowEngineService;
+  }
+
+  @KafkaListener(topics = {"workflow.task.events", "workflow.instance.events"})
+  public void onMessage(String payload) {
+    try {
+      NodeCompletedEvent event = objectMapper.readValue(payload, NodeCompletedEvent.class);
+      workflowEngineService.onNodeCompleted(event);
+    } catch (JsonProcessingException ex) {
+      throw new IllegalArgumentException("Invalid NodeCompletedEvent payload", ex);
+    }
+  }
+}

@@ -7,6 +7,8 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.util.UUID;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.LastModifiedBy;
 
 /** A single node in a workflow version's graph. */
 @Entity
@@ -38,6 +40,14 @@ public class NodeDefinition {
 
   @Column(name = "order_index", nullable = false)
   private int orderIndex;
+
+  @CreatedBy
+  @Column(name = "created_by")
+  private UUID createdBy;
+
+  @LastModifiedBy
+  @Column(name = "updated_by")
+  private UUID updatedBy;
 
   protected NodeDefinition() {}
 

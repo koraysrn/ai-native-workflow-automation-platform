@@ -15,6 +15,9 @@ import com.awap.engine.infrastructure.WorkflowInstanceRepository;
 import com.awap.engine.interfaces.dto.ExecutionLogResponse;
 import com.awap.engine.interfaces.dto.StartWorkflowRequest;
 import com.awap.engine.interfaces.dto.WorkflowInstanceResponse;
+import com.awap.identity.domain.Role;
+import com.awap.identity.domain.User;
+import com.awap.identity.infrastructure.UserRepository;
 import com.awap.task.application.TaskService;
 import com.awap.task.interfaces.dto.TaskRequest;
 import com.awap.workflow.application.SpelExpressionService;
@@ -25,6 +28,7 @@ import com.awap.workflow.domain.TransitionDefinition;
 import com.awap.workflow.domain.WorkflowDefinition;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
@@ -46,6 +50,7 @@ public class WorkflowEngineService {
   private final TaskService taskService;
   private final SpelExpressionService spelExpressionService;
   private final ObjectMapper objectMapper;
+  private final UserRepository userRepository;
 
   public WorkflowEngineService(
       WorkflowInstanceRepository instanceRepository,
@@ -55,7 +60,8 @@ public class WorkflowEngineService {
       ExecutionContextRepository executionContextRepository,
       TaskService taskService,
       SpelExpressionService spelExpressionService,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      UserRepository userRepository) {
     this.instanceRepository = instanceRepository;
     this.executionLogRepository = executionLogRepository;
     this.workflowDefinitionService = workflowDefinitionService;
@@ -64,6 +70,7 @@ public class WorkflowEngineService {
     this.taskService = taskService;
     this.spelExpressionService = spelExpressionService;
     this.objectMapper = objectMapper;
+    this.userRepository = userRepository;
   }
 
   @Transactional
@@ -123,6 +130,7 @@ public class WorkflowEngineService {
     if (execution.getStatus() != NodeExecutionStatus.COMPLETED) {
       execution.complete(outputJson);
       nodeExecutionRepository.save(execution);
+      mergeOutputIntoContext(instance, nodeId, outputJson);
       log(instance, nodeId, execution.getNodeType(), "NODE_COMPLETED", outputJson);
     }
     advanceFrom(instance, nodeId);
@@ -142,6 +150,25 @@ public class WorkflowEngineService {
                         "Node execution not found."));
     completeNode(
         event.tenantId(), event.workflowInstanceId(), execution.getNodeId(), event.outputJson());
+  }
+
+  @Transactional
+  public WorkflowInstanceResponse retry(UUID tenantId, UUID id) {
+    WorkflowInstance instance = find(tenantId, id);
+    transition(instance, WorkflowState.RUNNING, "WORKFLOW_RETRIED");
+    resumeFailedNodes(instance);
+    return toResponse(instance);
+  }
+
+  @Transactional
+  public WorkflowInstanceResponse replay(UUID tenantId, UUID id) {
+    WorkflowInstance instance = find(tenantId, id);
+    // Deterministic replay: re-drive failed nodes idempotently from the recorded
+    // execution state. External side effects are not repeated (no external-call
+    // node types exist in Phase 0).
+    transition(instance, WorkflowState.RUNNING, "WORKFLOW_REPLAYED");
+    resumeFailedNodes(instance);
+    return toResponse(instance);
   }
 
   @Transactional
@@ -180,6 +207,11 @@ public class WorkflowEngineService {
   }
 
   private void executeNode(WorkflowInstance instance, NodeDefinition node) {
+    if (instance.getState() != WorkflowState.COMPLETED
+        && instance.getState() != WorkflowState.CANCELLED
+        && instance.getState() != WorkflowState.FAILED) {
+      instance.transitionTo(WorkflowState.RUNNING);
+    }
     NodeExecution execution =
         nodeExecutionRepository
             .findByWorkflowInstanceIdAndNodeId(instance.getId(), node.getNodeId())
@@ -192,7 +224,8 @@ public class WorkflowEngineService {
                             node.getNodeId(),
                             node.getNodeType().name())));
 
-    if (execution.getStatus() == NodeExecutionStatus.COMPLETED) {
+    if (execution.getStatus() == NodeExecutionStatus.COMPLETED
+        || execution.getStatus() == NodeExecutionStatus.WAITING) {
       return;
     }
 
@@ -217,13 +250,14 @@ public class WorkflowEngineService {
         log(instance, node.getNodeId(), node.getNodeType().name(), "NODE_WAITING", null);
       }
       case APPROVAL, TASK -> {
+        UUID assigneeId = resolveAssignee(instance, node);
         TaskRequest taskRequest =
             new TaskRequest(
                 node.getName(),
                 "Auto-created by workflow node " + node.getNodeId(),
                 instance.getId(),
                 execution.getId(),
-                null);
+                assigneeId);
         taskService.create(instance.getTenantId(), taskRequest);
         execution.waitForExternal();
         nodeExecutionRepository.save(execution);
@@ -231,6 +265,43 @@ public class WorkflowEngineService {
         log(instance, node.getNodeId(), node.getNodeType().name(), "NODE_WAITING", null);
       }
     }
+  }
+
+  private void resumeFailedNodes(WorkflowInstance instance) {
+    nodeExecutionRepository
+        .findByWorkflowInstanceIdAndStatus(instance.getId(), NodeExecutionStatus.FAILED)
+        .forEach(
+            execution ->
+                nodesOf(instance).stream()
+                    .filter(node -> node.getNodeId().equals(execution.getNodeId()))
+                    .findFirst()
+                    .ifPresent(node -> executeNode(instance, node)));
+  }
+
+  private UUID resolveAssignee(WorkflowInstance instance, NodeDefinition node) {
+    String configJson = node.getConfigJson();
+    if (configJson == null || configJson.isBlank()) {
+      return null;
+    }
+    try {
+      JsonNode config = objectMapper.readTree(configJson);
+      JsonNode approvers = config.get("approvers");
+      if (approvers != null && approvers.isArray()) {
+        for (JsonNode approver : approvers) {
+          String value = approver.asText(null);
+          if (value != null && value.startsWith("role:")) {
+            String role = value.substring("role:".length());
+            return userRepository
+                .findFirstByTenantIdAndRole(instance.getTenantId(), Role.valueOf(role))
+                .map(User::getId)
+                .orElse(null);
+          }
+        }
+      }
+    } catch (JsonProcessingException | IllegalArgumentException ex) {
+      return null;
+    }
+    return null;
   }
 
   private void advanceFrom(WorkflowInstance instance, String fromNodeId) {
@@ -284,6 +355,31 @@ public class WorkflowEngineService {
                     ErrorCode.RESOURCE_NOT_FOUND,
                     HttpStatus.NOT_FOUND,
                     "Node execution not found."));
+  }
+
+  private void mergeOutputIntoContext(WorkflowInstance instance, String nodeId, String outputJson) {
+    if (outputJson == null || outputJson.isBlank()) {
+      return;
+    }
+    executionContextRepository
+        .findByWorkflowInstanceId(instance.getId())
+        .ifPresent(
+            context -> {
+              Map<String, Object> variables = readVariables(instance.getId());
+              try {
+                JsonNode parsed = objectMapper.readTree(outputJson);
+                if (parsed.isObject()) {
+                  parsed
+                      .fields()
+                      .forEachRemaining(entry -> variables.put(entry.getKey(), entry.getValue()));
+                }
+                variables.put(nodeId, parsed);
+                context.setVariablesJson(objectMapper.writeValueAsString(variables));
+                executionContextRepository.save(context);
+              } catch (JsonProcessingException ignored) {
+                // non-JSON node output: leave variables untouched
+              }
+            });
   }
 
   private Map<String, Object> readVariables(UUID instanceId) {

@@ -5,6 +5,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.util.UUID;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.LastModifiedBy;
 
 /** A directed edge between two nodes, optionally guarded by a SpEL expression. */
 @Entity
@@ -29,6 +31,14 @@ public class TransitionDefinition {
 
   @Column(name = "condition_expression")
   private String conditionExpression;
+
+  @CreatedBy
+  @Column(name = "created_by")
+  private UUID createdBy;
+
+  @LastModifiedBy
+  @Column(name = "updated_by")
+  private UUID updatedBy;
 
   protected TransitionDefinition() {}
 

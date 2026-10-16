@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -31,6 +32,7 @@ public class WorkflowDefinitionController {
   }
 
   @PostMapping
+  @PreAuthorize("hasAuthority('WORKFLOW_CREATE')")
   public ResponseEntity<WorkflowDefinitionResponse> create(
       @Valid @RequestBody WorkflowDefinitionRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
@@ -38,32 +40,38 @@ public class WorkflowDefinitionController {
   }
 
   @GetMapping
+  @PreAuthorize("hasAuthority('INSTANCE_READ')")
   public ResponseEntity<List<WorkflowDefinitionResponse>> list() {
     return ResponseEntity.ok(service.list(currentTenantId()));
   }
 
   @GetMapping("/{id}")
+  @PreAuthorize("hasAuthority('INSTANCE_READ')")
   public ResponseEntity<WorkflowDefinitionResponse> get(@PathVariable UUID id) {
     return ResponseEntity.ok(service.get(currentTenantId(), id));
   }
 
   @PostMapping("/{id}/publish")
+  @PreAuthorize("hasAuthority('WORKFLOW_PUBLISH')")
   public ResponseEntity<WorkflowDefinitionResponse> publish(@PathVariable UUID id) {
     return ResponseEntity.ok(service.publish(currentTenantId(), id));
   }
 
   @PostMapping("/{id}/rollback/{version}")
+  @PreAuthorize("hasAuthority('WORKFLOW_PUBLISH')")
   public ResponseEntity<WorkflowDefinitionResponse> rollback(
       @PathVariable UUID id, @PathVariable int version) {
     return ResponseEntity.ok(service.rollback(currentTenantId(), id, version));
   }
 
   @GetMapping("/{id}/versions")
+  @PreAuthorize("hasAuthority('INSTANCE_READ')")
   public ResponseEntity<List<WorkflowVersionResponse>> versions(@PathVariable UUID id) {
     return ResponseEntity.ok(service.versions(currentTenantId(), id));
   }
 
   @PostMapping("/{id}/versions/{version}/archive")
+  @PreAuthorize("hasAuthority('WORKFLOW_PUBLISH')")
   public ResponseEntity<Void> archiveVersion(@PathVariable UUID id, @PathVariable int version) {
     service.archiveVersion(currentTenantId(), id, version);
     return ResponseEntity.noContent().build();

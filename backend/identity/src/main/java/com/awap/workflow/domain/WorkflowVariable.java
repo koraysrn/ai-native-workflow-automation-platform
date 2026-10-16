@@ -5,6 +5,8 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.util.UUID;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.LastModifiedBy;
 
 /** A typed workflow variable declared on a workflow version. */
 @Entity
@@ -29,6 +31,14 @@ public class WorkflowVariable {
 
   @Column(name = "default_value")
   private String defaultValue;
+
+  @CreatedBy
+  @Column(name = "created_by")
+  private UUID createdBy;
+
+  @LastModifiedBy
+  @Column(name = "updated_by")
+  private UUID updatedBy;
 
   protected WorkflowVariable() {}
 

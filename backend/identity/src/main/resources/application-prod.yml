@@ -2,3 +2,7 @@ logging:
   level:
     root: WARN
     com.awap: INFO
+
+awap:
+  clamav:
+    enabled: true

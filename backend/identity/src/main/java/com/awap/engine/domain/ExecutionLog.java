@@ -6,6 +6,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.data.annotation.CreatedBy;
 
 /** Immutable audit record of every node execution and state transition. */
 @Entity
@@ -36,6 +37,10 @@ public class ExecutionLog {
 
   @Column(nullable = false)
   private Instant createdAt;
+
+  @CreatedBy
+  @Column(name = "created_by")
+  private UUID createdBy;
 
   protected ExecutionLog() {}
 

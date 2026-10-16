@@ -13,6 +13,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -33,6 +34,7 @@ public class FormController {
   }
 
   @PostMapping
+  @PreAuthorize("hasAuthority('FORM_MANAGE')")
   public ResponseEntity<FormDefinitionResponse> create(
       @Valid @RequestBody FormDefinitionRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
@@ -40,22 +42,26 @@ public class FormController {
   }
 
   @GetMapping
+  @PreAuthorize("hasAuthority('FORM_MANAGE')")
   public ResponseEntity<List<FormDefinitionResponse>> list() {
     return ResponseEntity.ok(formService.list(currentTenantId()));
   }
 
   @GetMapping("/{id}")
+  @PreAuthorize("hasAuthority('FORM_MANAGE')")
   public ResponseEntity<FormDefinitionResponse> get(@PathVariable UUID id) {
     return ResponseEntity.ok(formService.get(currentTenantId(), id));
   }
 
   @PutMapping("/{id}")
+  @PreAuthorize("hasAuthority('FORM_MANAGE')")
   public ResponseEntity<FormDefinitionResponse> update(
       @PathVariable UUID id, @Valid @RequestBody FormDefinitionRequest request) {
     return ResponseEntity.ok(formService.update(currentTenantId(), id, request));
   }
 
   @PostMapping("/{id}/submissions")
+  @PreAuthorize("hasAuthority('FORM_MANAGE')")
   public ResponseEntity<FormSubmissionResponse> submit(
       @PathVariable UUID id, @Valid @RequestBody FormSubmissionRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
@@ -63,6 +69,7 @@ public class FormController {
   }
 
   @GetMapping("/{id}/submissions")
+  @PreAuthorize("hasAuthority('FORM_MANAGE')")
   public ResponseEntity<List<FormSubmissionResponse>> submissions(@PathVariable UUID id) {
     return ResponseEntity.ok(formService.submissions(currentTenantId(), id));
   }

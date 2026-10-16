@@ -3,6 +3,8 @@ package com.awap.common.api;
 import jakarta.servlet.http.HttpServletRequest;
 import java.net.URI;
 import java.time.Instant;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -12,6 +14,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 /** Central exception handler returning RFC 7807 Problem Details. */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+  private static final Logger LOGGER = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
   @ExceptionHandler(AwapException.class)
   public ResponseEntity<ProblemDetails> handleAwapException(
@@ -35,6 +39,7 @@ public class GlobalExceptionHandler {
 
   @ExceptionHandler(Exception.class)
   public ResponseEntity<ProblemDetails> handleGeneric(Exception ex, HttpServletRequest request) {
+    LOGGER.error("Unhandled exception for {}", request.getRequestURI(), ex);
     ProblemDetails body =
         build(
             ErrorCode.GENERIC_INTERNAL_ERROR,

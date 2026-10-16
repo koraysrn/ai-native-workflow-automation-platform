@@ -76,16 +76,18 @@ public class TaskService {
   }
 
   @Transactional
-  public TaskResponse approve(UUID tenantId, UUID id) {
+  public TaskResponse approve(UUID tenantId, UUID id, UUID actorId, String actorRole) {
     Task task = find(tenantId, id);
+    requireDecisionRight(task, actorId, actorRole);
     runGuarded(task::approve);
     publishCompleted(task, "{\"decision\":\"APPROVED\"}");
     return toResponse(task);
   }
 
   @Transactional
-  public TaskResponse reject(UUID tenantId, UUID id) {
+  public TaskResponse reject(UUID tenantId, UUID id, UUID actorId, String actorRole) {
     Task task = find(tenantId, id);
+    requireDecisionRight(task, actorId, actorRole);
     runGuarded(task::reject);
     publishCompleted(task, "{\"decision\":\"REJECTED\"}");
     return toResponse(task);
@@ -119,6 +121,19 @@ public class TaskService {
               task.getNodeExecutionId(),
               outputJson));
     }
+  }
+
+  private void requireDecisionRight(Task task, UUID actorId, String actorRole) {
+    if (task.getAssigneeId() != null
+        && !task.getAssigneeId().equals(actorId)
+        && !isManager(actorRole)) {
+      throw new AwapException(
+          ErrorCode.TASK_ACCESS_DENIED, HttpStatus.FORBIDDEN, "Task is assigned to another user.");
+    }
+  }
+
+  private boolean isManager(String role) {
+    return "MANAGER".equals(role) || "TENANT_ADMIN".equals(role) || "SYSTEM_ADMIN".equals(role);
   }
 
   private Task find(UUID tenantId, UUID id) {

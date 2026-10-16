@@ -78,6 +78,7 @@ jobs:
           cache: pnpm
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+        working-directory: frontend
       - name: Generate consumer contract (Pact)
         run: pnpm pact:generate
         working-directory: frontend
@@ -86,6 +87,9 @@ jobs:
         with:
           name: pact
           path: frontend/pacts
+      - name: Unit tests (Jest)
+        run: pnpm exec jest --runInBand
+        working-directory: frontend
       - name: Type check
         run: pnpm typecheck
         working-directory: frontend

@@ -2,6 +2,7 @@ package com.awap.workflow.application;
 
 import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
+import com.awap.identity.application.QuotaService;
 import com.awap.workflow.domain.NodeDefinition;
 import com.awap.workflow.domain.NodeType;
 import com.awap.workflow.domain.TransitionDefinition;
@@ -20,7 +21,9 @@ import com.awap.workflow.interfaces.dto.WorkflowVersionResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -37,6 +40,7 @@ public class WorkflowDefinitionService {
   private final WorkflowVariableRepository workflowVariableRepository;
   private final ObjectMapper objectMapper;
   private final SpelExpressionService spelExpressionService;
+  private final QuotaService quotaService;
 
   public WorkflowDefinitionService(
       WorkflowDefinitionRepository definitionRepository,
@@ -45,7 +49,8 @@ public class WorkflowDefinitionService {
       TransitionDefinitionRepository transitionDefinitionRepository,
       WorkflowVariableRepository workflowVariableRepository,
       ObjectMapper objectMapper,
-      SpelExpressionService spelExpressionService) {
+      SpelExpressionService spelExpressionService,
+      QuotaService quotaService) {
     this.definitionRepository = definitionRepository;
     this.versionRepository = versionRepository;
     this.nodeDefinitionRepository = nodeDefinitionRepository;
@@ -53,10 +58,12 @@ public class WorkflowDefinitionService {
     this.workflowVariableRepository = workflowVariableRepository;
     this.objectMapper = objectMapper;
     this.spelExpressionService = spelExpressionService;
+    this.quotaService = quotaService;
   }
 
   @Transactional
   public WorkflowDefinitionResponse create(UUID tenantId, WorkflowDefinitionRequest request) {
+    quotaService.assertCanCreateWorkflow(tenantId);
     validateDefinition(request.definitionJson());
     WorkflowDefinition definition =
         new WorkflowDefinition(tenantId, request.name(), request.description());
@@ -110,14 +117,16 @@ public class WorkflowDefinitionService {
   @Transactional
   public WorkflowDefinitionResponse rollback(UUID tenantId, UUID id, int targetVersion) {
     WorkflowDefinition definition = find(tenantId, id);
-    versionRepository
-        .findByWorkflowIdAndVersion(id, targetVersion)
-        .orElseThrow(
-            () ->
-                new AwapException(
-                    ErrorCode.RESOURCE_NOT_FOUND,
-                    HttpStatus.NOT_FOUND,
-                    "Target version not found."));
+    WorkflowVersion target =
+        versionRepository
+            .findByWorkflowIdAndVersion(id, targetVersion)
+            .orElseThrow(
+                () ->
+                    new AwapException(
+                        ErrorCode.RESOURCE_NOT_FOUND,
+                        HttpStatus.NOT_FOUND,
+                        "Target version not found."));
+    target.publish();
     definition.rollbackTo(targetVersion);
     return toResponse(definition);
   }
@@ -187,11 +196,17 @@ public class WorkflowDefinitionService {
       if (nodes == null || !nodes.isArray() || nodes.isEmpty()) {
         throw invalidDefinition();
       }
+      Set<String> nodeIds = new HashSet<>();
       for (JsonNode node : nodes) {
         String type = node.path("type").asText(null);
         if (type == null || !isSupportedType(type)) {
           throw invalidDefinition();
         }
+        String nodeId = node.path("id").asText(null);
+        if (nodeId == null || nodeId.isBlank()) {
+          throw invalidDefinition();
+        }
+        nodeIds.add(nodeId);
         String expression = node.path("expression").asText(null);
         if (expression != null) {
           spelExpressionService.validate(expression);
@@ -199,6 +214,27 @@ public class WorkflowDefinitionService {
         String condition = node.path("condition").asText(null);
         if (condition != null) {
           spelExpressionService.validate(condition);
+        }
+      }
+
+      JsonNode transitions = root.get("transitions");
+      if (transitions == null) {
+        transitions = root.get("edges");
+      }
+      if (transitions != null) {
+        if (!transitions.isArray()) {
+          throw invalidDefinition();
+        }
+        for (JsonNode transition : transitions) {
+          String from = transition.path("from").asText(null);
+          String to = transition.path("to").asText(null);
+          if (from == null || to == null || !nodeIds.contains(from) || !nodeIds.contains(to)) {
+            throw invalidDefinition();
+          }
+          String condition = transition.path("condition").asText(null);
+          if (condition != null) {
+            spelExpressionService.validate(condition);
+          }
         }
       }
     } catch (JsonProcessingException ex) {
@@ -238,6 +274,9 @@ public class WorkflowDefinitionService {
       }
 
       JsonNode transitions = root.get("transitions");
+      if (transitions == null || !transitions.isArray()) {
+        transitions = root.get("edges");
+      }
       if (transitions != null && transitions.isArray()) {
         for (JsonNode transition : transitions) {
           String from = transition.path("from").asText(null);

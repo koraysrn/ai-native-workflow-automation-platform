@@ -68,6 +68,7 @@ public class SpelExpressionService {
             .withInstanceMethods()
             .withRootObject(root)
             .build();
+    registerWhitelistedFunctions(context);
     return evaluateWithTimeout(parsed, context);
   }
 
@@ -77,7 +78,13 @@ public class SpelExpressionService {
     EvaluationContext context =
         SimpleEvaluationContext.forReadOnlyDataBinding().withInstanceMethods().build();
     variables.forEach(context::setVariable);
+    registerWhitelistedFunctions(context);
     return evaluateWithTimeout(parsed, context);
+  }
+
+  /** Exposes the whitelisted functions as {@code #fn.<name>(...)} inside the sandbox. */
+  private void registerWhitelistedFunctions(EvaluationContext context) {
+    context.setVariable("fn", new SpelFunctions());
   }
 
   private Object evaluateWithTimeout(Expression expression, EvaluationContext context) {

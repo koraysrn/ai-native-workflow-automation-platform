@@ -6,6 +6,7 @@ import com.awap.identity.infrastructure.security.TenantContext;
 import com.awap.organization.application.OrganizationService;
 import com.awap.organization.interfaces.dto.CompanyRequest;
 import com.awap.organization.interfaces.dto.CompanyResponse;
+import com.awap.organization.interfaces.dto.CompanyTreeResponse;
 import com.awap.organization.interfaces.dto.DepartmentRequest;
 import com.awap.organization.interfaces.dto.DepartmentResponse;
 import com.awap.organization.interfaces.dto.OrgUserRequest;
@@ -20,6 +21,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -40,17 +42,26 @@ public class OrganizationController {
   }
 
   @PostMapping("/companies")
+  @PreAuthorize("hasAuthority('USER_MANAGE')")
   public ResponseEntity<CompanyResponse> createCompany(@Valid @RequestBody CompanyRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(organizationService.createCompany(currentTenantId(), request));
   }
 
   @GetMapping("/companies")
+  @PreAuthorize("hasAuthority('USER_MANAGE')")
   public ResponseEntity<List<CompanyResponse>> listCompanies() {
     return ResponseEntity.ok(organizationService.listCompanies(currentTenantId()));
   }
 
+  @GetMapping("/tree")
+  @PreAuthorize("hasAuthority('USER_MANAGE')")
+  public ResponseEntity<List<CompanyTreeResponse>> tree() {
+    return ResponseEntity.ok(organizationService.getTree(currentTenantId()));
+  }
+
   @PostMapping("/departments")
+  @PreAuthorize("hasAuthority('USER_MANAGE')")
   public ResponseEntity<DepartmentResponse> createDepartment(
       @Valid @RequestBody DepartmentRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
@@ -58,22 +69,26 @@ public class OrganizationController {
   }
 
   @GetMapping("/departments")
+  @PreAuthorize("hasAuthority('USER_MANAGE')")
   public ResponseEntity<List<DepartmentResponse>> listDepartments(@RequestParam UUID companyId) {
     return ResponseEntity.ok(organizationService.listDepartments(currentTenantId(), companyId));
   }
 
   @PostMapping("/teams")
+  @PreAuthorize("hasAuthority('USER_MANAGE')")
   public ResponseEntity<TeamResponse> createTeam(@Valid @RequestBody TeamRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(organizationService.createTeam(currentTenantId(), request));
   }
 
   @GetMapping("/teams")
+  @PreAuthorize("hasAuthority('USER_MANAGE')")
   public ResponseEntity<List<TeamResponse>> listTeams(@RequestParam UUID departmentId) {
     return ResponseEntity.ok(organizationService.listTeams(currentTenantId(), departmentId));
   }
 
   @PostMapping("/positions")
+  @PreAuthorize("hasAuthority('USER_MANAGE')")
   public ResponseEntity<PositionResponse> createPosition(
       @Valid @RequestBody PositionRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
@@ -81,22 +96,26 @@ public class OrganizationController {
   }
 
   @GetMapping("/positions")
+  @PreAuthorize("hasAuthority('USER_MANAGE')")
   public ResponseEntity<List<PositionResponse>> listPositions() {
     return ResponseEntity.ok(organizationService.listPositions(currentTenantId()));
   }
 
   @PostMapping("/users")
+  @PreAuthorize("hasAuthority('USER_MANAGE')")
   public ResponseEntity<OrgUserResponse> createUser(@Valid @RequestBody OrgUserRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(organizationService.createUser(currentTenantId(), request));
   }
 
   @GetMapping("/users")
+  @PreAuthorize("hasAuthority('USER_MANAGE')")
   public ResponseEntity<List<OrgUserResponse>> listUsers() {
     return ResponseEntity.ok(organizationService.listUsers(currentTenantId()));
   }
 
   @PostMapping("/users/{id}/assign")
+  @PreAuthorize("hasAuthority('USER_MANAGE')")
   public ResponseEntity<OrgUserResponse> assignToTeam(
       @PathVariable UUID id, @Valid @RequestBody TeamAssignRequest request) {
     return ResponseEntity.ok(

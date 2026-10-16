@@ -6,6 +6,8 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.LastModifiedBy;
 
 /** A tenant represents an isolated customer organization with a plan and usage quotas. */
 @Entity
@@ -42,6 +44,14 @@ public class Tenant {
 
   @Column(nullable = false)
   private Instant updatedAt;
+
+  @CreatedBy
+  @Column(name = "created_by")
+  private UUID createdBy;
+
+  @LastModifiedBy
+  @Column(name = "updated_by")
+  private UUID updatedBy;
 
   @Column(nullable = false)
   private boolean deleted;

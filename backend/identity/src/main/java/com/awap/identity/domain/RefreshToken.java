@@ -6,6 +6,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.data.annotation.CreatedBy;
 
 /** A refresh token that can be rotated and revoked. */
 @Entity
@@ -30,6 +31,10 @@ public class RefreshToken {
 
   @Column(nullable = false)
   private boolean revoked;
+
+  @CreatedBy
+  @Column(name = "created_by")
+  private UUID createdBy;
 
   protected RefreshToken() {}
 

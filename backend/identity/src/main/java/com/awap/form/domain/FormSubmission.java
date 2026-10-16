@@ -6,6 +6,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.data.annotation.CreatedBy;
 
 /** A tenant-scoped response submitted against a form definition. */
 @Entity
@@ -33,6 +34,10 @@ public class FormSubmission {
 
   @Column(nullable = false)
   private Instant createdAt;
+
+  @CreatedBy
+  @Column(name = "created_by")
+  private UUID createdBy;
 
   protected FormSubmission() {}
 

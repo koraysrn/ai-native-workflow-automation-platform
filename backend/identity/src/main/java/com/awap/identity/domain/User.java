@@ -9,6 +9,8 @@ import jakarta.persistence.Table;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.LastModifiedBy;
 
 /** A user belongs to exactly one tenant. */
 @Entity
@@ -40,6 +42,14 @@ public class User {
 
   @Column(nullable = false)
   private Instant updatedAt;
+
+  @CreatedBy
+  @Column(name = "created_by")
+  private UUID createdBy;
+
+  @LastModifiedBy
+  @Column(name = "updated_by")
+  private UUID updatedBy;
 
   @Column(name = "failed_login_attempts", nullable = false)
   private int failedLoginAttempts;

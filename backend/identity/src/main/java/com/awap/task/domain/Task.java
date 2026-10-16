@@ -9,6 +9,8 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.data.annotation.CreatedBy;
+import org.springframework.data.annotation.LastModifiedBy;
 
 /** A tenant-scoped task with optimistic locking, escalation and a guarded state machine. */
 @Entity
@@ -58,6 +60,14 @@ public class Task {
 
   @Column(nullable = false)
   private Instant updatedAt;
+
+  @CreatedBy
+  @Column(name = "created_by")
+  private UUID createdBy;
+
+  @LastModifiedBy
+  @Column(name = "updated_by")
+  private UUID updatedBy;
 
   @Column(nullable = false)
   private boolean deleted;

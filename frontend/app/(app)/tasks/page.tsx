@@ -1,49 +1,32 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  approveTask,
-  listTasks,
-  rejectTask,
-  type TaskDto,
-} from "../../../lib/api";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { listTasks, type TaskDto } from "../../../lib/api";
+import TaskDetail from "../../../components/tasks/TaskDetail";
 
 export default function TasksPage() {
-  const queryClient = useQueryClient();
   const { data: tasks = [] } = useQuery({
     queryKey: ["tasks"],
     queryFn: listTasks,
   });
-
-  const decide = useMutation({
-    mutationFn: ({ id, approve }: { id: string; approve: boolean }) =>
-      approve ? approveTask(id) : rejectTask(id),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tasks"] }),
-  });
+  const [selected, setSelected] = useState<TaskDto | null>(null);
 
   return (
     <div>
       <h1 style={{ fontSize: 24, fontWeight: 700 }}>Tasks</h1>
+      {selected && <TaskDetail task={selected} onClose={() => setSelected(null)} />}
       <ul>
-        {tasks.map((task: TaskDto) => (
+        {tasks.map((task) => (
           <li key={task.id} style={{ marginBottom: 8 }}>
-            {task.title} — {task.status}{" "}
-            {(task.status === "ASSIGNED" || task.status === "IN_PROGRESS") && (
-              <>
-                <button
-                  onClick={() => decide.mutate({ id: task.id, approve: true })}
-                  disabled={decide.isPending}
-                >
-                  Approve
-                </button>
-                <button
-                  onClick={() => decide.mutate({ id: task.id, approve: false })}
-                  disabled={decide.isPending}
-                >
-                  Reject
-                </button>
-              </>
-            )}
+            <button
+              type="button"
+              onClick={() => setSelected(task)}
+              style={{ background: "none", border: "none", cursor: "pointer", padding: 0 }}
+            >
+              {task.title}
+            </button>{" "}
+            — {task.status}
           </li>
         ))}
       </ul>

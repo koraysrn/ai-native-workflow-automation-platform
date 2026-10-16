@@ -7,6 +7,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.time.Instant;
 import java.util.UUID;
+import org.springframework.data.annotation.CreatedBy;
 
 /** Stores an idempotency key for a tenant to prevent duplicate mutating requests. */
 @Entity
@@ -39,6 +40,10 @@ public class IdempotencyRecord {
 
   @Column(nullable = false)
   private Instant createdAt;
+
+  @CreatedBy
+  @Column(name = "created_by")
+  private UUID createdBy;
 
   protected IdempotencyRecord() {}
 

@@ -1,6 +1,7 @@
 package com.awap.identity.infrastructure;
 
 import com.awap.identity.domain.IdempotencyRecord;
+import java.time.Instant;
 import java.util.UUID;
 import org.springframework.data.jpa.repository.JpaRepository;
 
@@ -9,4 +10,6 @@ public interface IdempotencyRecordRepository extends JpaRepository<IdempotencyRe
 
   java.util.Optional<IdempotencyRecord> findByTenantIdAndIdempotencyKey(
       UUID tenantId, String idempotencyKey);
+
+  void deleteByCreatedAtBefore(Instant cutoff);
 }

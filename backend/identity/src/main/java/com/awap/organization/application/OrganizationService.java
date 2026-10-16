@@ -2,6 +2,7 @@ package com.awap.organization.application;
 
 import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
+import com.awap.identity.application.QuotaService;
 import com.awap.organization.domain.Company;
 import com.awap.organization.domain.Department;
 import com.awap.organization.domain.OrganizationUser;
@@ -14,16 +15,21 @@ import com.awap.organization.infrastructure.PositionRepository;
 import com.awap.organization.infrastructure.TeamRepository;
 import com.awap.organization.interfaces.dto.CompanyRequest;
 import com.awap.organization.interfaces.dto.CompanyResponse;
+import com.awap.organization.interfaces.dto.CompanyTreeResponse;
 import com.awap.organization.interfaces.dto.DepartmentRequest;
 import com.awap.organization.interfaces.dto.DepartmentResponse;
+import com.awap.organization.interfaces.dto.DepartmentTreeResponse;
 import com.awap.organization.interfaces.dto.OrgUserRequest;
 import com.awap.organization.interfaces.dto.OrgUserResponse;
 import com.awap.organization.interfaces.dto.PositionRequest;
 import com.awap.organization.interfaces.dto.PositionResponse;
 import com.awap.organization.interfaces.dto.TeamRequest;
 import com.awap.organization.interfaces.dto.TeamResponse;
+import com.awap.organization.interfaces.dto.TeamTreeResponse;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -37,18 +43,21 @@ public class OrganizationService {
   private final TeamRepository teamRepository;
   private final PositionRepository positionRepository;
   private final OrganizationUserRepository organizationUserRepository;
+  private final QuotaService quotaService;
 
   public OrganizationService(
       CompanyRepository companyRepository,
       DepartmentRepository departmentRepository,
       TeamRepository teamRepository,
       PositionRepository positionRepository,
-      OrganizationUserRepository organizationUserRepository) {
+      OrganizationUserRepository organizationUserRepository,
+      QuotaService quotaService) {
     this.companyRepository = companyRepository;
     this.departmentRepository = departmentRepository;
     this.teamRepository = teamRepository;
     this.positionRepository = positionRepository;
     this.organizationUserRepository = organizationUserRepository;
+    this.quotaService = quotaService;
   }
 
   @Transactional
@@ -116,6 +125,7 @@ public class OrganizationService {
 
   @Transactional
   public OrgUserResponse createUser(UUID tenantId, OrgUserRequest request) {
+    quotaService.assertCanCreateUser(tenantId);
     OrganizationUser user =
         new OrganizationUser(
             tenantId, request.email(), request.fullName(), request.teamId(), request.positionId());
@@ -126,6 +136,51 @@ public class OrganizationService {
   public List<OrgUserResponse> listUsers(UUID tenantId) {
     return organizationUserRepository.findByTenantIdAndDeletedFalse(tenantId).stream()
         .map(this::toResponse)
+        .toList();
+  }
+
+  public List<CompanyTreeResponse> getTree(UUID tenantId) {
+    List<Department> departments = departmentRepository.findByTenantIdAndDeletedFalse(tenantId);
+    List<Team> teams = teamRepository.findByTenantIdAndDeletedFalse(tenantId);
+    List<OrganizationUser> users =
+        organizationUserRepository.findByTenantIdAndDeletedFalse(tenantId);
+
+    Map<UUID, List<Department>> departmentsByCompany =
+        departments.stream().collect(Collectors.groupingBy(Department::getCompanyId));
+    Map<UUID, List<Team>> teamsByDepartment =
+        teams.stream().collect(Collectors.groupingBy(Team::getDepartmentId));
+    Map<UUID, List<OrganizationUser>> usersByTeam =
+        users.stream()
+            .filter(user -> user.getTeamId() != null)
+            .collect(Collectors.groupingBy(OrganizationUser::getTeamId));
+
+    return companyRepository.findByTenantIdAndDeletedFalse(tenantId).stream()
+        .map(
+            company ->
+                new CompanyTreeResponse(
+                    company.getId(),
+                    company.getName(),
+                    departmentsByCompany.getOrDefault(company.getId(), List.of()).stream()
+                        .map(
+                            department ->
+                                new DepartmentTreeResponse(
+                                    department.getId(),
+                                    department.getName(),
+                                    teamsByDepartment
+                                        .getOrDefault(department.getId(), List.of())
+                                        .stream()
+                                        .map(
+                                            team ->
+                                                new TeamTreeResponse(
+                                                    team.getId(),
+                                                    team.getName(),
+                                                    usersByTeam
+                                                        .getOrDefault(team.getId(), List.of())
+                                                        .stream()
+                                                        .map(this::toResponse)
+                                                        .toList()))
+                                        .toList()))
+                        .toList()))
         .toList();
   }
 

@@ -10,6 +10,7 @@ import com.awap.engine.infrastructure.ExecutionLogRepository;
 import com.awap.engine.infrastructure.NodeExecutionRepository;
 import com.awap.engine.infrastructure.WorkflowInstanceRepository;
 import com.awap.engine.interfaces.dto.StartWorkflowRequest;
+import com.awap.identity.infrastructure.UserRepository;
 import com.awap.task.application.TaskService;
 import com.awap.workflow.application.SpelExpressionService;
 import com.awap.workflow.application.WorkflowDefinitionService;
@@ -32,6 +33,7 @@ class WorkflowEngineServiceTest {
   @Mock private ExecutionContextRepository executionContextRepository;
   @Mock private TaskService taskService;
   @Mock private SpelExpressionService spelExpressionService;
+  @Mock private UserRepository userRepository;
 
   private WorkflowEngineService service;
 
@@ -46,7 +48,8 @@ class WorkflowEngineServiceTest {
             executionContextRepository,
             taskService,
             spelExpressionService,
-            new ObjectMapper());
+            new ObjectMapper(),
+            userRepository);
   }
 
   @Test
