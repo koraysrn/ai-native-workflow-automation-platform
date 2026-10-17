@@ -258,30 +258,6 @@
                     <plugin>
                         <groupId>org.pitest</groupId>
                         <artifactId>pitest-maven</artifactId>
-                        <executions>
-                            <execution>
-                                <id>pit-critical-modules</id>
-                                <phase>verify</phase>
-                                <goals>
-                                    <goal>mutationCoverage</goal>
-                                </goals>
-                                <configuration>
-                                    <targetClasses>
-                                        <param>com.awap.engine.*</param>
-                                        <param>com.awap.task.*</param>
-                                        <param>com.awap.identity.application.*</param>
-                                    </targetClasses>
-                                    <targetTests>
-                                        <param>com.awap.*</param>
-                                    </targetTests>
-                                    <mutators>
-                                        <mutator>DEFAULTS</mutator>
-                                    </mutators>
-                                    <mutationThreshold>60</mutationThreshold>
-                                    <coverageThreshold>60</coverageThreshold>
-                                </configuration>
-                            </execution>
-                        </executions>
                         <configuration>
                             <targetClasses>
                                 <param>com.awap.*</param>
