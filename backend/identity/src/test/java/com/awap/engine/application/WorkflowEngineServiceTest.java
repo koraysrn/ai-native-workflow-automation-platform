@@ -117,13 +117,13 @@ class WorkflowEngineServiceTest {
     when(instanceRepository.findByIdAndTenantIdAndDeletedFalse(id, tenantId))
         .thenReturn(Optional.of(instance));
     when(nodeExecutionRepository.findByWorkflowInstanceIdAndStatus(
-            id, NodeExecutionStatus.COMPLETED))
+            instance.getId(), NodeExecutionStatus.COMPLETED))
         .thenReturn(List.of());
 
     var response = service.resume(tenantId, id);
 
     assertThat(response.state()).isEqualTo("RUNNING");
     verify(nodeExecutionRepository)
-        .findByWorkflowInstanceIdAndStatus(id, NodeExecutionStatus.COMPLETED);
+        .findByWorkflowInstanceIdAndStatus(instance.getId(), NodeExecutionStatus.COMPLETED);
   }
 }
