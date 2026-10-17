@@ -27,10 +27,13 @@ jobs:
         include:
           - name: awap-backend
             dockerfile: backend/Dockerfile
+            context: .
           - name: awap-frontend
             dockerfile: frontend/Dockerfile
+            context: .
           - name: awap-ai-layer
             dockerfile: ai-layer/Dockerfile
+            context: ./ai-layer
     steps:
       - uses: actions/checkout@v7
 
@@ -56,7 +59,7 @@ jobs:
       - name: Build image
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           push: ${{ inputs.push }}
           tags: ghcr.io/${{ github.repository }}/${{ matrix.name }}:${{ inputs.tag-suffix }}
@@ -66,7 +69,7 @@ jobs:
       - name: Promote cache
         if: ${{ !cancelled() }}
         run: |
-          rm -rf /tmp/.buildx-cache
           if [ -d /tmp/.buildx-cache-new ]; then
+            rm -rf /tmp/.buildx-cache
             mv /tmp/.buildx-cache-new /tmp/.buildx-cache
           fi
