@@ -1,0 +1,10 @@
+{
+  "type": "record",
+  "name": "WorkflowInstanceStateEvent",
+  "namespace": "com.awap.engine.event",
+  "fields": [
+    {"name": "tenantId", "type": "string"},
+    {"name": "workflowInstanceId", "type": "string"},
+    {"name": "state", "type": "string"}
+  ]
+}
