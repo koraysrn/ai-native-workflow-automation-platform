@@ -23,8 +23,7 @@ public class InvitationController {
 
   @PostMapping("/{token}/accept")
   public ResponseEntity<TenantResponse> accept(
-      @PathVariable String token,
-      @RequestBody(required = false) AcceptInvitationRequest request) {
+      @PathVariable String token, @RequestBody(required = false) AcceptInvitationRequest request) {
     AcceptInvitationRequest safe =
         request != null ? request : new AcceptInvitationRequest(null, null);
     return ResponseEntity.ok(tenantService.acceptInvitation(token, safe));

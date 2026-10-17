@@ -49,12 +49,7 @@ public class Invitation {
   protected Invitation() {}
 
   public Invitation(
-      UUID tenantId,
-      String email,
-      Role role,
-      String tokenHash,
-      Instant expiresAt,
-      UUID invitedBy) {
+      UUID tenantId, String email, Role role, String tokenHash, Instant expiresAt, UUID invitedBy) {
     this.id = UUID.randomUUID();
     this.tenantId = tenantId;
     this.email = email;
