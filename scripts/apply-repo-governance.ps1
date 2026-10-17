@@ -27,9 +27,9 @@ $labels = @(
     @{ n = "priority/p1";     d = "High priority";                                c = "d93f0b" },
     @{ n = "priority/p2";     d = "Medium priority";                              c = "fbca04" },
     @{ n = "priority/p3";     d = "Low priority";                                 c = "0e8a16" },
-    @{ n = "phase/on-faz";    d = "On Faz (preparation phase)";                   c = "e4e669" },
-    @{ n = "phase/faz-0";     d = "Faz 0 (core MVP)";                             c = "0e8a16" },
-    @{ n = "phase/faz-1";     d = "Faz 1 (post-MVP)";                             c = "0075ca" }
+    @{ n = "phase/preparation"; d = "Preparation phase (repo, CI/CD, security foundations)"; c = "e4e669" },
+    @{ n = "phase/core-mvp";    d = "Core MVP phase";                             c = "0e8a16" },
+    @{ n = "phase/expansion";   d = "Post-MVP expansion";                         c = "0075ca" }
 )
 
 foreach ($l in $labels) {
@@ -50,9 +50,9 @@ function Ensure-Milestone {
     }
 }
 
-Ensure-Milestone "Ön Faz" "On Faz - repo, CI/CD ve guvenlik temellerinin hazirligi"
-Ensure-Milestone "Faz 0"  "Faz 0 - cekirdek MVP"
-Ensure-Milestone "Faz 1"  "Faz 1 - MVP sonrasi genisletmeler"
+Ensure-Milestone "Preparation Phase"  "Preparation phase - repo, CI/CD and security foundations"
+Ensure-Milestone "Phase 0 - Core MVP" "Phase 0 - core MVP"
+Ensure-Milestone "Phase 1 - Expansion" "Phase 1 - post-MVP expansion"
 
 # 4. Branch protection on main (policy lives in settings/branch-protection.json)
 $policy = Join-Path $PSScriptRoot "..\settings\branch-protection.json"

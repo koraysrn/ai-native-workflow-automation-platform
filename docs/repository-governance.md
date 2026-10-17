@@ -50,14 +50,14 @@ Bu belge `main` dalının korunması, etiket (label) taksonomisi, milestone yap�
 | `priority/p1` | Yüksek öncelik |
 | `priority/p2` | Orta öncelik |
 | `priority/p3` | Düşük öncelik |
-| `phase/on-faz` | Ön Faz (hazırlık fazı) |
-| `phase/faz-0` | Faz 0 (çekirdek MVP) |
-| `phase/faz-1` | Faz 1 (MVP sonrası) |
+| `phase/preparation` | Preparation phase (repo, CI/CD, security foundations) |
+| `phase/core-mvp` | Core MVP phase |
+| `phase/expansion` | Post-MVP expansion |
 
 ## Milestones
 
 | Milestone | Kapsam |
 |---|---|
-| `Ön Faz` | Repo, CI/CD ve güvenlik temellerinin hazırlığı |
-| `Faz 0` | Çekirdek MVP |
-| `Faz 1` | MVP sonrası genişletmeler |
+| `Preparation Phase` | Repo, CI/CD and security foundations |
+| `Phase 0 - Core MVP` | Core MVP |
+| `Phase 1 - Expansion` | Post-MVP expansion |
