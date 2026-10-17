@@ -55,6 +55,16 @@ function csrfToken(): string | undefined {
   return match ? decodeURIComponent(match[1]) : undefined;
 }
 
+/** Reads the active tenant cookie set by the tenant switcher. */
+function activeTenantId(): string | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+  const match = document.cookie.match(/(?:^|;\s*)awap_tenant=([^;]*)/);
+  const value = match?.[1];
+  return value ? decodeURIComponent(value) : null;
+}
+
 /** Calls the public actuator health endpoint used by the shared consumer contract. */
 export async function healthCheck(): Promise<HealthDto> {
   const response = await fetch(`${apiBase()}/actuator/health`);
@@ -141,6 +151,10 @@ async function authFetch<T>(path: string, retried = false): Promise<T> {
   if (token) {
     headers["X-XSRF-TOKEN"] = token;
   }
+  const tenant = activeTenantId();
+  if (tenant) {
+    headers["X-Tenant-Id"] = tenant;
+  }
   const response = await fetch(`${apiBase()}${path}`, {
     headers,
     credentials: "include",
@@ -163,6 +177,10 @@ async function authPost<T>(path: string, body: unknown, retried = false): Promis
   const token = csrfToken();
   if (token) {
     headers["X-XSRF-TOKEN"] = token;
+  }
+  const tenant = activeTenantId();
+  if (tenant) {
+    headers["X-Tenant-Id"] = tenant;
   }
   const response = await fetch(`${apiBase()}${path}`, {
     method: "POST",

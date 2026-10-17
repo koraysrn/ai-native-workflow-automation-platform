@@ -34,6 +34,7 @@ export async function logout(): Promise<void> {
   } catch {
     // best-effort logout; cookies will be cleared on next successful auth
   }
+  clearActiveTenant();
   // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload clears session cookies and re-runs the middleware auth check
   window.location.href = "/";
 }
