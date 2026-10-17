@@ -15,8 +15,15 @@ export default function TaskDetail({
   const [comment, setComment] = useState("");
 
   const decide = useMutation({
-    mutationFn: ({ id, approve }: { id: string; approve: boolean }) =>
-      approve ? approveTask(id) : rejectTask(id),
+    mutationFn: ({
+      id,
+      approve,
+      comment,
+    }: {
+      id: string;
+      approve: boolean;
+      comment: string;
+    }) => (approve ? approveTask(id, comment) : rejectTask(id, comment)),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["tasks"] });
       onClose();
@@ -31,20 +38,20 @@ export default function TaskDetail({
         Status: <strong>{task.status}</strong>
       </p>
       <textarea
-        placeholder="Comment (not yet persisted)"
+        placeholder="Comment"
         value={comment}
         onChange={(event) => setComment(event.target.value)}
         style={{ display: "block", width: "100%", minHeight: 64, marginBottom: 12 }}
       />
       <div style={{ display: "flex", gap: 8 }}>
         <button
-          onClick={() => decide.mutate({ id: task.id, approve: true })}
+          onClick={() => decide.mutate({ id: task.id, approve: true, comment })}
           disabled={decide.isPending}
         >
           Approve
         </button>
         <button
-          onClick={() => decide.mutate({ id: task.id, approve: false })}
+          onClick={() => decide.mutate({ id: task.id, approve: false, comment })}
           disabled={decide.isPending}
         >
           Reject

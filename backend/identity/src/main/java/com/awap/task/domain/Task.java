@@ -51,6 +51,9 @@ public class Task {
   @Column(name = "completed_at")
   private Instant completedAt;
 
+  @Column(name = "decision_comment")
+  private String decisionComment;
+
   @Version
   @Column(nullable = false)
   private long version;
@@ -128,15 +131,25 @@ public class Task {
   }
 
   public void approve() {
+    approve(null);
+  }
+
+  public void approve(String comment) {
     requireOpenForDecision();
     this.status = TaskStatus.APPROVED;
+    this.decisionComment = comment;
     this.completedAt = Instant.now();
     this.updatedAt = Instant.now();
   }
 
   public void reject() {
+    reject(null);
+  }
+
+  public void reject(String comment) {
     requireOpenForDecision();
     this.status = TaskStatus.REJECTED;
+    this.decisionComment = comment;
     this.completedAt = Instant.now();
     this.updatedAt = Instant.now();
   }
@@ -220,6 +233,10 @@ public class Task {
 
   public Instant getCompletedAt() {
     return completedAt;
+  }
+
+  public String getDecisionComment() {
+    return decisionComment;
   }
 
   public long getVersion() {
