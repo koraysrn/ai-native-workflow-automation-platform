@@ -1,0 +1,11 @@
+{
+  "type": "record",
+  "name": "TaskCompletedEvent",
+  "namespace": "com.awap.engine.event",
+  "fields": [
+    {"name": "tenantId", "type": "string"},
+    {"name": "workflowInstanceId", "type": "string"},
+    {"name": "nodeExecutionId", "type": "string"},
+    {"name": "outputJson", "type": ["null", "string"], "default": null}
+  ]
+}
