@@ -40,6 +40,7 @@ export default function TaskDetail({
       <textarea
         placeholder="Comment"
         value={comment}
+        maxLength={2000}
         onChange={(event) => setComment(event.target.value)}
         style={{ display: "block", width: "100%", minHeight: 64, marginBottom: 12 }}
       />
