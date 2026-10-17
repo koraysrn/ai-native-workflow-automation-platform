@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -85,6 +86,7 @@ class TaskControllerWebMvcTest {
             post("/api/v1/tasks/{id}/approve", id)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"comment\":\"Looks good\"}")
+                .with(csrf())
                 .with(user("user").authorities(new SimpleGrantedAuthority("TASK_APPROVE"))))
         .andExpect(status().isOk());
 
@@ -102,6 +104,7 @@ class TaskControllerWebMvcTest {
     mockMvc
         .perform(
             post("/api/v1/tasks/{id}/approve", id)
+                .with(csrf())
                 .with(user("user").authorities(new SimpleGrantedAuthority("TASK_APPROVE"))))
         .andExpect(status().isOk());
 
@@ -121,6 +124,7 @@ class TaskControllerWebMvcTest {
             post("/api/v1/tasks/{id}/reject", id)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"comment\":\"Needs rework\"}")
+                .with(csrf())
                 .with(user("user").authorities(new SimpleGrantedAuthority("TASK_APPROVE"))))
         .andExpect(status().isOk());
 
