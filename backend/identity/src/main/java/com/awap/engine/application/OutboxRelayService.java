@@ -57,7 +57,8 @@ public class OutboxRelayService {
           "organization.team.created",
           "organization.position.created",
           "organization.user.created",
-          "organization.team.user_assigned" -> "organization.events";
+          "organization.team.user_assigned" ->
+          "organization.events";
       default -> "workflow.instance.events";
     };
   }
