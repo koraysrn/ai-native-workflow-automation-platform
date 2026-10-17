@@ -2,6 +2,7 @@ package com.awap.organization.application;
 
 import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
+import com.awap.engine.application.OutboxEventPublisher;
 import com.awap.identity.application.QuotaService;
 import com.awap.organization.domain.Company;
 import com.awap.organization.domain.Department;
@@ -44,6 +45,7 @@ public class OrganizationService {
   private final PositionRepository positionRepository;
   private final OrganizationUserRepository organizationUserRepository;
   private final QuotaService quotaService;
+  private final OutboxEventPublisher outboxEventPublisher;
 
   public OrganizationService(
       CompanyRepository companyRepository,
@@ -51,19 +53,26 @@ public class OrganizationService {
       TeamRepository teamRepository,
       PositionRepository positionRepository,
       OrganizationUserRepository organizationUserRepository,
-      QuotaService quotaService) {
+      QuotaService quotaService,
+      OutboxEventPublisher outboxEventPublisher) {
     this.companyRepository = companyRepository;
     this.departmentRepository = departmentRepository;
     this.teamRepository = teamRepository;
     this.positionRepository = positionRepository;
     this.organizationUserRepository = organizationUserRepository;
     this.quotaService = quotaService;
+    this.outboxEventPublisher = outboxEventPublisher;
   }
 
   @Transactional
   public CompanyResponse createCompany(UUID tenantId, CompanyRequest request) {
     Company company = new Company(tenantId, request.name());
     companyRepository.save(company);
+    publish(
+        tenantId,
+        "organization.company.created",
+        company.getId(),
+        Map.of("tenantId", tenantId, "entityId", company.getId(), "name", company.getName()));
     return toResponse(company);
   }
 
@@ -81,6 +90,11 @@ public class OrganizationService {
     Department department =
         new Department(tenantId, request.companyId(), request.parentId(), request.name());
     departmentRepository.save(department);
+    publish(
+        tenantId,
+        "organization.department.created",
+        department.getId(),
+        Map.of("tenantId", tenantId, "entityId", department.getId(), "name", department.getName()));
     return toResponse(department);
   }
 
@@ -99,6 +113,11 @@ public class OrganizationService {
         .orElseThrow(() -> notFound("Department not found."));
     Team team = new Team(tenantId, request.departmentId(), request.name());
     teamRepository.save(team);
+    publish(
+        tenantId,
+        "organization.team.created",
+        team.getId(),
+        Map.of("tenantId", tenantId, "entityId", team.getId(), "name", team.getName()));
     return toResponse(team);
   }
 
@@ -114,6 +133,11 @@ public class OrganizationService {
   public PositionResponse createPosition(UUID tenantId, PositionRequest request) {
     Position position = new Position(tenantId, request.name());
     positionRepository.save(position);
+    publish(
+        tenantId,
+        "organization.position.created",
+        position.getId(),
+        Map.of("tenantId", tenantId, "entityId", position.getId(), "name", position.getName()));
     return toResponse(position);
   }
 
@@ -130,6 +154,11 @@ public class OrganizationService {
         new OrganizationUser(
             tenantId, request.email(), request.fullName(), request.teamId(), request.positionId());
     organizationUserRepository.save(user);
+    publish(
+        tenantId,
+        "organization.user.created",
+        user.getId(),
+        Map.of("tenantId", tenantId, "entityId", user.getId(), "email", user.getEmail()));
     return toResponse(user);
   }
 
@@ -194,7 +223,16 @@ public class OrganizationService {
             .findByIdAndTenantIdAndDeletedFalse(userId, tenantId)
             .orElseThrow(() -> notFound("User not found."));
     user.assignToTeam(teamId);
+    publish(
+        tenantId,
+        "organization.team.user_assigned",
+        user.getId(),
+        Map.of("tenantId", tenantId, "entityId", user.getId(), "teamId", teamId));
     return toResponse(user);
+  }
+
+  private void publish(UUID tenantId, String eventType, UUID entityId, Object snapshot) {
+    outboxEventPublisher.publish(tenantId, "ORGANIZATION", entityId, eventType, snapshot);
   }
 
   private AwapException notFound(String detail) {

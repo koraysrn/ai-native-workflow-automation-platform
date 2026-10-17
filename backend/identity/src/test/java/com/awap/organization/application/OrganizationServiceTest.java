@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import com.awap.common.api.AwapException;
+import com.awap.engine.application.OutboxEventPublisher;
 import com.awap.identity.application.QuotaService;
 import com.awap.organization.infrastructure.CompanyRepository;
 import com.awap.organization.infrastructure.DepartmentRepository;
@@ -31,6 +32,7 @@ class OrganizationServiceTest {
   @Mock private PositionRepository positionRepository;
   @Mock private OrganizationUserRepository organizationUserRepository;
   @Mock private QuotaService quotaService;
+  @Mock private OutboxEventPublisher outboxEventPublisher;
 
   private OrganizationService service;
 
@@ -43,7 +45,8 @@ class OrganizationServiceTest {
             teamRepository,
             positionRepository,
             organizationUserRepository,
-            quotaService);
+            quotaService,
+            outboxEventPublisher);
   }
 
   @Test

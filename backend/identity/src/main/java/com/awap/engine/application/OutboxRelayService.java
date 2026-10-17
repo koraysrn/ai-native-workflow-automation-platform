@@ -52,6 +52,12 @@ public class OutboxRelayService {
     return switch (eventType) {
       case "TASK_COMPLETED", "TASK_ESCALATION_DUE" -> "workflow.task.events";
       case "FORM_SUBMITTED" -> "workflow.instance.events";
+      case "organization.company.created",
+          "organization.department.created",
+          "organization.team.created",
+          "organization.position.created",
+          "organization.user.created",
+          "organization.team.user_assigned" -> "organization.events";
       default -> "workflow.instance.events";
     };
   }
