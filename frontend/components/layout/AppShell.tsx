@@ -1,9 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import type { ReactNode } from "react";
-import { logout } from "../../lib/auth";
+import { getActiveTenant, logout } from "../../lib/auth";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
@@ -17,6 +17,7 @@ const navItems = [
 
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
@@ -47,6 +48,21 @@ export default function AppShell({ children }: { children: ReactNode }) {
             </Link>
           ))}
         </nav>
+        <button
+          type="button"
+          onClick={() => router.push("/select-tenant")}
+          style={{
+            background: "#1e293b",
+            color: "#e2e8f0",
+            border: "none",
+            padding: "8px 10px",
+            borderRadius: 6,
+            cursor: "pointer",
+            marginBottom: 8,
+          }}
+        >
+          Tenant: {getActiveTenant() ?? "select"}
+        </button>
         <button
           type="button"
           onClick={() => logout()}

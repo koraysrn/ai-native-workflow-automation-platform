@@ -64,6 +64,21 @@ export async function healthCheck(): Promise<HealthDto> {
   return (await response.json()) as HealthDto;
 }
 
+export interface TenantMembershipDto {
+  tenantId: string;
+  role: string;
+}
+
+export async function fetchTenants(): Promise<TenantMembershipDto[]> {
+  const response = await fetch(`${apiBase()}/api/v1/auth/tenants`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to load tenants with status ${response.status}`);
+  }
+  return (await response.json()) as TenantMembershipDto[];
+}
+
 export interface RegisterTenantPayload {
   slug: string;
   name: string;
