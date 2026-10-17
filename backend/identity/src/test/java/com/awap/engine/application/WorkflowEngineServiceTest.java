@@ -92,8 +92,7 @@ class WorkflowEngineServiceTest {
 
     assertThat(response.state()).isEqualTo("PAUSED");
     verify(outboxEventPublisher)
-        .publish(
-            eq(tenantId), eq("WORKFLOW"), eq(instance.getId()), eq("WORKFLOW_PAUSED"), any());
+        .publish(eq(tenantId), eq("WORKFLOW"), eq(instance.getId()), eq("WORKFLOW_PAUSED"), any());
   }
 
   @Test

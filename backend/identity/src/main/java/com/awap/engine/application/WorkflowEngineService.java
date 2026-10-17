@@ -309,9 +309,9 @@ public class WorkflowEngineService {
   }
 
   /**
-   * After a pause, nodes that completed while the instance was paused may have
-   * had their outgoing transitions skipped. Re-driving them is idempotent:
-   * targets that are already COMPLETED or WAITING are ignored by executeNode.
+   * After a pause, nodes that completed while the instance was paused may have had their outgoing
+   * transitions skipped. Re-driving them is idempotent: targets that are already COMPLETED or
+   * WAITING are ignored by executeNode.
    */
   private void resumeCompletedNodes(WorkflowInstance instance) {
     nodeExecutionRepository
