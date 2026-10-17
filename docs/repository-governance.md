@@ -1,29 +1,29 @@
 # Repository Governance
 
-Bu belge `main` dalının korunması, etiket (label) taksonomisi, milestone yapısı ve merge politikasını kod olarak tanımlar. Uygulama için idempotent script: [`scripts/apply-repo-governance.ps1`](../scripts/apply-repo-governance.ps1).
+This document defines the protection of the `main` branch, the issue/PR label taxonomy, the milestone structure and the merge policy as code. The idempotent apply script lives at [`scripts/apply-repo-governance.ps1`](../scripts/apply-repo-governance.ps1).
 
-## Branch protection — `main`
+## Branch protection - `main`
 
-| Kural | Değer |
+| Rule | Value |
 |---|---|
-| Require pull request | Evet |
-| Direct push | Yasak |
-| Enforce admins | Evet |
-| Require conversation resolution | Evet |
-| Dismiss stale reviews | Evet |
+| Require pull request | Yes |
+| Direct push | Disallowed |
+| Enforce admins | Yes |
+| Require conversation resolution | Yes |
+| Dismiss stale reviews | Yes |
 | Required approving review count | 0 |
-| Require code owner reviews | Hayır (aşağıdaki nota bakın) |
-| Allow force pushes | Hayır |
-| Allow deletions | Hayır |
-| Strict status checks | Evet |
+| Require code owner reviews | No (see note below) |
+| Allow force pushes | No |
+| Allow deletions | No |
+| Strict status checks | Yes |
 
-> **Not — code owner review:** Repo tek maintainer'lı olduğundan (`@koraysrn`) `require_code_owner_reviews` kapalıdır. Açık tutulması, yazarın kendi PR'ını onaylayamaması nedeniyle tüm PR'ları kilitleyebilir. Ek maintainer/lar eklendiğinde bu kural açılmalıdır.
+> **Note - code owner review:** Because the repository has a single maintainer (`@koraysrn`), `require_code_owner_reviews` is disabled. Keeping it enabled would lock every PR, since the author cannot approve their own PR. This rule should be enabled once additional maintainers are added.
 
 ### Required status checks
 
 - `Backend (Java 25 / Spring Boot 4.1.1)`
-- `Frontend (TypeScript 6.x / Next.js 16)`
-- `AI Layer (Python 3.14 / FastAPI)`
+- `Frontend (TypeScript 7.x / Next.js 16)`
+- `AI Layer (Python 3.15 / FastAPI)`
 - `Trivy vulnerability scan`
 - `Secret scan (Gitleaks)`
 - `OWASP Dependency Check`
@@ -32,31 +32,33 @@ Bu belge `main` dalının korunması, etiket (label) taksonomisi, milestone yap�
 
 ## Merge policy
 
-- Squash merge zorunlu; merge commit ve rebase kapalı.
-- Head branch merge sonrası otomatik silinir.
-- Commit mesajları Conventional Commits'e uygun olmalıdır ([`commitlint.config.cjs`](../commitlint.config.cjs)).
+- Squash merge is mandatory; merge commits and rebase are disabled.
+- The head branch is deleted automatically after merge.
+- Commit messages must follow Conventional Commits ([`commitlint.config.cjs`](../commitlint.config.cjs)).
 
 ## Labels
 
-| Etiket | Açıklama |
+| Label | Description |
 |---|---|
-| `kind/bug` | Hata düzeltmesi |
-| `kind/feature` | Yeni özellik veya istek |
-| `kind/chore` | Bakım, araç veya altyapı işi |
+| `kind/bug` | Bug fix or correction |
+| `kind/feature` | New feature or request |
+| `kind/chore` | Maintenance, tooling or infra work |
 | `area/backend` | Backend (Java / Spring Boot) |
 | `area/frontend` | Frontend (Next.js / React) |
 | `area/ai` | AI layer (Python / FastAPI) |
-| `priority/p0` | Kritik — ilk gönderilecek |
-| `priority/p1` | Yüksek öncelik |
-| `priority/p2` | Orta öncelik |
-| `priority/p3` | Düşük öncelik |
+| `priority/p0` | Critical - must ship first |
+| `priority/p1` | High priority |
+| `priority/p2` | Medium priority |
+| `priority/p3` | Low priority |
 | `phase/preparation` | Preparation phase (repo, CI/CD, security foundations) |
 | `phase/core-mvp` | Core MVP phase |
 | `phase/expansion` | Post-MVP expansion |
 
+> **Note - phase naming:** The planning documents originally used `phase/on-faz`, `phase/faz-0` and `phase/faz-1`. These were renamed to `phase/preparation`, `phase/core-mvp` and `phase/expansion` for clarity and consistency with the milestone names.
+
 ## Milestones
 
-| Milestone | Kapsam |
+| Milestone | Scope |
 |---|---|
 | `Preparation Phase` | Repo, CI/CD and security foundations |
 | `Phase 0 - Core MVP` | Core MVP |
