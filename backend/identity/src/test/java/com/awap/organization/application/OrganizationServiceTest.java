@@ -89,16 +89,21 @@ class OrganizationServiceTest {
     UUID tenantId = UUID.randomUUID();
     UUID userId = UUID.randomUUID();
     UUID teamId = UUID.randomUUID();
+    OrganizationUser user = new OrganizationUser(tenantId, "u@acme.com", "U", null, null);
     when(teamRepository.findByIdAndTenantIdAndDeletedFalse(teamId, tenantId))
         .thenReturn(Optional.of(new Team(tenantId, UUID.randomUUID(), "Core")));
     when(organizationUserRepository.findByIdAndTenantIdAndDeletedFalse(userId, tenantId))
-        .thenReturn(Optional.of(new OrganizationUser(tenantId, "u@acme.com", "U", null, null)));
+        .thenReturn(Optional.of(user));
 
     OrgUserResponse response = service.assignToTeam(tenantId, userId, teamId);
 
     assertThat(response.teamId()).isEqualTo(teamId);
     verify(outboxEventPublisher)
         .publish(
-            eq(tenantId), eq("ORGANIZATION"), eq(userId), eq("organization.team.user_assigned"), any());
+            eq(tenantId),
+            eq("ORGANIZATION"),
+            eq(user.getId()),
+            eq("organization.team.user_assigned"),
+            any());
   }
 }
