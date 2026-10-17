@@ -52,7 +52,8 @@ function csrfToken(): string | undefined {
     return undefined;
   }
   const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
-  return match ? decodeURIComponent(match[1]) : undefined;
+  const token = match?.[1];
+  return token ? decodeURIComponent(token) : undefined;
 }
 
 /** Reads the active tenant cookie set by the tenant switcher. */
