@@ -16,22 +16,20 @@ on every version change (see `CLAUDE.md` — Version Compatibility Rules).
 | React | 19.3.x | ✅ | |
 | Node.js | 24 LTS | ✅ | |
 | pnpm | 12.x | ✅ | |
-| Python | 3.14 (conda) | ✅ | Chosen for ecosystem maturity; 3.15 when `cp315` wheels land |
+| Python | 3.15.0 (uv) | ✅ | uv-managed with committed `uv.lock`; cp315 wheels verified |
 | FastAPI | 0.135.x | ✅ | conda-forge |
 | LangChain | 1.4.x | ✅ | installed via `pip` inside the conda env |
 | LangGraph | 1.2.x | ✅ | installed via `pip` inside the conda env |
 
 ## AI Layer Notes
 
-- The AI Layer environment is managed **only with conda**; `environment.yml`
-  is the single source of truth.
-- `python=3.14`, `fastapi`, and `ruff` come from conda-forge; `langchain` and
-  `langgraph` are installed from PyPI via the `pip` section so that the latest
-  1.x majors are available.
-- Python 3.15.0 works with conda, but conda-forge currently ships older
-  LangChain/LangGraph majors (0.3.x / 0.4.x) for it. To keep the AI stack
-  current, Python 3.14 is used until conda-forge publishes 1.x for Python 3.15
-  or `ormsgpack`/`uuid-utils` ship `cp315` wheels on PyPI.
+- The AI Layer environment is managed **with uv**; `ai-layer/pyproject.toml`
+  and the committed `ai-layer/uv.lock` are the single source of truth.
+- Python is pinned to 3.15.0 via `[tool.uv]`; C-based dependencies
+  (`numpy`, `orjson`, `pydantic-core`) are verified by the pilot compatibility
+  check (`ai-layer/compat_check.py`).
+- `langchain` (1.4.x) and `langgraph` (1.2.x) are installed from PyPI.
+- `environment.yml` was removed; the AI layer no longer depends on conda.
 
 ## Frontend Notes
 
