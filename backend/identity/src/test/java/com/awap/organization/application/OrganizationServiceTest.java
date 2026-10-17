@@ -69,7 +69,11 @@ class OrganizationServiceTest {
 
     verify(outboxEventPublisher)
         .publish(
-            eq(tenantId), eq("ORGANIZATION"), any(UUID.class), eq("organization.company.created"), any());
+            eq(tenantId),
+            eq("ORGANIZATION"),
+            any(UUID.class),
+            eq("organization.company.created"),
+            any());
   }
 
   @Test
