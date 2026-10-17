@@ -135,10 +135,6 @@ public class TaskService {
     }
   }
 
-  private void recordDecision(String decision) {
-    meterRegistry.counter("awap.task.decisions", "decision", decision).increment();
-  }
-
   private void requireDecisionRight(Task task, UUID actorId, String actorRole) {
     if (task.getAssigneeId() != null
         && !task.getAssigneeId().equals(actorId)
