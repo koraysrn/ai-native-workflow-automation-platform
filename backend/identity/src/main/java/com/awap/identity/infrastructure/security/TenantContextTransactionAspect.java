@@ -1,9 +1,11 @@
 package com.awap.identity.infrastructure.security;
 
+import jakarta.persistence.EntityManager;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import javax.sql.DataSource;
+import org.hibernate.Session;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Before;
 import org.springframework.core.Ordered;
@@ -19,9 +21,11 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 public class TenantContextTransactionAspect {
 
   private final DataSource dataSource;
+  private final EntityManager entityManager;
 
-  public TenantContextTransactionAspect(DataSource dataSource) {
+  public TenantContextTransactionAspect(DataSource dataSource, EntityManager entityManager) {
     this.dataSource = dataSource;
+    this.entityManager = entityManager;
   }
 
   @Before(
@@ -32,6 +36,7 @@ public class TenantContextTransactionAspect {
   }
 
   private void setLocalTenant(TenantContext.Context context) {
+    enableJpaFilter(context);
     if (!TransactionSynchronizationManager.isSynchronizationActive()) {
       return;
     }
@@ -45,6 +50,18 @@ public class TenantContextTransactionAspect {
       }
     } catch (SQLException ex) {
       throw new IllegalStateException("Failed to set tenant context on connection", ex);
+    }
+  }
+
+  /** Enables the Hibernate tenantFilter as a defense-in-depth layer (RLS remains the hard guarantee). */
+  private void enableJpaFilter(TenantContext.Context context) {
+    try {
+      entityManager
+          .unwrap(Session.class)
+          .enableFilter("tenantFilter")
+          .setParameter("tenantId", context.tenantId());
+    } catch (RuntimeException ignored) {
+      // The JPA filter is best-effort; RLS is the primary isolation mechanism.
     }
   }
 }

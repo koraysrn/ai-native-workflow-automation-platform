@@ -9,10 +9,12 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
+import org.hibernate.annotations.Filter;
 
 /** A running instance of a published workflow version. */
 @Entity
 @Table(name = "workflow_instances")
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class WorkflowInstance {
 
   @Id
