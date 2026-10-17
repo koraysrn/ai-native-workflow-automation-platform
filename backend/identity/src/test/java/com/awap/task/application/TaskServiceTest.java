@@ -2,6 +2,7 @@ package com.awap.task.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 import com.awap.common.api.AwapException;
@@ -10,6 +11,8 @@ import com.awap.task.domain.TaskStatus;
 import com.awap.task.infrastructure.TaskRepository;
 import com.awap.task.interfaces.dto.TaskRequest;
 import com.awap.task.interfaces.dto.TaskResponse;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -23,12 +26,15 @@ class TaskServiceTest {
 
   @Mock private TaskRepository taskRepository;
   @Mock private OutboxEventPublisher outboxEventPublisher;
+  @Mock private MeterRegistry meterRegistry;
+  @Mock private Counter counter;
 
   private TaskService service;
 
   @BeforeEach
   void setUp() {
-    service = new TaskService(taskRepository, outboxEventPublisher);
+    when(meterRegistry.counter(anyString(), anyString(), anyString())).thenReturn(counter);
+    service = new TaskService(taskRepository, outboxEventPublisher, meterRegistry);
   }
 
   @Test
