@@ -87,10 +87,7 @@ class TenantServiceTest {
 
     TenantResponse response =
         tenantService.updateLimits(
-            targetTenantId,
-            new LimitsRequest("PRO", 20, 20, 2000),
-            callerTenantId,
-            "SYSTEM_ADMIN");
+            targetTenantId, new LimitsRequest("PRO", 20, 20, 2000), callerTenantId, "SYSTEM_ADMIN");
 
     assertThat(response.plan()).isEqualTo("PRO");
     assertThat(response.maxUsers()).isEqualTo(20);
