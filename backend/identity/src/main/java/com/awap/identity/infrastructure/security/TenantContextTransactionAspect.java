@@ -5,9 +5,9 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.sql.Statement;
 import javax.sql.DataSource;
-import org.hibernate.Session;
 import org.aspectj.lang.annotation.Aspect;
 import org.aspectj.lang.annotation.Before;
+import org.hibernate.Session;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 import org.springframework.jdbc.datasource.DataSourceUtils;
@@ -53,7 +53,10 @@ public class TenantContextTransactionAspect {
     }
   }
 
-  /** Enables the Hibernate tenantFilter as a defense-in-depth layer (RLS remains the hard guarantee). */
+  /**
+   * Enables the Hibernate tenantFilter as a defense-in-depth layer (RLS remains the hard
+   * guarantee).
+   */
   private void enableJpaFilter(TenantContext.Context context) {
     try {
       entityManager
