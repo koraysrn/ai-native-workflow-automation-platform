@@ -78,7 +78,11 @@ class TaskControllerWebMvcTest {
   void approveWithCommentPassesCommentToService() throws Exception {
     UUID id = UUID.randomUUID();
     when(taskService.approve(
-            any(UUID.class), any(UUID.class), any(UUID.class), any(String.class), any(String.class)))
+            any(UUID.class),
+            any(UUID.class),
+            any(UUID.class),
+            any(String.class),
+            any(String.class)))
         .thenReturn(taskResponse());
 
     mockMvc
@@ -98,7 +102,11 @@ class TaskControllerWebMvcTest {
   void approveWithoutBodySucceedsWithNullComment() throws Exception {
     UUID id = UUID.randomUUID();
     when(taskService.approve(
-            any(UUID.class), any(UUID.class), any(UUID.class), any(String.class), any(String.class)))
+            any(UUID.class),
+            any(UUID.class),
+            any(UUID.class),
+            any(String.class),
+            any(String.class)))
         .thenReturn(taskResponse());
 
     mockMvc
@@ -116,7 +124,11 @@ class TaskControllerWebMvcTest {
   void rejectWithCommentPassesCommentToService() throws Exception {
     UUID id = UUID.randomUUID();
     when(taskService.reject(
-            any(UUID.class), any(UUID.class), any(UUID.class), any(String.class), any(String.class)))
+            any(UUID.class),
+            any(UUID.class),
+            any(UUID.class),
+            any(String.class),
+            any(String.class)))
         .thenReturn(taskResponse());
 
     mockMvc
