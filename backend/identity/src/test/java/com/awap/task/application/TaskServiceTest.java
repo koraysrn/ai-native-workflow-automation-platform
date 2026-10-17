@@ -4,10 +4,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.awap.common.api.AwapException;
 import com.awap.engine.application.OutboxEventPublisher;
+import com.awap.task.domain.Task;
 import com.awap.task.domain.TaskStatus;
 import com.awap.task.infrastructure.TaskRepository;
 import com.awap.task.interfaces.dto.TaskRequest;
@@ -59,5 +61,21 @@ class TaskServiceTest {
 
     assertThatThrownBy(() -> service.approve(tenantId, id, UUID.randomUUID(), "EMPLOYEE"))
         .isInstanceOf(AwapException.class);
+  }
+
+  @Test
+  void approveIncrementsDecisionCounter() {
+    UUID tenantId = UUID.randomUUID();
+    UUID id = UUID.randomUUID();
+    UUID assigneeId = UUID.randomUUID();
+    Task task = new Task(tenantId, null, null, "Review", null, assigneeId);
+    task.claim(assigneeId);
+    when(taskRepository.findByIdAndTenantIdAndDeletedFalse(id, tenantId))
+        .thenReturn(Optional.of(task));
+
+    service.approve(tenantId, id, assigneeId, "EMPLOYEE");
+
+    verify(counter).increment();
+    verify(meterRegistry).counter("awap.task.decisions", "decision", "APPROVED");
   }
 }
