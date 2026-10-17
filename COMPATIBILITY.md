@@ -11,7 +11,7 @@ on every version change (see `CLAUDE.md` — Version Compatibility Rules).
 | Java | 25 (LTS, Temurin) | ✅ | `mvn verify` BUILD SUCCESS with Spring Boot 4.1.1 |
 | Spring Boot | 4.1.1 | ✅ | Parent BOM; `--release 25` compile |
 | Maven | 3.9.x | ✅ | 3.9.9 used for the pilot test; Maven Wrapper committed |
-| TypeScript | 6.x | ✅ | Chosen for ESLint compatibility; upgrade to 7.0.2 when `typescript-eslint` supports it |
+| TypeScript | 7.0.2 | ✅ | Native compiler; `typecheck`/`build` on TS 7, `lint` via TS 6 API |
 | Next.js | 16.4.x | ✅ | `next build` (Turbopack) OK |
 | React | 19.3.x | ✅ | |
 | Node.js | 24 LTS | ✅ | |
@@ -35,11 +35,14 @@ on every version change (see `CLAUDE.md` — Version Compatibility Rules).
 
 ## Frontend Notes
 
-- TypeScript 6.x is used so that ESLint (`typescript-eslint`) works end to end.
-- TypeScript 7.0.2 (native compiler) passes `tsc --noEmit` and `next build`,
-  but `typescript-eslint` does not support TS 7.0 yet
-  (typescript-eslint#10940).
-- When `typescript-eslint` ships TS 7 support, the project will upgrade to 7.0.2.
+- TypeScript 7.0.2 (native compiler) is pinned in `frontend/package.json`.
+- `tsconfig.json` enables `strict`, `noUncheckedIndexedAccess` and
+  `exactOptionalPropertyTypes`.
+- `pnpm typecheck` (`next typegen && tsc --noEmit`) and `pnpm build` run on
+  TypeScript 7.0.2.
+- `pnpm lint` runs ESLint via `scripts/lint.mjs`, which redirects
+  typescript-eslint to the `typescript-6` alias (TypeScript 6 API) until
+  typescript-eslint ships TS 7 support (typescript-eslint#10940).
 
 ## Version Upgrade Policy
 
