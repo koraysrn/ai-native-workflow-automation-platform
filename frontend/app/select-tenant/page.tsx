@@ -13,8 +13,9 @@ export default function SelectTenantPage() {
     fetchTenants()
       .then((list) => {
         setTenants(list);
-        if (list.length === 1) {
-          setActiveTenant(list[0].tenantId);
+        const single = list[0];
+        if (list.length === 1 && single) {
+          setActiveTenant(single.tenantId);
           window.location.assign("/dashboard");
         }
       })
