@@ -40,4 +40,20 @@ jobs:
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:
-      - run: echo "ArgoCD sync is performed by the GitOps controller when manifests change."
+      - name: Install ArgoCD CLI
+        run: |
+          curl -sSL -o /usr/local/bin/argocd \
+            https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
+          chmod +x /usr/local/bin/argocd
+      - name: Sync application
+        env:
+          ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
+          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_AUTH_TOKEN }}
+        run: |
+          if [ -n "$ARGOCD_AUTH_TOKEN" ]; then
+            argocd login "$ARGOCD_SERVER" --auth-token "$ARGOCD_AUTH_TOKEN" --grpc-web
+            argocd app sync awap --async
+            argocd app wait awap --health --timeout 300
+          else
+            echo "ARGOCD_AUTH_TOKEN not configured; skipping ArgoCD sync."
+          fi
