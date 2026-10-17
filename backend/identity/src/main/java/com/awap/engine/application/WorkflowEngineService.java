@@ -212,6 +212,10 @@ public class WorkflowEngineService {
     log(instance, null, null, "WORKFLOW_RESUMED", "Workflow instance resumed.");
     outboxEventPublisher.publish(
         tenantId, "WORKFLOW", instance.getId(), "WORKFLOW_RESUMED", Map.of("state", "RUNNING"));
+    // Re-drive completed nodes whose outgoing transitions were skipped while the
+    // instance was paused, so resume actually continues execution instead of
+    // leaving the workflow stuck in RUNNING.
+    resumeCompletedNodes(instance);
     return toResponse(instance);
   }
 
@@ -302,6 +306,17 @@ public class WorkflowEngineService {
                     .filter(node -> node.getNodeId().equals(execution.getNodeId()))
                     .findFirst()
                     .ifPresent(node -> executeNode(instance, node)));
+  }
+
+  /**
+   * After a pause, nodes that completed while the instance was paused may have
+   * had their outgoing transitions skipped. Re-driving them is idempotent:
+   * targets that are already COMPLETED or WAITING are ignored by executeNode.
+   */
+  private void resumeCompletedNodes(WorkflowInstance instance) {
+    nodeExecutionRepository
+        .findByWorkflowInstanceIdAndStatus(instance.getId(), NodeExecutionStatus.COMPLETED)
+        .forEach(execution -> advanceFrom(instance, execution.getNodeId()));
   }
 
   private UUID resolveAssignee(WorkflowInstance instance, NodeDefinition node) {

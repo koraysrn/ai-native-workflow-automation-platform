@@ -1,10 +1,17 @@
 package com.awap.engine.application;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
+import com.awap.engine.domain.NodeExecutionStatus;
+import com.awap.engine.domain.WorkflowInstance;
+import com.awap.engine.domain.WorkflowState;
 import com.awap.engine.infrastructure.ExecutionContextRepository;
 import com.awap.engine.infrastructure.ExecutionLogRepository;
 import com.awap.engine.infrastructure.NodeExecutionRepository;
@@ -15,6 +22,8 @@ import com.awap.task.application.TaskService;
 import com.awap.workflow.application.SpelExpressionService;
 import com.awap.workflow.application.WorkflowDefinitionService;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -68,5 +77,53 @@ class WorkflowEngineServiceTest {
     assertThatThrownBy(
             () -> service.start(tenantId, new StartWorkflowRequest(definitionId, null, null)))
         .isInstanceOf(AwapException.class);
+  }
+
+  @Test
+  void pauseTransitionsRunningInstanceToPaused() {
+    UUID tenantId = UUID.randomUUID();
+    UUID id = UUID.randomUUID();
+    WorkflowInstance instance =
+        new WorkflowInstance(tenantId, UUID.randomUUID(), 1, WorkflowState.RUNNING, null, null);
+    when(instanceRepository.findByIdAndTenantIdAndDeletedFalse(id, tenantId))
+        .thenReturn(Optional.of(instance));
+
+    var response = service.pause(tenantId, id);
+
+    assertThat(response.state()).isEqualTo("PAUSED");
+    verify(outboxEventPublisher)
+        .publish(
+            eq(tenantId), eq("WORKFLOW"), eq(instance.getId()), eq("WORKFLOW_PAUSED"), any());
+  }
+
+  @Test
+  void pauseRejectsTerminalInstance() {
+    UUID tenantId = UUID.randomUUID();
+    UUID id = UUID.randomUUID();
+    WorkflowInstance instance =
+        new WorkflowInstance(tenantId, UUID.randomUUID(), 1, WorkflowState.COMPLETED, null, null);
+    when(instanceRepository.findByIdAndTenantIdAndDeletedFalse(id, tenantId))
+        .thenReturn(Optional.of(instance));
+
+    assertThatThrownBy(() -> service.pause(tenantId, id)).isInstanceOf(AwapException.class);
+  }
+
+  @Test
+  void resumeTransitionsPausedInstanceToRunningAndReDrivesCompletedNodes() {
+    UUID tenantId = UUID.randomUUID();
+    UUID id = UUID.randomUUID();
+    WorkflowInstance instance =
+        new WorkflowInstance(tenantId, UUID.randomUUID(), 1, WorkflowState.PAUSED, null, null);
+    when(instanceRepository.findByIdAndTenantIdAndDeletedFalse(id, tenantId))
+        .thenReturn(Optional.of(instance));
+    when(nodeExecutionRepository.findByWorkflowInstanceIdAndStatus(
+            id, NodeExecutionStatus.COMPLETED))
+        .thenReturn(List.of());
+
+    var response = service.resume(tenantId, id);
+
+    assertThat(response.state()).isEqualTo("RUNNING");
+    verify(nodeExecutionRepository)
+        .findByWorkflowInstanceIdAndStatus(id, NodeExecutionStatus.COMPLETED);
   }
 }
