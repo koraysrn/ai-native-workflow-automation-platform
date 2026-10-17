@@ -67,7 +67,7 @@ jobs:
         working-directory: backend
 
   frontend:
-    name: Frontend (TypeScript 6.x / Next.js 16)
+    name: Frontend (TypeScript 7.x / Next.js 16)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -170,3 +170,13 @@ jobs:
             echo "SONAR_TOKEN not configured; skipping SonarQube analysis."
           fi
         working-directory: backend
+
+  docker-build:
+    name: Docker build (backend, frontend, ai-layer)
+    uses: ./.github/workflows/docker-build.yml
+    with:
+      push: false
+      tag-suffix: ci
+    permissions:
+      contents: read
+      packages: write
