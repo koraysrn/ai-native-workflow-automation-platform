@@ -28,8 +28,7 @@ Bu belge `main` dalının korunması, etiket (label) taksonomisi, milestone yap�
 - `Secret scan (Gitleaks)`
 - `OWASP Dependency Check`
 - `SonarQube analysis`
-
-> `docker-build` job'ı eklendiğinde (issue #33) bu listeye eklenmelidir.
+- `Docker build (backend, frontend, ai-layer)`
 
 ## Merge policy
 

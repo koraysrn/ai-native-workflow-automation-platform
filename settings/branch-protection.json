@@ -8,7 +8,8 @@
       "Trivy vulnerability scan",
       "Secret scan (Gitleaks)",
       "OWASP Dependency Check",
-      "SonarQube analysis"
+      "SonarQube analysis",
+      "Docker build (backend, frontend, ai-layer)"
     ]
   },
   "enforce_admins": true,
