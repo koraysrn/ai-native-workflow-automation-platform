@@ -17,9 +17,9 @@ on every version change (see `CLAUDE.md` — Version Compatibility Rules).
 | Node.js | 24 LTS | ✅ | |
 | pnpm | 12.x | ✅ | |
 | Python | 3.15.0 (uv) | ✅ | uv-managed with committed `uv.lock`; cp315 wheels verified |
-| FastAPI | 0.135.x | ✅ | conda-forge |
-| LangChain | 1.4.x | ✅ | installed via `pip` inside the conda env |
-| LangGraph | 1.2.x | ✅ | installed via `pip` inside the conda env |
+| FastAPI | 0.135.x | ✅ | installed via `uv` from PyPI |
+| LangChain | 1.4.x | ✅ | installed via `uv` from PyPI |
+| LangGraph | 1.2.x | ✅ | installed via `uv` from PyPI |
 
 ## AI Layer Notes
 
@@ -43,6 +43,6 @@ on every version change (see `CLAUDE.md` — Version Compatibility Rules).
 
 - Upgrades are performed only through Renovate / Dependabot after CI passes.
 - On every upgrade: OWASP Dependency Scan, `mvn verify`,
-  `pnpm build && pnpm typecheck && pnpm lint`, `ruff check`, and the conda
-  environment solve must pass.
+  `pnpm build && pnpm typecheck && pnpm lint`, `ruff check`, and
+  `uv sync --locked` must pass.
 - A PR containing an incompatible version is automatically rejected in CI.
