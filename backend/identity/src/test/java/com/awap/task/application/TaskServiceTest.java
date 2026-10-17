@@ -3,6 +3,7 @@ package com.awap.task.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import com.awap.common.api.AwapException;
@@ -33,7 +34,7 @@ class TaskServiceTest {
 
   @BeforeEach
   void setUp() {
-    when(meterRegistry.counter(anyString(), anyString(), anyString())).thenReturn(counter);
+    lenient().when(meterRegistry.counter(anyString(), anyString(), anyString())).thenReturn(counter);
     service = new TaskService(taskRepository, outboxEventPublisher, meterRegistry);
   }
 
