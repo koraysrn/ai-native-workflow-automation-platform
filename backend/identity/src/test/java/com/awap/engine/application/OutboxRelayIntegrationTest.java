@@ -11,7 +11,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.test.context.EmbeddedKafka;
 
 /** Verifies the outbox relay against a real embedded broker (publish + published flag). */
-@SpringBootTest
+@SpringBootTest(classes = com.awap.identity.IdentityApplication.class)
 @EmbeddedKafka(partitions = 1, topics = {"workflow.instance.events", "workflow.task.events"})
 class OutboxRelayIntegrationTest {
 
