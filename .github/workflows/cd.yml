@@ -42,18 +42,22 @@ jobs:
     steps:
       - name: Install ArgoCD CLI
         run: |
-          curl -sSL -o /usr/local/bin/argocd \
-            https://github.com/argoproj/argo-cd/releases/latest/download/argocd-linux-amd64
-          chmod +x /usr/local/bin/argocd
+          ARGOCD_VERSION=v2.14.10
+          curl -sSL -o /tmp/argocd-linux-amd64 \
+            "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-amd64"
+          curl -sSL -o /tmp/argocd-linux-amd64.sha256 \
+            "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-amd64.sha256"
+          echo "$(cat /tmp/argocd-linux-amd64.sha256)  /tmp/argocd-linux-amd64" | sha256sum -c -
+          sudo install -m 0755 /tmp/argocd-linux-amd64 /usr/local/bin/argocd
       - name: Sync application
         env:
           ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
           ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_AUTH_TOKEN }}
         run: |
-          if [ -n "$ARGOCD_AUTH_TOKEN" ]; then
-            argocd login "$ARGOCD_SERVER" --auth-token "$ARGOCD_AUTH_TOKEN" --grpc-web
-            argocd app sync awap --async
-            argocd app wait awap --health --timeout 300
-          else
-            echo "ARGOCD_AUTH_TOKEN not configured; skipping ArgoCD sync."
+          if [ -z "$ARGOCD_SERVER" ] || [ -z "$ARGOCD_AUTH_TOKEN" ]; then
+            echo "ARGOCD_SERVER and ARGOCD_AUTH_TOKEN must be configured."
+            exit 1
           fi
+          argocd login "$ARGOCD_SERVER" --auth-token "$ARGOCD_AUTH_TOKEN" --grpc-web
+          argocd app sync awap --async --grpc-web
+          argocd app wait awap --health --timeout 300 --grpc-web
