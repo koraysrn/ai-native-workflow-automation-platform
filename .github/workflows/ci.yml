@@ -67,7 +67,7 @@ jobs:
         working-directory: backend
 
   frontend:
-    name: Frontend (TypeScript 6.x / Next.js 16)
+    name: Frontend (TypeScript 7.x / Next.js 16)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
