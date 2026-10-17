@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "node scripts/lint.mjs",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "jest",
     "test:e2e": "playwright test",
@@ -44,7 +44,8 @@
     "jest-environment-jsdom": "^30.5.2",
     "prettier": "^3.9.10",
     "tailwindcss": "^4",
-    "typescript": "^6.0.3"
+    "typescript": "7.0.2",
+    "typescript-6": "npm:typescript@6.0.3"
   },
   "packageManager": "pnpm@12.11.2"
 }
