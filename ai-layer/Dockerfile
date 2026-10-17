@@ -1,7 +1,7 @@
 # Build stage: create the conda environment from environment.yml
 FROM condaforge/miniforge3:latest AS builder
 WORKDIR /app
-COPY environment.yml environment.yml
+COPY ai-layer/environment.yml environment.yml
 RUN conda env create -f environment.yml && conda clean -afy
 
 # Runtime stage

@@ -33,7 +33,7 @@ jobs:
             context: .
           - name: awap-ai-layer
             dockerfile: ai-layer/Dockerfile
-            context: ./ai-layer
+            context: .
     steps:
       - uses: actions/checkout@v7
 
