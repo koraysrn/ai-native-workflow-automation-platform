@@ -2,13 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
 import { fetchTenants, type TenantMembershipDto } from "../../lib/api";
 import { setActiveTenant } from "../../lib/auth";
 
 export default function SelectTenantPage() {
   const router = useRouter();
-  const queryClient = useQueryClient();
   const [tenants, setTenants] = useState<TenantMembershipDto[] | null>(null);
 
   useEffect(() => {
@@ -17,17 +15,16 @@ export default function SelectTenantPage() {
         setTenants(list);
         if (list.length === 1) {
           setActiveTenant(list[0].tenantId);
-          queryClient.invalidateQueries();
-          router.replace("/dashboard");
+          window.location.assign("/dashboard");
         }
       })
       .catch(() => router.replace("/"));
-  }, [queryClient, router]);
+  }, [router]);
 
   const choose = (tenantId: string) => {
     setActiveTenant(tenantId);
-    queryClient.invalidateQueries();
-    router.replace("/dashboard");
+    // Full reload clears all client-side caches, preventing stale cross-tenant data.
+    window.location.assign("/dashboard");
   };
 
   if (tenants === null) {
