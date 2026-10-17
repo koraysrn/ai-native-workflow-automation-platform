@@ -34,7 +34,9 @@ class TaskServiceTest {
 
   @BeforeEach
   void setUp() {
-    lenient().when(meterRegistry.counter(anyString(), anyString(), anyString())).thenReturn(counter);
+    lenient()
+        .when(meterRegistry.counter(anyString(), anyString(), anyString()))
+        .thenReturn(counter);
     service = new TaskService(taskRepository, outboxEventPublisher, meterRegistry);
   }
 
