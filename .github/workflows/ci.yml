@@ -112,17 +112,25 @@ jobs:
         working-directory: frontend
 
   ai-layer:
-    name: AI Layer (Python 3.14 / FastAPI)
+    name: AI Layer (Python 3.15 / FastAPI)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: conda-incubator/setup-miniconda@v3
+      - uses: astral-sh/setup-uv@v5
+      - uses: actions/setup-python@v6
         with:
-          environment-file: environment.yml
-          activate-environment: awap-ai
+          python-version: "3.15"
+      - name: Sync dependencies (locked)
+        run: uv sync --locked
+        working-directory: ai-layer
       - name: Lint (Ruff)
-        shell: bash -el {0}
-        run: ruff check .
+        run: uv run ruff check .
+        working-directory: ai-layer
+      - name: Format check (Ruff)
+        run: uv run ruff format --check .
+        working-directory: ai-layer
+      - name: Pilot compatibility check
+        run: uv run python compat_check.py
         working-directory: ai-layer
 
   trivy:
