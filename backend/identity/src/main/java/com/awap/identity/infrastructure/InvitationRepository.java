@@ -9,9 +9,7 @@ import org.springframework.data.jpa.repository.Query;
 public interface InvitationRepository extends JpaRepository<Invitation, UUID> {
 
   /** Looks the invitation up via the SECURITY DEFINER helper (accept flow runs pre-auth). */
-  @Query(
-      value = "SELECT * FROM awap_find_invitation_by_token_hash(:tokenHash)",
-      nativeQuery = true)
+  @Query(value = "SELECT * FROM awap_find_invitation_by_token_hash(:tokenHash)", nativeQuery = true)
   Optional<Invitation> findByTokenHash(String tokenHash);
 
   boolean existsByTenantIdAndEmailAndConsumedFalse(UUID tenantId, String email);
