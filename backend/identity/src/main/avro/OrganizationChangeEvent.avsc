@@ -1,0 +1,11 @@
+{
+  "type": "record",
+  "name": "OrganizationChangeEvent",
+  "namespace": "com.awap.engine.event",
+  "fields": [
+    {"name": "tenantId", "type": "string"},
+    {"name": "entityId", "type": "string"},
+    {"name": "eventType", "type": "string"},
+    {"name": "snapshot", "type": ["null", "string"], "default": null}
+  ]
+}
