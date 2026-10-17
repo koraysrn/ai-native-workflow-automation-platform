@@ -64,7 +64,6 @@ public class TenantService {
       UUID id, LimitsRequest request, UUID callerTenantId, String callerRole) {
     requireAccess(id, callerTenantId, callerRole);
     boolean crossTenantAdmin = "SYSTEM_ADMIN".equals(callerRole) && !id.equals(callerTenantId);
-    Tenant tenant = crossTenantAdmin ? findTenantRls(id) : findTenant(id);
     if (crossTenantAdmin) {
       tenantRepository.updateLimitsRls(
           id,
@@ -72,10 +71,13 @@ public class TenantService {
           request.maxUsers(),
           request.maxWorkflows(),
           request.maxAiCallsPerMonth());
-    } else {
-      tenant.updateLimits(
-          request.plan(), request.maxUsers(), request.maxWorkflows(), request.maxAiCallsPerMonth());
+      // Re-read after the RLS-bypassing native update so the response reflects
+      // the new limits instead of the stale pre-update entity.
+      return toResponse(findTenantRls(id));
     }
+    Tenant tenant = findTenant(id);
+    tenant.updateLimits(
+        request.plan(), request.maxUsers(), request.maxWorkflows(), request.maxAiCallsPerMonth());
     return toResponse(tenant);
   }
 

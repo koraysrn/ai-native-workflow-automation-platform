@@ -6,8 +6,8 @@ CREATE OR REPLACE FUNCTION awap_find_tenant_by_id(p_tenant UUID)
 RETURNS SETOF tenants
 LANGUAGE sql
 SECURITY DEFINER
-SET search_path = public AS $$
-    SELECT * FROM tenants WHERE id = p_tenant;
+SET search_path = pg_catalog AS $$
+    SELECT * FROM public.tenants WHERE id = p_tenant;
 $$;
 
 REVOKE ALL ON FUNCTION awap_find_tenant_by_id(UUID) FROM PUBLIC;
@@ -22,9 +22,9 @@ CREATE OR REPLACE FUNCTION awap_update_tenant_limits(
 ) RETURNS void
 LANGUAGE plpgsql
 SECURITY DEFINER
-SET search_path = public AS $$
+SET search_path = pg_catalog AS $$
 BEGIN
-    UPDATE tenants
+    UPDATE public.tenants
        SET plan = p_plan,
            max_users = p_max_users,
            max_workflows = p_max_workflows,

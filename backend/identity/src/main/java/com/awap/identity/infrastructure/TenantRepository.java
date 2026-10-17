@@ -21,9 +21,6 @@ public interface TenantRepository extends JpaRepository<Tenant, UUID> {
       nativeQuery = true)
   Optional<Tenant> findByIdRls(UUID id);
 
-  @org.springframework.data.jpa.repository.Modifying(
-      clearAutomatically = true,
-      flushAutomatically = true)
   @org.springframework.data.jpa.repository.Query(
       value =
           "SELECT awap_update_tenant_limits(:tenantId, :plan, :maxUsers, :maxWorkflows, :maxAiCalls)",

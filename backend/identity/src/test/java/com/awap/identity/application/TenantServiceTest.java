@@ -12,8 +12,11 @@ import com.awap.identity.domain.Tenant;
 import com.awap.identity.domain.User;
 import com.awap.identity.infrastructure.TenantRepository;
 import com.awap.identity.infrastructure.UserRepository;
+import com.awap.identity.interfaces.dto.LimitsRequest;
 import com.awap.identity.interfaces.dto.TenantRequest;
 import com.awap.identity.interfaces.dto.TenantResponse;
+import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -58,5 +61,39 @@ class TenantServiceTest {
         new TenantRequest("acme", "Acme", "admin@acme.com", "password123", "Admin User");
 
     assertThatThrownBy(() -> tenantService.createTenant(request)).isInstanceOf(AwapException.class);
+  }
+
+  @Test
+  void updateLimitsRejectsNonAdminCrossTenantAccess() {
+    UUID targetTenantId = UUID.randomUUID();
+    UUID callerTenantId = UUID.randomUUID();
+
+    assertThatThrownBy(
+            () ->
+                tenantService.updateLimits(
+                    targetTenantId,
+                    new LimitsRequest("PRO", 20, 20, 2000),
+                    callerTenantId,
+                    "TENANT_ADMIN"))
+        .isInstanceOf(AwapException.class);
+  }
+
+  @Test
+  void updateLimitsAsSystemAdminReReadsAfterRlsUpdate() {
+    UUID targetTenantId = UUID.randomUUID();
+    UUID callerTenantId = UUID.randomUUID();
+    Tenant updated = new Tenant("acme", "Acme", "PRO", 20, 20, 2000);
+    when(tenantRepository.findByIdRls(targetTenantId)).thenReturn(Optional.of(updated));
+
+    TenantResponse response =
+        tenantService.updateLimits(
+            targetTenantId,
+            new LimitsRequest("PRO", 20, 20, 2000),
+            callerTenantId,
+            "SYSTEM_ADMIN");
+
+    assertThat(response.plan()).isEqualTo("PRO");
+    assertThat(response.maxUsers()).isEqualTo(20);
+    verify(tenantRepository).updateLimitsRls(targetTenantId, "PRO", 20, 20, 2000);
   }
 }
