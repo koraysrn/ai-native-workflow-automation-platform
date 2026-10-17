@@ -95,7 +95,7 @@ public class TenantService {
         new Invitation(
             tenant.getId(),
             request.email(),
-            Role.valueOf(request.role()),
+            parseRole(request.role()),
             hashToken(rawToken),
             expiresAt,
             actorId);
@@ -125,26 +125,40 @@ public class TenantService {
     } catch (IllegalStateException ex) {
       throw new AwapException(ErrorCode.VALIDATION_FAILED, HttpStatus.CONFLICT, ex.getMessage());
     }
-    Tenant tenant = findTenant(invitation.getTenantId());
-    long userCount = userRepository.countByTenantIdAndDeletedFalse(tenant.getId());
+    Tenant tenant = findTenantRls(invitation.getTenantId());
+    long userCount = userRepository.countByTenantIdAndDeletedFalseRls(tenant.getId());
     if (userCount >= tenant.getMaxUsers()) {
       throw new AwapException(
           ErrorCode.VALIDATION_FAILED, HttpStatus.CONFLICT, "Tenant user quota exceeded.");
     }
     User user =
         userRepository
-            .findByTenantIdAndEmail(tenant.getId(), invitation.getEmail())
+            .findByTenantIdAndEmailRls(tenant.getId(), invitation.getEmail())
+            .map(
+                existing -> {
+                  existing.assignRole(invitation.getRole());
+                  return existing;
+                })
             .orElseGet(
                 () ->
                     new User(
                         tenant.getId(),
                         invitation.getEmail(),
-                        passwordEncoder.encode(
-                            request.password() == null ? "" : request.password()),
+                        passwordEncoder.encode(requirePassword(request)),
                         request.fullName() == null ? invitation.getEmail() : request.fullName(),
                         invitation.getRole()));
     userRepository.save(user);
     return toResponse(tenant);
+  }
+
+  private String requirePassword(AcceptInvitationRequest request) {
+    if (request.password() == null || request.password().isBlank()) {
+      throw new AwapException(
+          ErrorCode.VALIDATION_FAILED,
+          HttpStatus.BAD_REQUEST,
+          "Password is required to accept an invitation as a new user.");
+    }
+    return request.password();
   }
 
   private Tenant findTenant(UUID id) {
@@ -154,6 +168,24 @@ public class TenantService {
             () ->
                 new AwapException(
                     ErrorCode.TENANT_NOT_FOUND, HttpStatus.NOT_FOUND, "The tenant was not found."));
+  }
+
+  private Tenant findTenantRls(UUID id) {
+    return tenantRepository
+        .findByIdRls(id)
+        .orElseThrow(
+            () ->
+                new AwapException(
+                    ErrorCode.TENANT_NOT_FOUND, HttpStatus.NOT_FOUND, "The tenant was not found."));
+  }
+
+  private Role parseRole(String role) {
+    try {
+      return Role.valueOf(role);
+    } catch (IllegalArgumentException ex) {
+      throw new AwapException(
+          ErrorCode.VALIDATION_FAILED, HttpStatus.BAD_REQUEST, "Unknown role: " + role);
+    }
   }
 
   private void requireAccess(UUID id, UUID callerTenantId, String callerRole) {

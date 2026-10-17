@@ -21,6 +21,11 @@ public interface UserRepository extends JpaRepository<User, UUID> {
       nativeQuery = true)
   Optional<User> findByTenantIdAndEmailRls(UUID tenantId, String email);
 
+  @org.springframework.data.jpa.repository.Query(
+      value = "SELECT awap_count_tenant_users(:tenantId)",
+      nativeQuery = true)
+  long countByTenantIdAndDeletedFalseRls(UUID tenantId);
+
   /** Records a failed login via the SECURITY DEFINER helper (RLS-bypassing write). */
   @org.springframework.data.jpa.repository.Query(
       value = "SELECT awap_record_failed_login(:userId)",

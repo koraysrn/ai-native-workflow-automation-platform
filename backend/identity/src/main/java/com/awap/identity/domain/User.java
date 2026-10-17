@@ -93,6 +93,11 @@ public class User {
     lockedUntil = null;
   }
 
+  public void assignRole(Role role) {
+    this.role = role;
+    this.updatedAt = Instant.now();
+  }
+
   public UUID getId() {
     return id;
   }
