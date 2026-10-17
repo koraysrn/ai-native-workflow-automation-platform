@@ -83,6 +83,22 @@ public class WorkflowInstance {
     this.updatedAt = Instant.now();
   }
 
+  public void pause() {
+    if (state != WorkflowState.RUNNING && state != WorkflowState.WAITING) {
+      throw new IllegalStateException("Only RUNNING or WAITING workflows can be paused.");
+    }
+    this.state = WorkflowState.PAUSED;
+    this.updatedAt = Instant.now();
+  }
+
+  public void resume() {
+    if (state != WorkflowState.PAUSED) {
+      throw new IllegalStateException("Only PAUSED workflows can be resumed.");
+    }
+    this.state = WorkflowState.RUNNING;
+    this.updatedAt = Instant.now();
+  }
+
   public UUID getId() {
     return id;
   }

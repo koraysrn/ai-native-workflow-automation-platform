@@ -51,6 +51,7 @@ public class WorkflowEngineService {
   private final SpelExpressionService spelExpressionService;
   private final ObjectMapper objectMapper;
   private final UserRepository userRepository;
+  private final OutboxEventPublisher outboxEventPublisher;
 
   public WorkflowEngineService(
       WorkflowInstanceRepository instanceRepository,
@@ -61,7 +62,8 @@ public class WorkflowEngineService {
       TaskService taskService,
       SpelExpressionService spelExpressionService,
       ObjectMapper objectMapper,
-      UserRepository userRepository) {
+      UserRepository userRepository,
+      OutboxEventPublisher outboxEventPublisher) {
     this.instanceRepository = instanceRepository;
     this.executionLogRepository = executionLogRepository;
     this.workflowDefinitionService = workflowDefinitionService;
@@ -71,6 +73,7 @@ public class WorkflowEngineService {
     this.spelExpressionService = spelExpressionService;
     this.objectMapper = objectMapper;
     this.userRepository = userRepository;
+    this.outboxEventPublisher = outboxEventPublisher;
   }
 
   @Transactional
@@ -192,6 +195,26 @@ public class WorkflowEngineService {
     return toResponse(instance);
   }
 
+  @Transactional
+  public WorkflowInstanceResponse pause(UUID tenantId, UUID id) {
+    WorkflowInstance instance = find(tenantId, id);
+    guarded(instance::pause);
+    log(instance, null, null, "WORKFLOW_PAUSED", "Workflow instance paused.");
+    outboxEventPublisher.publish(
+        tenantId, "WORKFLOW", instance.getId(), "WORKFLOW_PAUSED", Map.of("state", "PAUSED"));
+    return toResponse(instance);
+  }
+
+  @Transactional
+  public WorkflowInstanceResponse resume(UUID tenantId, UUID id) {
+    WorkflowInstance instance = find(tenantId, id);
+    guarded(instance::resume);
+    log(instance, null, null, "WORKFLOW_RESUMED", "Workflow instance resumed.");
+    outboxEventPublisher.publish(
+        tenantId, "WORKFLOW", instance.getId(), "WORKFLOW_RESUMED", Map.of("state", "RUNNING"));
+    return toResponse(instance);
+  }
+
   private void executeStartNode(WorkflowInstance instance) {
     NodeDefinition startNode =
         nodesOf(instance).stream()
@@ -207,6 +230,9 @@ public class WorkflowEngineService {
   }
 
   private void executeNode(WorkflowInstance instance, NodeDefinition node) {
+    if (instance.getState() == WorkflowState.PAUSED) {
+      return;
+    }
     if (instance.getState() != WorkflowState.COMPLETED
         && instance.getState() != WorkflowState.CANCELLED
         && instance.getState() != WorkflowState.FAILED) {
@@ -406,6 +432,14 @@ public class WorkflowEngineService {
                     ErrorCode.RESOURCE_NOT_FOUND,
                     HttpStatus.NOT_FOUND,
                     "Workflow instance not found."));
+  }
+
+  private void guarded(Runnable action) {
+    try {
+      action.run();
+    } catch (IllegalStateException ex) {
+      throw new AwapException(ErrorCode.VALIDATION_FAILED, HttpStatus.CONFLICT, ex.getMessage());
+    }
   }
 
   private void transition(WorkflowInstance instance, WorkflowState target, String action) {

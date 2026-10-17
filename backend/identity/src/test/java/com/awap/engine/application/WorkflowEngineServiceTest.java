@@ -34,6 +34,7 @@ class WorkflowEngineServiceTest {
   @Mock private TaskService taskService;
   @Mock private SpelExpressionService spelExpressionService;
   @Mock private UserRepository userRepository;
+  @Mock private OutboxEventPublisher outboxEventPublisher;
 
   private WorkflowEngineService service;
 
@@ -49,7 +50,8 @@ class WorkflowEngineServiceTest {
             taskService,
             spelExpressionService,
             new ObjectMapper(),
-            userRepository);
+            userRepository,
+            outboxEventPublisher);
   }
 
   @Test
