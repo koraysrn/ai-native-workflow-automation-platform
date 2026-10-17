@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.awap.common.api.AwapException;
 import com.awap.identity.domain.Tenant;
 import com.awap.identity.domain.User;
+import com.awap.identity.infrastructure.InvitationRepository;
 import com.awap.identity.infrastructure.TenantRepository;
 import com.awap.identity.infrastructure.UserRepository;
 import com.awap.identity.interfaces.dto.TenantRequest;
@@ -27,12 +28,14 @@ class TenantServiceTest {
   @Mock private TenantRepository tenantRepository;
   @Mock private UserRepository userRepository;
   @Mock private PasswordEncoder passwordEncoder;
+  @Mock private InvitationRepository invitationRepository;
 
   private TenantService tenantService;
 
   @BeforeEach
   void setUp() {
-    tenantService = new TenantService(tenantRepository, userRepository, passwordEncoder);
+    tenantService =
+        new TenantService(tenantRepository, userRepository, passwordEncoder, invitationRepository);
   }
 
   @Test

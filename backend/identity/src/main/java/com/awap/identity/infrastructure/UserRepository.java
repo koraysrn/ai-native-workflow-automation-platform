@@ -10,6 +10,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
   Optional<User> findByTenantIdAndEmail(UUID tenantId, String email);
 
+  long countByTenantIdAndDeletedFalse(UUID tenantId);
+
   Optional<User> findByIdAndTenantId(UUID id, UUID tenantId);
 
   Optional<User> findFirstByTenantIdAndRole(UUID tenantId, Role role);
