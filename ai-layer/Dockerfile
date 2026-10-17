@@ -1,8 +1,8 @@
 # Build stage: resolve and install dependencies with uv
-FROM ghcr.io/astral-sh/uv:python3.15-bookworm AS builder
+FROM python:3.15-slim AS builder
 WORKDIR /app
 COPY ai-layer/pyproject.toml ai-layer/uv.lock ./
-RUN uv sync --locked --no-dev
+RUN pip install --no-cache-dir uv && uv sync --locked --no-dev
 
 # Runtime stage
 FROM python:3.15-slim
