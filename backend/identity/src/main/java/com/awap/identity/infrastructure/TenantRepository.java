@@ -15,4 +15,17 @@ public interface TenantRepository extends JpaRepository<Tenant, UUID> {
       value = "SELECT * FROM awap_find_tenant_by_slug(:slug)",
       nativeQuery = true)
   Optional<Tenant> findBySlugRls(String slug);
+
+  @org.springframework.data.jpa.repository.Query(
+      value = "SELECT * FROM awap_find_tenant_by_id(:id)",
+      nativeQuery = true)
+  Optional<Tenant> findByIdRls(UUID id);
+
+  @org.springframework.data.jpa.repository.Modifying(clearAutomatically = true, flushAutomatically = true)
+  @org.springframework.data.jpa.repository.Query(
+      value =
+          "SELECT awap_update_tenant_limits(:tenantId, :plan, :maxUsers, :maxWorkflows, :maxAiCalls)",
+      nativeQuery = true)
+  void updateLimitsRls(
+      UUID tenantId, String plan, int maxUsers, int maxWorkflows, long maxAiCalls);
 }

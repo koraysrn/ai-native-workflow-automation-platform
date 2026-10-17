@@ -63,15 +63,34 @@ public class TenantService {
   public TenantResponse updateLimits(
       UUID id, LimitsRequest request, UUID callerTenantId, String callerRole) {
     requireAccess(id, callerTenantId, callerRole);
-    Tenant tenant = findTenant(id);
-    tenant.updateLimits(
-        request.plan(), request.maxUsers(), request.maxWorkflows(), request.maxAiCallsPerMonth());
+    boolean crossTenantAdmin = "SYSTEM_ADMIN".equals(callerRole) && !id.equals(callerTenantId);
+    Tenant tenant = crossTenantAdmin ? findTenantRls(id) : findTenant(id);
+    if (crossTenantAdmin) {
+      tenantRepository.updateLimitsRls(
+          id,
+          request.plan(),
+          request.maxUsers(),
+          request.maxWorkflows(),
+          request.maxAiCallsPerMonth());
+    } else {
+      tenant.updateLimits(
+          request.plan(), request.maxUsers(), request.maxWorkflows(), request.maxAiCallsPerMonth());
+    }
     return toResponse(tenant);
   }
 
   private Tenant findTenant(UUID id) {
     return tenantRepository
         .findById(id)
+        .orElseThrow(
+            () ->
+                new AwapException(
+                    ErrorCode.TENANT_NOT_FOUND, HttpStatus.NOT_FOUND, "The tenant was not found."));
+  }
+
+  private Tenant findTenantRls(UUID id) {
+    return tenantRepository
+        .findByIdRls(id)
         .orElseThrow(
             () ->
                 new AwapException(
