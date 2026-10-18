@@ -11,4 +11,5 @@ public record TaskResponse(
     String description,
     UUID assigneeId,
     String status,
-    long version) {}
+    long version,
+    String decisionComment) {}

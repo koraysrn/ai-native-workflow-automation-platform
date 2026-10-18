@@ -8,6 +8,7 @@ export interface TaskDto {
   description: string | null;
   assigneeId: string | null;
   status: string;
+  decisionComment: string | null;
 }
 
 export interface WorkflowDefinitionDto {
@@ -194,12 +195,12 @@ export function createFormDefinition(
   return authPost<FormDefinitionDto>("/api/v1/forms", { name, schemaJson });
 }
 
-export function approveTask(id: string): Promise<TaskDto> {
-  return authPost<TaskDto>(`/api/v1/tasks/${id}/approve`, {});
+export function approveTask(id: string, comment?: string): Promise<TaskDto> {
+  return authPost<TaskDto>(`/api/v1/tasks/${id}/approve`, { comment });
 }
 
-export function rejectTask(id: string): Promise<TaskDto> {
-  return authPost<TaskDto>(`/api/v1/tasks/${id}/reject`, {});
+export function rejectTask(id: string, comment?: string): Promise<TaskDto> {
+  return authPost<TaskDto>(`/api/v1/tasks/${id}/reject`, { comment });
 }
 
 export function startWorkflowInstance(
