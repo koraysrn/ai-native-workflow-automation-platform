@@ -1,6 +1,8 @@
 package com.awap.task.application;
 
 import com.awap.engine.application.OutboxEventPublisher;
+import com.awap.engine.domain.WorkflowState;
+import com.awap.engine.infrastructure.WorkflowInstanceRepository;
 import com.awap.task.domain.Task;
 import com.awap.task.domain.TaskStatus;
 import com.awap.task.infrastructure.TaskRepository;
@@ -19,11 +21,15 @@ public class TaskEscalationScheduler {
 
   private final TaskRepository taskRepository;
   private final OutboxEventPublisher outboxEventPublisher;
+  private final WorkflowInstanceRepository workflowInstanceRepository;
 
   public TaskEscalationScheduler(
-      TaskRepository taskRepository, OutboxEventPublisher outboxEventPublisher) {
+      TaskRepository taskRepository,
+      OutboxEventPublisher outboxEventPublisher,
+      WorkflowInstanceRepository workflowInstanceRepository) {
     this.taskRepository = taskRepository;
     this.outboxEventPublisher = outboxEventPublisher;
+    this.workflowInstanceRepository = workflowInstanceRepository;
   }
 
   @Scheduled(fixedDelay = 30_000)
@@ -31,6 +37,10 @@ public class TaskEscalationScheduler {
   public void escalateOverdueTasks() {
     List<Task> due = taskRepository.findDueForEscalation(Instant.now(), OPEN_STATUSES);
     for (Task task : due) {
+      if (task.getWorkflowInstanceId() != null && isPaused(task)) {
+        // Paused workflows must not progress via timers/schedulers.
+        continue;
+      }
       task.markEscalationDue();
       outboxEventPublisher.publish(
           task.getTenantId(),
@@ -39,6 +49,13 @@ public class TaskEscalationScheduler {
           "TASK_ESCALATION_DUE",
           new TaskEscalationDue(task.getId(), task.getAssigneeId()));
     }
+  }
+
+  private boolean isPaused(Task task) {
+    return workflowInstanceRepository
+        .findByIdAndTenantIdAndDeletedFalse(task.getWorkflowInstanceId(), task.getTenantId())
+        .map(instance -> instance.getState() == WorkflowState.PAUSED)
+        .orElse(false);
   }
 
   /** Payload published when a task escalates. */

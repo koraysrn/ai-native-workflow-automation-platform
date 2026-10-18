@@ -4,6 +4,8 @@ import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
 import com.awap.identity.application.TenantService;
 import com.awap.identity.infrastructure.security.TenantContext;
+import com.awap.identity.interfaces.dto.InvitationResponse;
+import com.awap.identity.interfaces.dto.InviteUserRequest;
 import com.awap.identity.interfaces.dto.LimitsRequest;
 import com.awap.identity.interfaces.dto.TenantRequest;
 import com.awap.identity.interfaces.dto.TenantResponse;
@@ -47,6 +49,15 @@ public class TenantController {
         tenantService.updateLimits(id, request, currentTenantId(), currentRole()));
   }
 
+  @PostMapping("/{id}/invitations")
+  public ResponseEntity<InvitationResponse> invite(
+      @PathVariable UUID id, @Valid @RequestBody InviteUserRequest request) {
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(
+            tenantService.inviteUser(
+                id, request, currentTenantId(), currentRole(), currentUserId()));
+  }
+
   private UUID currentTenantId() {
     return TenantContext.current()
         .map(TenantContext.Context::tenantId)
@@ -61,6 +72,17 @@ public class TenantController {
   private String currentRole() {
     return TenantContext.current()
         .map(TenantContext.Context::role)
+        .orElseThrow(
+            () ->
+                new AwapException(
+                    ErrorCode.UNAUTHORIZED,
+                    HttpStatus.UNAUTHORIZED,
+                    "Authentication is required."));
+  }
+
+  private UUID currentUserId() {
+    return TenantContext.current()
+        .map(TenantContext.Context::userId)
         .orElseThrow(
             () ->
                 new AwapException(

@@ -98,6 +98,18 @@ public class WorkflowInstanceController {
     return ResponseEntity.ok(engineService.cancel(currentTenantId(), id));
   }
 
+  @PostMapping("/{id}/pause")
+  @PreAuthorize("hasAuthority('INSTANCE_MANAGE')")
+  public ResponseEntity<WorkflowInstanceResponse> pause(@PathVariable UUID id) {
+    return ResponseEntity.ok(engineService.pause(currentTenantId(), id));
+  }
+
+  @PostMapping("/{id}/resume")
+  @PreAuthorize("hasAuthority('INSTANCE_MANAGE')")
+  public ResponseEntity<WorkflowInstanceResponse> resume(@PathVariable UUID id) {
+    return ResponseEntity.ok(engineService.resume(currentTenantId(), id));
+  }
+
   /** Request body for completing a node with an optional JSON output. */
   public record CompleteNodeRequest(String outputJson) {}
 

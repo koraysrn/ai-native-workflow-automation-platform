@@ -10,6 +10,8 @@ public interface UserRepository extends JpaRepository<User, UUID> {
 
   Optional<User> findByTenantIdAndEmail(UUID tenantId, String email);
 
+  long countByTenantIdAndDeletedFalse(UUID tenantId);
+
   Optional<User> findByIdAndTenantId(UUID id, UUID tenantId);
 
   Optional<User> findFirstByTenantIdAndRole(UUID tenantId, Role role);
@@ -18,6 +20,11 @@ public interface UserRepository extends JpaRepository<User, UUID> {
       value = "SELECT * FROM awap_find_user_by_email(:tenantId, :email)",
       nativeQuery = true)
   Optional<User> findByTenantIdAndEmailRls(UUID tenantId, String email);
+
+  @org.springframework.data.jpa.repository.Query(
+      value = "SELECT awap_count_tenant_users(:tenantId)",
+      nativeQuery = true)
+  long countByTenantIdAndDeletedFalseRls(UUID tenantId);
 
   /** Records a failed login via the SECURITY DEFINER helper (RLS-bypassing write). */
   @org.springframework.data.jpa.repository.Query(
