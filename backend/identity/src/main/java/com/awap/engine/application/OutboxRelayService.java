@@ -39,7 +39,7 @@ public class OutboxRelayService {
                 topicFor(event.getEventType()),
                 event.getAggregateId().toString(),
                 event.getPayloadJson())
-            .get(3, TimeUnit.SECONDS);
+            .get(10, TimeUnit.SECONDS);
         event.markPublished();
       } catch (Exception ex) {
         // keep unpublished so the next sweep retries
