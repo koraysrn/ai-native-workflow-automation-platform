@@ -5,6 +5,7 @@ import com.awap.common.api.ErrorCode;
 import com.awap.identity.infrastructure.security.TenantContext;
 import com.awap.task.application.TaskService;
 import com.awap.task.interfaces.dto.TaskAssignRequest;
+import com.awap.task.interfaces.dto.TaskDecisionRequest;
 import com.awap.task.interfaces.dto.TaskRequest;
 import com.awap.task.interfaces.dto.TaskResponse;
 import jakarta.validation.Valid;
@@ -65,16 +66,20 @@ public class TaskController {
 
   @PostMapping("/{id}/approve")
   @PreAuthorize("hasAuthority('TASK_APPROVE')")
-  public ResponseEntity<TaskResponse> approve(@PathVariable UUID id) {
+  public ResponseEntity<TaskResponse> approve(
+      @PathVariable UUID id, @RequestBody(required = false) TaskDecisionRequest request) {
+    String comment = request != null ? request.comment() : null;
     return ResponseEntity.ok(
-        taskService.approve(currentTenantId(), id, currentUserId(), currentRole()));
+        taskService.approve(currentTenantId(), id, currentUserId(), currentRole(), comment));
   }
 
   @PostMapping("/{id}/reject")
   @PreAuthorize("hasAuthority('TASK_APPROVE')")
-  public ResponseEntity<TaskResponse> reject(@PathVariable UUID id) {
+  public ResponseEntity<TaskResponse> reject(
+      @PathVariable UUID id, @RequestBody(required = false) TaskDecisionRequest request) {
+    String comment = request != null ? request.comment() : null;
     return ResponseEntity.ok(
-        taskService.reject(currentTenantId(), id, currentUserId(), currentRole()));
+        taskService.reject(currentTenantId(), id, currentUserId(), currentRole(), comment));
   }
 
   @PostMapping("/{id}/complete")

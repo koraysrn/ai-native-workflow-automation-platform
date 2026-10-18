@@ -36,6 +36,14 @@ jobs:
         with:
           name: sbom-backend
           path: backend/target/bom.json
+      - name: Mutation testing (PIT)
+        run: mvn -B -Ppit verify
+        working-directory: backend
+      - name: Upload PIT report
+        uses: actions/upload-artifact@v6
+        with:
+          name: pit-report
+          path: backend/identity/target/pit-reports
 
   owasp:
     name: OWASP Dependency Check

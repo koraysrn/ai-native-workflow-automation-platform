@@ -39,7 +39,7 @@ public class OutboxRelayService {
                 topicFor(event.getEventType()),
                 event.getAggregateId().toString(),
                 event.getPayloadJson())
-            .get(3, TimeUnit.SECONDS);
+            .get(10, TimeUnit.SECONDS);
         event.markPublished();
       } catch (Exception ex) {
         // keep unpublished so the next sweep retries
@@ -52,6 +52,13 @@ public class OutboxRelayService {
     return switch (eventType) {
       case "TASK_COMPLETED", "TASK_ESCALATION_DUE" -> "workflow.task.events";
       case "FORM_SUBMITTED" -> "workflow.instance.events";
+      case "organization.company.created",
+          "organization.department.created",
+          "organization.team.created",
+          "organization.position.created",
+          "organization.user.created",
+          "organization.team.user_assigned" ->
+          "organization.events";
       default -> "workflow.instance.events";
     };
   }

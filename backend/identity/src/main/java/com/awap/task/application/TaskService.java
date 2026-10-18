@@ -82,20 +82,22 @@ public class TaskService {
   }
 
   @Transactional
-  public TaskResponse approve(UUID tenantId, UUID id, UUID actorId, String actorRole) {
+  public TaskResponse approve(
+      UUID tenantId, UUID id, UUID actorId, String actorRole, String comment) {
     Task task = find(tenantId, id);
     requireDecisionRight(task, actorId, actorRole);
-    runGuarded(task::approve);
+    runGuarded(() -> task.approve(comment));
     publishCompleted(task, "{\"decision\":\"APPROVED\"}");
     recordDecision("APPROVED");
     return toResponse(task);
   }
 
   @Transactional
-  public TaskResponse reject(UUID tenantId, UUID id, UUID actorId, String actorRole) {
+  public TaskResponse reject(
+      UUID tenantId, UUID id, UUID actorId, String actorRole, String comment) {
     Task task = find(tenantId, id);
     requireDecisionRight(task, actorId, actorRole);
-    runGuarded(task::reject);
+    runGuarded(() -> task.reject(comment));
     publishCompleted(task, "{\"decision\":\"REJECTED\"}");
     recordDecision("REJECTED");
     return toResponse(task);
@@ -174,6 +176,7 @@ public class TaskService {
         task.getDescription(),
         task.getAssigneeId(),
         task.getStatus().name(),
-        task.getVersion());
+        task.getVersion(),
+        task.getDecisionComment());
   }
 }

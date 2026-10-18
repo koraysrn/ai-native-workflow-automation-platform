@@ -9,10 +9,12 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
+import org.hibernate.annotations.Filter;
 
 /** A running instance of a published workflow version. */
 @Entity
 @Table(name = "workflow_instances")
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class WorkflowInstance {
 
   @Id
@@ -80,6 +82,22 @@ public class WorkflowInstance {
       throw new IllegalStateException("Failed workflow can only transition to RUNNING (retry).");
     }
     this.state = target;
+    this.updatedAt = Instant.now();
+  }
+
+  public void pause() {
+    if (state != WorkflowState.RUNNING && state != WorkflowState.WAITING) {
+      throw new IllegalStateException("Only RUNNING or WAITING workflows can be paused.");
+    }
+    this.state = WorkflowState.PAUSED;
+    this.updatedAt = Instant.now();
+  }
+
+  public void resume() {
+    if (state != WorkflowState.PAUSED) {
+      throw new IllegalStateException("Only PAUSED workflows can be resumed.");
+    }
+    this.state = WorkflowState.RUNNING;
     this.updatedAt = Instant.now();
   }
 

@@ -59,7 +59,7 @@ class TaskServiceTest {
     when(taskRepository.findByIdAndTenantIdAndDeletedFalse(id, tenantId))
         .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.approve(tenantId, id, UUID.randomUUID(), "EMPLOYEE"))
+    assertThatThrownBy(() -> service.approve(tenantId, id, UUID.randomUUID(), "EMPLOYEE", null))
         .isInstanceOf(AwapException.class);
   }
 
@@ -73,9 +73,25 @@ class TaskServiceTest {
     when(taskRepository.findByIdAndTenantIdAndDeletedFalse(id, tenantId))
         .thenReturn(Optional.of(task));
 
-    service.approve(tenantId, id, assigneeId, "EMPLOYEE");
+    service.approve(tenantId, id, assigneeId, "EMPLOYEE", "Looks good");
 
     verify(counter).increment();
     verify(meterRegistry).counter("awap.task.decisions", "decision", "APPROVED");
+  }
+
+  @Test
+  void approvePersistsComment() {
+    UUID tenantId = UUID.randomUUID();
+    UUID id = UUID.randomUUID();
+    UUID assigneeId = UUID.randomUUID();
+    Task task = new Task(tenantId, null, null, "Review", null, assigneeId);
+    task.claim(assigneeId);
+    when(taskRepository.findByIdAndTenantIdAndDeletedFalse(id, tenantId))
+        .thenReturn(Optional.of(task));
+
+    TaskResponse response = service.approve(tenantId, id, assigneeId, "EMPLOYEE", "Looks good");
+
+    assertThat(response.status()).isEqualTo(TaskStatus.APPROVED.name());
+    assertThat(response.decisionComment()).isEqualTo("Looks good");
   }
 }

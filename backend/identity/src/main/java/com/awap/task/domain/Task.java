@@ -9,12 +9,17 @@ import jakarta.persistence.Table;
 import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.UUID;
+import org.hibernate.annotations.Filter;
+import org.hibernate.annotations.FilterDef;
+import org.hibernate.annotations.ParamDef;
 import org.springframework.data.annotation.CreatedBy;
 import org.springframework.data.annotation.LastModifiedBy;
 
 /** A tenant-scoped task with optimistic locking, escalation and a guarded state machine. */
 @Entity
 @Table(name = "tasks")
+@FilterDef(name = "tenantFilter", parameters = @ParamDef(name = "tenantId", type = UUID.class))
+@Filter(name = "tenantFilter", condition = "tenant_id = :tenantId")
 public class Task {
 
   @Id
@@ -50,6 +55,9 @@ public class Task {
 
   @Column(name = "completed_at")
   private Instant completedAt;
+
+  @Column(name = "decision_comment")
+  private String decisionComment;
 
   @Version
   @Column(nullable = false)
@@ -128,15 +136,25 @@ public class Task {
   }
 
   public void approve() {
+    approve(null);
+  }
+
+  public void approve(String comment) {
     requireOpenForDecision();
     this.status = TaskStatus.APPROVED;
+    this.decisionComment = comment;
     this.completedAt = Instant.now();
     this.updatedAt = Instant.now();
   }
 
   public void reject() {
+    reject(null);
+  }
+
+  public void reject(String comment) {
     requireOpenForDecision();
     this.status = TaskStatus.REJECTED;
+    this.decisionComment = comment;
     this.completedAt = Instant.now();
     this.updatedAt = Instant.now();
   }
@@ -220,6 +238,10 @@ public class Task {
 
   public Instant getCompletedAt() {
     return completedAt;
+  }
+
+  public String getDecisionComment() {
+    return decisionComment;
   }
 
   public long getVersion() {

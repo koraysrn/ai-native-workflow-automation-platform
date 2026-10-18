@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.awap.identity.IdentityApplication;
 import com.awap.task.domain.Task;
+import com.awap.task.domain.TaskStatus;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -32,5 +33,19 @@ class TaskRepositoryITest {
 
     assertThat(taskRepository.findByIdAndTenantIdAndDeletedFalse(task.getId(), UUID.randomUUID()))
         .isEmpty();
+  }
+
+  @Test
+  void decisionCommentRoundTrips() {
+    UUID tenant = UUID.randomUUID();
+    UUID assignee = UUID.randomUUID();
+    Task task = new Task(tenant, null, null, "Review", null, assignee);
+    task.claim(assignee);
+    task.approve("Looks good");
+    taskRepository.save(task);
+
+    Task reloaded = taskRepository.findById(task.getId()).orElseThrow();
+    assertThat(reloaded.getDecisionComment()).isEqualTo("Looks good");
+    assertThat(reloaded.getStatus()).isEqualTo(TaskStatus.APPROVED);
   }
 }
