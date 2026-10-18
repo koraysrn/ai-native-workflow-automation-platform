@@ -9,6 +9,7 @@ import com.awap.task.infrastructure.TaskRepository;
 import com.awap.task.interfaces.dto.TaskAssignRequest;
 import com.awap.task.interfaces.dto.TaskRequest;
 import com.awap.task.interfaces.dto.TaskResponse;
+import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
@@ -22,10 +23,15 @@ public class TaskService {
 
   private final TaskRepository taskRepository;
   private final OutboxEventPublisher outboxEventPublisher;
+  private final MeterRegistry meterRegistry;
 
-  public TaskService(TaskRepository taskRepository, OutboxEventPublisher outboxEventPublisher) {
+  public TaskService(
+      TaskRepository taskRepository,
+      OutboxEventPublisher outboxEventPublisher,
+      MeterRegistry meterRegistry) {
     this.taskRepository = taskRepository;
     this.outboxEventPublisher = outboxEventPublisher;
+    this.meterRegistry = meterRegistry;
   }
 
   @Transactional
@@ -82,6 +88,7 @@ public class TaskService {
     requireDecisionRight(task, actorId, actorRole);
     runGuarded(() -> task.approve(comment));
     publishCompleted(task, "{\"decision\":\"APPROVED\"}");
+    recordDecision("APPROVED");
     return toResponse(task);
   }
 
@@ -92,6 +99,7 @@ public class TaskService {
     requireDecisionRight(task, actorId, actorRole);
     runGuarded(() -> task.reject(comment));
     publishCompleted(task, "{\"decision\":\"REJECTED\"}");
+    recordDecision("REJECTED");
     return toResponse(task);
   }
 
@@ -108,6 +116,10 @@ public class TaskService {
     Task task = find(tenantId, id);
     runGuarded(() -> task.escalate(request.assigneeId(), Instant.now().plusSeconds(3600)));
     return toResponse(task);
+  }
+
+  private void recordDecision(String decision) {
+    meterRegistry.counter("awap.task.decisions", "decision", decision).increment();
   }
 
   private void publishCompleted(Task task, String outputJson) {
