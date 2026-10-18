@@ -67,7 +67,10 @@ public class SecurityConfig {
             csrf ->
                 csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
                     .ignoringRequestMatchers(
-                        "/api/v1/auth/login", "/api/v1/auth/refresh", "/api/v1/tenants"))
+                        "/api/v1/auth/login",
+                        "/api/v1/auth/refresh",
+                        "/api/v1/tenants",
+                        "/api/v1/tenant-invitations/*/accept"))
         .cors(Customizer.withDefaults())
         .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .exceptionHandling(
@@ -79,6 +82,8 @@ public class SecurityConfig {
                     .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/refresh")
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/tenants")
+                    .permitAll()
+                    .requestMatchers(HttpMethod.POST, "/api/v1/tenant-invitations/*/accept")
                     .permitAll()
                     .anyRequest()
                     .authenticated())
