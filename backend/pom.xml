@@ -274,6 +274,8 @@
                             </outputFormats>
                             <historyInputFile>${project.build.directory}/pitest.history</historyInputFile>
                             <historyOutputFile>${project.build.directory}/pitest.history</historyOutputFile>
+                            <mutationThreshold>40</mutationThreshold>
+                            <coverageThreshold>50</coverageThreshold>
                         </configuration>
                         <dependencies>
                             <dependency>
