@@ -57,6 +57,16 @@ function csrfToken(): string | undefined {
   return token ? decodeURIComponent(token) : undefined;
 }
 
+/** Reads the active tenant cookie set by the tenant switcher. */
+function activeTenantId(): string | null {
+  if (typeof document === "undefined") {
+    return null;
+  }
+  const match = document.cookie.match(/(?:^|;\s*)awap_tenant=([^;]*)/);
+  const value = match?.[1];
+  return value ? decodeURIComponent(value) : null;
+}
+
 /** Calls the public actuator health endpoint used by the shared consumer contract. */
 export async function healthCheck(): Promise<HealthDto> {
   const response = await fetch(`${apiBase()}/actuator/health`);
@@ -64,6 +74,21 @@ export async function healthCheck(): Promise<HealthDto> {
     throw new Error(`Health check failed with status ${response.status}`);
   }
   return (await response.json()) as HealthDto;
+}
+
+export interface TenantMembershipDto {
+  tenantId: string;
+  role: string;
+}
+
+export async function fetchTenants(): Promise<TenantMembershipDto[]> {
+  const response = await fetch(`${apiBase()}/api/v1/auth/tenants`, {
+    credentials: "include",
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to load tenants with status ${response.status}`);
+  }
+  return (await response.json()) as TenantMembershipDto[];
 }
 
 export interface RegisterTenantPayload {
@@ -128,6 +153,10 @@ async function authFetch<T>(path: string, retried = false): Promise<T> {
   if (token) {
     headers["X-XSRF-TOKEN"] = token;
   }
+  const tenant = activeTenantId();
+  if (tenant) {
+    headers["X-Tenant-Id"] = tenant;
+  }
   const response = await fetch(`${apiBase()}${path}`, {
     headers,
     credentials: "include",
@@ -150,6 +179,10 @@ async function authPost<T>(path: string, body: unknown, retried = false): Promis
   const token = csrfToken();
   if (token) {
     headers["X-XSRF-TOKEN"] = token;
+  }
+  const tenant = activeTenantId();
+  if (tenant) {
+    headers["X-Tenant-Id"] = tenant;
   }
   const response = await fetch(`${apiBase()}${path}`, {
     method: "POST",

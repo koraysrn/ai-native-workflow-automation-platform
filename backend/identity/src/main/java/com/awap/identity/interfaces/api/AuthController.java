@@ -9,11 +9,13 @@ import com.awap.identity.infrastructure.security.TenantContext;
 import com.awap.identity.interfaces.dto.LoginRequest;
 import com.awap.identity.interfaces.dto.MessageResponse;
 import com.awap.identity.interfaces.dto.RefreshRequest;
+import com.awap.identity.interfaces.dto.TenantMembershipResponse;
 import com.awap.identity.interfaces.dto.TokenResponse;
 import com.awap.identity.interfaces.dto.UserResponse;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.time.Duration;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
@@ -91,6 +93,13 @@ public class AuthController {
             user.getEmail(),
             user.getFullName(),
             user.getRole().name()));
+  }
+
+  @GetMapping("/tenants")
+  public ResponseEntity<List<TenantMembershipResponse>> tenants() {
+    User user = authService.me(currentUserId());
+    return ResponseEntity.ok(
+        List.of(new TenantMembershipResponse(user.getTenantId(), user.getRole().name())));
   }
 
   private void writeTokenCookies(HttpServletResponse response, TokenPair pair) {
