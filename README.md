@@ -90,8 +90,10 @@ cd infra
 docker compose up -d
 ```
 
-Starts PostgreSQL, Redis, Kafka (+ Schema Registry), MinIO, OpenSearch, Vault,
-Prometheus, Grafana and the OpenTelemetry collector.
+Starts PostgreSQL, Redis, Kafka (+ Schema Registry), OpenSearch, Vault,
+Prometheus, Grafana and the OpenTelemetry collector. MinIO is opt-in (its public
+Docker image now requires authentication or building from source); start it with
+`docker compose --profile storage up -d minio`.
 
 ### 2. Run the backend
 
