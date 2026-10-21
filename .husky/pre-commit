@@ -1,1 +1,13 @@
-echo "Running pre-commit checks..."
+#!/usr/bin/env sh
+# Pre-commit: scan staged changes for secrets.
+# The authoritative gate is the Gitleaks CI job; this hook fails fast locally.
+
+if command -v gitleaks >/dev/null 2>&1; then
+  gitleaks protect --staged --no-banner --redact --config .gitleaks.toml
+  exit $?
+fi
+
+echo "⚠️  gitleaks is not installed locally; skipping the pre-commit secret scan."
+echo "    CI enforces the scan via the Gitleaks action. Install gitleaks locally:"
+echo "    https://github.com/gitleaks/gitleaks#installing"
+exit 0

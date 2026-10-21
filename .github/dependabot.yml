@@ -1,47 +1,10 @@
 version: 2
 updates:
-  - package-ecosystem: "maven"
-    directory: "/backend"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
-
-  - package-ecosystem: "npm"
-    directory: "/frontend"
-    schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 5
-    ignore:
-      - dependency-name: "typescript"
-        versions: ["7.x"]
-      - dependency-name: "@types/node"
-        versions: [">=25"]
-      - dependency-name: "eslint"
-        versions: [">=10"]
-
+  # Maven, npm and Python dependency updates are handled by Renovate (renovate.json)
+  # to get grouped PRs. Dependabot is retained only for GitHub Actions so that the
+  # two tools do not open duplicate PRs.
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
-    ignore:
-      - dependency-name: "actions/checkout"
-        versions: [">=8"]
-      - dependency-name: "actions/cache"
-        versions: [">=7"]
-      - dependency-name: "actions/setup-node"
-        versions: [">=7"]
-      - dependency-name: "actions/setup-java"
-        versions: [">=7"]
-      - dependency-name: "actions/upload-artifact"
-        versions: [">=7"]
-      - dependency-name: "docker/login-action"
-        versions: [">=4"]
-      - dependency-name: "docker/build-push-action"
-        versions: [">=7"]
-      - dependency-name: "pnpm/action-setup"
-        versions: [">=7"]
-      - dependency-name: "conda-incubator/setup-miniconda"
-        versions: [">=4"]
-      - dependency-name: "gitleaks/gitleaks-action"
-        versions: [">=3"]

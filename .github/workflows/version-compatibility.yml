@@ -1,0 +1,19 @@
+name: Version compatibility check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  versions:
+    name: Version compatibility check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify fixed versions against the allowlist
+        run: bash scripts/verify-versions.sh

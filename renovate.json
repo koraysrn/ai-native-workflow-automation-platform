@@ -1,19 +1,25 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "extends": ["config:recommended"],
-  "lockFileMaintenance": {
-    "enabled": true
-  },
+  "timezone": "Europe/Istanbul",
+  "dependencyDashboard": true,
+  "prConcurrentLimit": 5,
+  "ignoreDeps": ["typescript"],
   "packageRules": [
     {
-      "matchDatasources": ["maven"],
-      "matchPackagePatterns": ["^org.springframework.boot:"],
-      "groupName": "Spring Boot"
+      "matchManagers": ["maven"],
+      "groupName": "backend-maven",
+      "labels": ["dependencies", "area/backend"]
     },
     {
-      "matchDatasources": ["pypi"],
-      "enabled": false
+      "matchManagers": ["npm"],
+      "groupName": "frontend-npm",
+      "labels": ["dependencies", "area/frontend"]
+    },
+    {
+      "matchManagers": ["pep621"],
+      "groupName": "ai-layer-python",
+      "labels": ["dependencies", "area/ai"]
     }
-  ],
-  "labels": ["dependencies"]
+  ]
 }

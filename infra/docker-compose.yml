@@ -53,8 +53,12 @@ services:
     ports:
       - "8081:8081"
 
+  # MinIO is opt-in (storage profile): the public MinIO Docker image now requires
+  # authentication (or building from source). Start it explicitly with:
+  #   docker compose --profile storage up -d minio
   minio:
-    image: minio/minio:latest
+    image: quay.io/minio/minio:latest
+    profiles: ["storage"]
     command: server /data --console-address ":9001"
     environment:
       MINIO_ROOT_USER: awapadmin

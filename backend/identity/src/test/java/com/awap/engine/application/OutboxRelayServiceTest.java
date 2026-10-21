@@ -1,7 +1,11 @@
 package com.awap.engine.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.awap.engine.domain.OutboxEvent;
@@ -34,30 +38,50 @@ class OutboxRelayServiceTest {
   }
 
   @Test
-  void relayPublishesEventAndMarksPublished() {
+  void relayClaimsPublishesAndKeepsClaimOnSuccess() {
     OutboxEvent event =
         new OutboxEvent(
             UUID.randomUUID(), "TASK", UUID.randomUUID(), "TASK_COMPLETED", "{\"ok\":true}");
     when(outboxRepository.findByPublishedFalseOrderByCreatedAtAsc()).thenReturn(List.of(event));
+    when(outboxRepository.claim(event.getId())).thenReturn(1);
     when(kafkaTemplate.send(anyString(), anyString(), anyString()))
         .thenReturn(CompletableFuture.completedFuture(new SendResult<>(null, null)));
 
     service.relayEvents();
 
-    assertThat(event.isPublished()).isTrue();
+    verify(outboxRepository).claim(event.getId());
+    verify(outboxRepository, never()).release(any());
+    verify(kafkaTemplate)
+        .send("workflow.task.events", event.getAggregateId().toString(), "{\"ok\":true}");
   }
 
   @Test
-  void relayKeepsEventUnpublishedOnSendFailure() {
+  void relaySkipsEventsAlreadyClaimedByAnotherRun() {
     OutboxEvent event =
         new OutboxEvent(
             UUID.randomUUID(), "FORM", UUID.randomUUID(), "FORM_SUBMITTED", "{\"ok\":true}");
     when(outboxRepository.findByPublishedFalseOrderByCreatedAtAsc()).thenReturn(List.of(event));
+    when(outboxRepository.claim(event.getId())).thenReturn(0);
+
+    service.relayEvents();
+
+    verify(outboxRepository).claim(event.getId());
+    verifyNoInteractions(kafkaTemplate);
+  }
+
+  @Test
+  void relayReleasesClaimOnSendFailure() {
+    OutboxEvent event =
+        new OutboxEvent(
+            UUID.randomUUID(), "FORM", UUID.randomUUID(), "FORM_SUBMITTED", "{\"ok\":true}");
+    when(outboxRepository.findByPublishedFalseOrderByCreatedAtAsc()).thenReturn(List.of(event));
+    when(outboxRepository.claim(event.getId())).thenReturn(1);
     when(kafkaTemplate.send(anyString(), anyString(), anyString()))
         .thenReturn(CompletableFuture.failedFuture(new RuntimeException("broker down")));
 
     service.relayEvents();
 
+    verify(outboxRepository).release(event.getId());
     assertThat(event.isPublished()).isFalse();
   }
 }

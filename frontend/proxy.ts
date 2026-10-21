@@ -1,6 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
-export function middleware(request: NextRequest) {
+export function proxy(request: NextRequest) {
   const session = request.cookies.get("awap_session")?.value;
   if (session !== "1") {
     return NextResponse.redirect(new URL("/", request.url));
