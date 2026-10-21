@@ -270,8 +270,8 @@ The project is developed with the following fixed versions:
 |---|---|
 | Java | Java 25 |
 | Spring Boot | 4.1.1 |
-| Python | Python 3.14 (conda) |
-| TypeScript | TypeScript 6.x (ESLint-compatible) |
+| Python | Python 3.15.0 (uv) |
+| TypeScript | TypeScript 7.0.2 |
 
 Measures to be taken against version incompatibilities:
 
@@ -334,7 +334,7 @@ For a phase to be released:
 | A11 | Integration complexity between Python (AI Layer) and Java (Backend) | gRPC preferred (REST fallback); P95<300ms target kept separate from LLM calls; cache + async job optimization |
 | A12 | Conflict between LangGraph and Workflow Engine state machines (split-brain) | LangGraph manages only agent-internal state; business process state is only in the Workflow Engine; clear boundary + event-based synchronization |
 | A13 | Lombok ban + Records' mutability constraint in JPA entities | DTO/value object Records; JPA entities written as mutable classes (exception to Records); compiler-based tools such as MapStruct |
-| A14 | Python 3.14 ecosystem maturity (build/compatibility issues in C-based AI libraries) | Pilot `conda env create -f environment.yml` + library compatibility test before starting development; early reporting of incompatibilities |
+| A14 | Python 3.15 ecosystem maturity (build/compatibility issues in C-based AI libraries) | Pilot `uv sync --locked` + `compat_check.py` library compatibility test before starting development; early reporting of incompatibilities |
 | A15 | Spring Boot 4.x third-party ecosystem compatibility | Continuous tracking of the compatibility matrix of Spring Security/Data/Modulith/Kafka etc. with Boot 4.1.1 |
 | A16 | DB I/O load and table bloat caused by Outbox Pattern | Partitioned outbox, regular cleanup, batch dispatcher + separate connection pool; CDC (Debezium) at high volume |
 

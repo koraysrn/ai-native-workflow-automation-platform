@@ -50,8 +50,8 @@ flowchart LR
 | Layer | Responsibility | Stack |
 |---|---|---|
 | `backend/` | Identity, organization, workflow definitions, engine, tasks, forms, files | Java 25, Spring Boot 4.1.1, Maven |
-| `frontend/` | Workflow designer, form builder, task/approval screens, admin | Next.js 16, TypeScript 6.x, TanStack Query, React Flow, Tailwind |
-| `ai-layer/` | AI execution and agentic steps | Python 3.14, FastAPI, LangChain/LangGraph |
+| `frontend/` | Workflow designer, form builder, task/approval screens, admin | Next.js 16, TypeScript 7.0.2, TanStack Query, React Flow, Tailwind |
+| `ai-layer/` | AI execution and agentic steps | Python 3.15.0, FastAPI, LangChain/LangGraph |
 | `infra/` | Local stack, Kubernetes manifests, observability | Docker Compose, Kafka + Schema Registry, PostgreSQL, MinIO, OpenSearch, Vault, Prometheus, Grafana |
 
 The authoritative compatibility matrix is maintained in
@@ -80,7 +80,7 @@ The authoritative compatibility matrix is maintained in
 
 - JDK 25 (Temurin)
 - Node.js 24 LTS + pnpm
-- Python 3.14 (conda) for the AI layer
+- Python 3.15.0 (uv) for the AI layer
 - Docker + Docker Compose for local infrastructure
 
 ### 1. Start local infrastructure
@@ -112,10 +112,9 @@ pnpm dev
 ### 4. Run the AI layer
 
 ```bash
-conda env create -f environment.yml
-conda activate awap-ai
 cd ai-layer
-uvicorn app.main:app --reload
+uv sync --locked
+uv run uvicorn app.main:app --reload
 ```
 
 ---

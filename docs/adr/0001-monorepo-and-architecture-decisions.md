@@ -2,6 +2,7 @@
 
 - **Status:** Accepted
 - **Date:** 2026-10-14
+- **Amended:** 2026-10-21 — AI Layer pivoted from conda/Python 3.14 to uv/Python 3.15.0 and the frontend to TypeScript 7.0.2 (see `COMPATIBILITY.md`).
 
 ## Context
 
@@ -21,13 +22,13 @@ developed safely and reproducibly.
    `interfaces`. Spring Modulith defines module boundaries; Hexagonal defines
    intra-module layers. Intra-module dependencies always point inward toward
    the domain.
-4. **Frontend build:** pnpm workspace rooted at `frontend/`, TypeScript 6.x in
-   strict mode, Next.js 16, TanStack Query for server state. TypeScript 7.0.2
-   is deferred until `typescript-eslint` supports it.
-5. **AI Layer environment:** conda with `environment.yml` at the repository
-   root as the single source of truth. Python 3.14 from conda-forge; LangChain
-   and LangGraph 1.x are installed from PyPI via the `pip` section. Python
-   3.15.0 is deferred until the ecosystem matures.
+4. **Frontend build:** pnpm workspace rooted at `frontend/`, TypeScript 7.0.2
+   (native compiler) in strict mode, Next.js 16, TanStack Query for server
+   state. ESLint runs via a TypeScript 6 alias until `typescript-eslint` ships
+   TS 7 support.
+5. **AI Layer environment:** uv with `ai-layer/pyproject.toml` and the
+   committed `ai-layer/uv.lock` as the single source of truth. Python 3.15.0
+   (uv-managed); LangChain and LangGraph 1.x are installed from PyPI.
 6. **License:** MIT.
 7. **Project language:** English for all code, comments, commit messages, and
    documentation.
@@ -35,10 +36,11 @@ developed safely and reproducibly.
 ## Consequences
 
 - A single CI pipeline can build and test all layers.
-- The conda environment must be kept in sync with `environment.yml`; adding an
-  AI Layer dependency means updating that file.
-- The AI stack stays on LangChain/LangGraph 1.x via PyPI; Python 3.15.0 is
-  deferred until conda-forge publishes 1.x packages for it or `cp315` wheels
-  land on PyPI (see `COMPATIBILITY.md`).
+- The uv environment must be kept in sync with `pyproject.toml`/`uv.lock`;
+  adding an AI Layer dependency means updating those files and running
+  `uv sync --locked`.
+- The AI stack stays on LangChain/LangGraph 1.x via PyPI on Python 3.15.0;
+  `cp315` wheels are verified by the pilot compatibility check (see
+  `COMPATIBILITY.md`).
 - Personal planning documents are excluded from the repository and must never
   be committed.

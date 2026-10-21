@@ -11,19 +11,20 @@ This document defines the protection of the `main` branch, the issue/PR label ta
 | Enforce admins | Yes |
 | Require conversation resolution | Yes |
 | Dismiss stale reviews | Yes |
-| Required approving review count | 0 |
+| Required approving review count | 1 |
 | Require code owner reviews | No (see note below) |
 | Allow force pushes | No |
 | Allow deletions | No |
 | Strict status checks | Yes |
 
-> **Note - code owner review:** Because the repository has a single maintainer (`@koraysrn`), `require_code_owner_reviews` is disabled. Keeping it enabled would lock every PR, since the author cannot approve their own PR. This rule should be enabled once additional maintainers are added.
+> **Note - code owner review & required reviews:** Because the repository has a single maintainer (`@koraysrn`), `require_code_owner_reviews` is disabled and `required_approving_review_count` is targeted at 1. Enforcing a required review now would lock every PR, since the author cannot approve their own PR. These rules must be activated in GitHub once additional maintainers are added.
 
 ### Required status checks
 
 - `Backend (Java 25 / Spring Boot 4.1.1)`
 - `Frontend (TypeScript 7.x / Next.js 16)`
 - `AI Layer (Python 3.15 / FastAPI)`
+- `Version compatibility check`
 - `Trivy vulnerability scan`
 - `Secret scan (Gitleaks)`
 - `OWASP Dependency Check`

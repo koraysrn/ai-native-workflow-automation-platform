@@ -5,6 +5,7 @@
       "Backend (Java 25 / Spring Boot 4.1.1)",
       "Frontend (TypeScript 7.x / Next.js 16)",
       "AI Layer (Python 3.15 / FastAPI)",
+      "Version compatibility check",
       "Trivy vulnerability scan",
       "Secret scan (Gitleaks)",
       "OWASP Dependency Check",
@@ -16,7 +17,7 @@
   "required_pull_request_reviews": {
     "dismiss_stale_reviews": true,
     "require_code_owner_reviews": false,
-    "required_approving_review_count": 0
+    "required_approving_review_count": 1
   },
   "required_conversation_resolution": true,
   "restrictions": null,

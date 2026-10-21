@@ -10,9 +10,11 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Relays unprocessed outbox events to Kafka; marks them published on success. */
+/** Relays unprocessed outbox events to Kafka exactly once, even under concurrent relay runs. */
 @Service
 public class OutboxRelayService {
+
+  private static final long SEND_TIMEOUT_SECONDS = 10;
 
   private final OutboxEventRepository outboxRepository;
   private final ObjectProvider<KafkaTemplate<String, String>> kafkaTemplateProvider;
@@ -33,16 +35,22 @@ public class OutboxRelayService {
     }
     List<OutboxEvent> events = outboxRepository.findByPublishedFalseOrderByCreatedAtAsc();
     for (OutboxEvent event : events) {
+      // Claim the event atomically. The scheduled task and any other relay instance must never
+      // publish the same event twice.
+      if (outboxRepository.claim(event.getId()) == 0) {
+        continue;
+      }
       try {
         kafkaTemplate
             .send(
                 topicFor(event.getEventType()),
                 event.getAggregateId().toString(),
                 event.getPayloadJson())
-            .get(10, TimeUnit.SECONDS);
-        event.markPublished();
+            .get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        // The claim (published=true) is committed with the surrounding transaction.
       } catch (Exception ex) {
-        // keep unpublished so the next sweep retries
+        // Release the claim so the next sweep retries the event.
+        outboxRepository.release(event.getId());
       }
     }
   }
