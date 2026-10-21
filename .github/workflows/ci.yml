@@ -11,6 +11,12 @@ permissions:
   packages: write
   security-events: write
 
+# One CI run per ref: a new push cancels the superseded run so parallel runs do
+# not compete for the same NVD API key quota during the OWASP cold download.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     name: Backend (Java 25 / Spring Boot 4.1.1)
