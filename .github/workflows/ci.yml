@@ -69,13 +69,13 @@ jobs:
           restore-keys: |
             nvd-${{ runner.os }}-
       - name: Dependency scan (OWASP)
-        timeout-minutes: 20
+        timeout-minutes: 60
         env:
           NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
         run: |
           if [ -n "$NVD_API_KEY" ]; then
             mvn -B -DskipTests install
-            mvn -B -Dnvd.api.key="$NVD_API_KEY" -Dnvd.api.delay=8000 org.owasp:dependency-check-maven:check
+            mvn -B -Dnvd.api.key="$NVD_API_KEY" -Dnvd.api.delay=8000 -Dnvd.api.resultsPerPage=500 org.owasp:dependency-check-maven:check
           else
             echo "NVD_API_KEY not configured; skipping OWASP Dependency Check."
           fi
