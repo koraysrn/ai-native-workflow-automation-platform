@@ -99,7 +99,7 @@ public class SecurityConfig {
   @Bean
   public CorsConfigurationSource corsConfigurationSource(
       @Value("${awap.security.cors-allowed-origins:http://localhost:3000,http://127.0.0.1:3000}")
-      String allowedOrigins) {
+          String allowedOrigins) {
     CorsConfiguration configuration = new CorsConfiguration();
     configuration.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
     configuration.setAllowedMethods(
