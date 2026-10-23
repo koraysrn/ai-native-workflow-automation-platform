@@ -67,9 +67,18 @@ function activeTenantId(): string | null {
   return value ? decodeURIComponent(value) : null;
 }
 
+/** Logs an API call to the browser console for local diagnostics. */
+function logApi(method: string, path: string, status: number, started: number): void {
+  console.log(
+    `[api] ${method} ${path} -> ${status} (${Math.round(performance.now() - started)}ms)`,
+  );
+}
+
 /** Calls the public actuator health endpoint used by the shared consumer contract. */
 export async function healthCheck(): Promise<HealthDto> {
+  const started = performance.now();
   const response = await fetch(`${apiBase()}/actuator/health`);
+  logApi("GET", "/actuator/health", response.status, started);
   if (!response.ok) {
     throw new Error(`Health check failed with status ${response.status}`);
   }
@@ -100,12 +109,14 @@ export interface RegisterTenantPayload {
 }
 
 export async function registerTenant(payload: RegisterTenantPayload): Promise<void> {
+  const started = performance.now();
   const response = await fetch(`${apiBase()}/api/v1/tenants`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     credentials: "include",
     body: JSON.stringify(payload),
   });
+  logApi("POST", "/api/v1/tenants", response.status, started);
   if (!response.ok) {
     throw new Error(await readErrorDetail(response, "Registration failed"));
   }
@@ -173,10 +184,12 @@ async function authFetch<T>(path: string, retried = false): Promise<T> {
   if (tenant) {
     headers["X-Tenant-Id"] = tenant;
   }
+  const started = performance.now();
   const response = await fetch(`${apiBase()}${path}`, {
     headers,
     credentials: "include",
   });
+  logApi("GET", path, response.status, started);
 
   if (response.status === 401 && !retried && (await refreshAccessToken())) {
     return authFetch<T>(path, true);
@@ -200,12 +213,14 @@ async function authPost<T>(path: string, body: unknown, retried = false): Promis
   if (tenant) {
     headers["X-Tenant-Id"] = tenant;
   }
+  const started = performance.now();
   const response = await fetch(`${apiBase()}${path}`, {
     method: "POST",
     headers,
     credentials: "include",
     body: JSON.stringify(body),
   });
+  logApi("POST", path, response.status, started);
 
   if (response.status === 401 && !retried && (await refreshAccessToken())) {
     return authPost<T>(path, body, true);
