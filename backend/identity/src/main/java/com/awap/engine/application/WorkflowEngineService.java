@@ -315,6 +315,30 @@ public class WorkflowEngineService {
             "NODE_DELAYED",
             "delaySeconds=" + delaySeconds);
       }
+      case PARALLEL -> {
+        int branches =
+            (int)
+                transitionsOf(instance).stream()
+                    .filter(transition -> transition.getFromNodeId().equals(node.getNodeId()))
+                    .count();
+        execution.openBranches(Math.max(branches, 1));
+        execution.setJoinNodeId(readJoinNodeId(node));
+        execution.complete("{}");
+        nodeExecutionRepository.save(execution);
+        log(
+            instance,
+            node.getNodeId(),
+            node.getNodeType().name(),
+            "NODE_FORKED",
+            "branches=" + branches);
+        advanceFrom(instance, node.getNodeId());
+      }
+      case MERGE -> {
+        execution.complete("{}");
+        nodeExecutionRepository.save(execution);
+        log(instance, node.getNodeId(), node.getNodeType().name(), "NODE_COMPLETED", null);
+        advanceFrom(instance, node.getNodeId());
+      }
       case APPROVAL, TASK -> {
         UUID assigneeId = resolveAssignee(instance, node);
         TaskRequest taskRequest =
@@ -368,6 +392,19 @@ public class WorkflowEngineService {
     }
   }
 
+  private String readJoinNodeId(NodeDefinition node) {
+    String configJson = node.getConfigJson();
+    if (configJson == null || configJson.isBlank()) {
+      return null;
+    }
+    try {
+      JsonNode config = objectMapper.readTree(configJson);
+      return config.path("joinNodeId").asText(null);
+    } catch (JsonProcessingException ex) {
+      return null;
+    }
+  }
+
   private UUID resolveAssignee(WorkflowInstance instance, NodeDefinition node) {
     String configJson = node.getConfigJson();
     if (configJson == null || configJson.isBlank()) {
@@ -407,13 +444,40 @@ public class WorkflowEngineService {
                     .filter(node -> node.getNodeId().equals(transition.getToNodeId()))
                     .findFirst()
                     .ifPresentOrElse(
-                        target -> executeNode(instance, target),
+                        target -> {
+                          if (target.getNodeType() == NodeType.MERGE) {
+                            reportBranchMerge(instance, target);
+                          } else {
+                            executeNode(instance, target);
+                          }
+                        },
                         () -> {
                           throw new AwapException(
                               ErrorCode.VALIDATION_FAILED,
                               HttpStatus.BAD_REQUEST,
                               "Transition target node not found: " + transition.getToNodeId());
                         }));
+  }
+
+  /**
+   * Records that a parallel branch reached the merge gateway. The join fires (executes the MERGE
+   * node) only once every branch opened by the matching PARALLEL gateway has reported.
+   */
+  private void reportBranchMerge(WorkflowInstance instance, NodeDefinition mergeNode) {
+    NodeExecution parallel =
+        nodeExecutionRepository
+            .findByWorkflowInstanceIdAndJoinNodeId(instance.getId(), mergeNode.getNodeId())
+            .orElseThrow(
+                () ->
+                    new AwapException(
+                        ErrorCode.WORKFLOW_INVALID_DEFINITION,
+                        HttpStatus.BAD_REQUEST,
+                        "Merge node has no matching parallel gateway: " + mergeNode.getNodeId()));
+    parallel.recordBranchMerge();
+    nodeExecutionRepository.save(parallel);
+    if (parallel.getMergedBranchCount() >= parallel.getBranchTokenCount()) {
+      executeNode(instance, mergeNode);
+    }
   }
 
   private boolean evaluateCondition(

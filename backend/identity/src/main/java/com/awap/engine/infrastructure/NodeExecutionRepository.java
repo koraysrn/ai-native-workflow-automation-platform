@@ -13,6 +13,9 @@ public interface NodeExecutionRepository extends JpaRepository<NodeExecution, UU
 
   Optional<NodeExecution> findByWorkflowInstanceIdAndNodeId(UUID workflowInstanceId, String nodeId);
 
+  Optional<NodeExecution> findByWorkflowInstanceIdAndJoinNodeId(
+      UUID workflowInstanceId, String joinNodeId);
+
   List<NodeExecution> findByWorkflowInstanceIdOrderByCreatedAtAsc(UUID workflowInstanceId);
 
   List<NodeExecution> findByWorkflowInstanceIdAndStatus(

@@ -7,5 +7,7 @@ public enum NodeType {
   FORM,
   APPROVAL,
   TASK,
-  DELAY
+  DELAY,
+  PARALLEL,
+  MERGE
 }
