@@ -38,5 +38,8 @@ Thumbs.db
 !.env.example
 secrets/
 
+# Plain-text Kubernetes secrets must never be committed (use Sealed Secrets).
+infra/k8s/secrets.plain.yaml
+
 # ===== Logs =====
 *.log

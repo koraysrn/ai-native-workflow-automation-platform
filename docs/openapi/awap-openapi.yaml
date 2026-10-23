@@ -1,0 +1,1697 @@
+openapi: 3.0.3
+info:
+  title: AWAP API
+  version: v1
+  description: >-
+    AI-Native Workflow Automation Platform (AWAP) REST API. All mutating
+    endpoints accept an `Idempotency-Key` header; a repeated request with the
+    same key returns the previously recorded response. Every endpoint is
+    tenant-scoped via `X-Tenant-Id` (derived from the authenticated session).
+  contact:
+    name: AWAP Team
+servers:
+  - url: http://localhost:8080
+    description: Local development
+
+security:
+  - bearerAuth: []
+
+tags:
+  - name: Health
+    description: Liveness and readiness endpoints.
+  - name: Auth
+    description: Authentication and session management.
+  - name: Tenants
+    description: Tenant on-boarding, quotas and invitations.
+  - name: Organizations
+    description: Company, department, team, position and user hierarchy.
+  - name: Workflow Definitions
+    description: Workflow templates, versioning, draft/publish and rollback.
+  - name: Workflow Instances
+    description: Workflow execution, state transitions and execution logs.
+  - name: Tasks
+    description: Task assignment, claiming, approval and rejection.
+  - name: Forms
+    description: Form definitions and submissions.
+  - name: Files
+    description: MinIO-backed file upload slots and download URLs.
+
+paths:
+  /actuator/health:
+    get:
+      operationId: healthCheck
+      summary: Service health
+      description: Returns the actuator health status used by probes and load balancers.
+      tags: [Health]
+      security: []
+      responses:
+        "200":
+          description: Service is healthy.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: UP
+
+  /api/v1/auth/login:
+    post:
+      operationId: login
+      summary: Authenticate a user
+      description: Validates credentials and writes HttpOnly access/refresh token cookies.
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [tenantSlug, email, password]
+              properties:
+                tenantSlug:
+                  type: string
+                email:
+                  type: string
+                  format: email
+                password:
+                  type: string
+                  format: password
+      responses:
+        "200":
+          description: Authentication succeeded.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
+  /api/v1/auth/logout:
+    post:
+      operationId: logout
+      summary: Terminate the session
+      description: Revokes the refresh token and clears the session cookies.
+      tags: [Auth]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        "200":
+          description: Logged out.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /api/v1/auth/refresh:
+    post:
+      operationId: refreshToken
+      summary: Rotate the refresh token
+      description: Exchanges the current refresh token for a new token pair (rotation).
+      tags: [Auth]
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        "200":
+          description: New token pair issued.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/auth/me:
+    get:
+      operationId: currentUser
+      summary: Current authenticated user
+      description: Returns the profile of the authenticated user.
+      tags: [Auth]
+      responses:
+        "200":
+          description: Current user profile.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/auth/tenants:
+    get:
+      operationId: listTenantMemberships
+      summary: Tenant memberships of the current user
+      description: Returns the tenants the authenticated user belongs to.
+      tags: [Auth]
+      responses:
+        "200":
+          description: Tenant memberships.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TenantMembershipResponse"
+
+  /api/v1/tenants:
+    post:
+      operationId: createTenant
+      summary: On-board a new tenant
+      description: Creates a tenant together with its administrator account.
+      tags: [Tenants]
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [slug, name, adminEmail, adminPassword, adminFullName]
+              properties:
+                slug:
+                  type: string
+                name:
+                  type: string
+                adminEmail:
+                  type: string
+                  format: email
+                adminPassword:
+                  type: string
+                  format: password
+                adminFullName:
+                  type: string
+      responses:
+        "201":
+          description: Tenant created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantResponse"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/tenants/{id}:
+    get:
+      operationId: getTenant
+      summary: Tenant detail
+      description: Returns a tenant. Only the owning tenant administrator may read it.
+      tags: [Tenants]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      responses:
+        "200":
+          description: Tenant detail.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/tenants/{id}/limits:
+    put:
+      operationId: updateTenantLimits
+      summary: Update tenant quotas
+      description: Updates plan-based resource quotas of a tenant.
+      tags: [Tenants]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                maxUsers:
+                  type: integer
+                maxWorkflows:
+                  type: integer
+                maxWorkflowExecutionsPerMonth:
+                  type: integer
+      responses:
+        "200":
+          description: Updated tenant.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TenantResponse"
+
+  /api/v1/tenants/{id}/invitations:
+    post:
+      operationId: inviteTenantUser
+      summary: Invite a user to a tenant
+      description: Creates an invitation for a user within the tenant.
+      tags: [Tenants]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, role]
+              properties:
+                email:
+                  type: string
+                  format: email
+                role:
+                  type: string
+      responses:
+        "201":
+          description: Invitation created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvitationResponse"
+
+  /api/v1/organizations/companies:
+    get:
+      operationId: listCompanies
+      summary: List companies
+      description: Lists companies in the current tenant.
+      tags: [Organizations]
+      responses:
+        "200":
+          description: Companies.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CompanyResponse"
+    post:
+      operationId: createCompany
+      summary: Create a company
+      description: Creates a company in the current tenant.
+      tags: [Organizations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+      responses:
+        "201":
+          description: Company created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CompanyResponse"
+
+  /api/v1/organizations/departments:
+    get:
+      operationId: listDepartments
+      summary: List departments
+      description: Lists departments for a company.
+      tags: [Organizations]
+      parameters:
+        - name: companyId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Departments.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DepartmentResponse"
+    post:
+      operationId: createDepartment
+      summary: Create a department
+      description: Creates a department under a company.
+      tags: [Organizations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [companyId, name]
+              properties:
+                companyId:
+                  type: string
+                  format: uuid
+                parentId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                name:
+                  type: string
+      responses:
+        "201":
+          description: Department created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DepartmentResponse"
+
+  /api/v1/organizations/teams:
+    get:
+      operationId: listTeams
+      summary: List teams
+      description: Lists teams for a department.
+      tags: [Organizations]
+      parameters:
+        - name: departmentId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Teams.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TeamResponse"
+    post:
+      operationId: createTeam
+      summary: Create a team
+      description: Creates a team under a department.
+      tags: [Organizations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [departmentId, name]
+              properties:
+                departmentId:
+                  type: string
+                  format: uuid
+                name:
+                  type: string
+      responses:
+        "201":
+          description: Team created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamResponse"
+
+  /api/v1/organizations/positions:
+    get:
+      operationId: listPositions
+      summary: List positions
+      description: Lists positions in the current tenant.
+      tags: [Organizations]
+      responses:
+        "200":
+          description: Positions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PositionResponse"
+    post:
+      operationId: createPosition
+      summary: Create a position
+      description: Creates a position in the current tenant.
+      tags: [Organizations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+      responses:
+        "201":
+          description: Position created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PositionResponse"
+
+  /api/v1/organizations/users:
+    get:
+      operationId: listOrgUsers
+      summary: List organization users
+      description: Lists organization users in the current tenant.
+      tags: [Organizations]
+      responses:
+        "200":
+          description: Organization users.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/OrgUserResponse"
+    post:
+      operationId: createOrgUser
+      summary: Create an organization user
+      description: Creates an organization user placed into a team and position.
+      tags: [Organizations]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, fullName]
+              properties:
+                email:
+                  type: string
+                  format: email
+                fullName:
+                  type: string
+                teamId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                positionId:
+                  type: string
+                  format: uuid
+                  nullable: true
+      responses:
+        "201":
+          description: Organization user created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgUserResponse"
+
+  /api/v1/organizations/users/{id}/assign:
+    post:
+      operationId: assignOrgUserToTeam
+      summary: Assign a user to a team
+      description: Assigns an organization user to a team.
+      tags: [Organizations]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [teamId]
+              properties:
+                teamId:
+                  type: string
+                  format: uuid
+      responses:
+        "200":
+          description: User assigned.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OrgUserResponse"
+
+  /api/v1/organizations/tree:
+    get:
+      operationId: organizationTree
+      summary: Organization hierarchy tree
+      description: Returns the full company -> department -> team -> user tree.
+      tags: [Organizations]
+      responses:
+        "200":
+          description: Organization tree.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+
+  /api/v1/workflow-definitions:
+    get:
+      operationId: listWorkflowDefinitions
+      summary: List workflow definitions
+      description: Lists workflow definitions in the current tenant.
+      tags: [Workflow Definitions]
+      responses:
+        "200":
+          description: Workflow definitions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkflowDefinitionResponse"
+    post:
+      operationId: createWorkflowDefinition
+      summary: Create a workflow definition
+      description: Creates a workflow definition as a draft with its first version.
+      tags: [Workflow Definitions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, definitionJson]
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                  nullable: true
+                definitionJson:
+                  type: string
+      responses:
+        "201":
+          description: Draft created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowDefinitionResponse"
+
+  /api/v1/workflow-definitions/{id}:
+    get:
+      operationId: getWorkflowDefinition
+      summary: Get a workflow definition
+      description: Returns a single workflow definition.
+      tags: [Workflow Definitions]
+      parameters:
+        - $ref: "#/components/parameters/WorkflowDefinitionId"
+      responses:
+        "200":
+          description: Workflow definition.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowDefinitionResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/workflow-definitions/{id}/publish:
+    post:
+      operationId: publishWorkflowDefinition
+      summary: Publish the latest version
+      description: Publishes the latest draft version of a workflow definition.
+      tags: [Workflow Definitions]
+      parameters:
+        - $ref: "#/components/parameters/WorkflowDefinitionId"
+      responses:
+        "200":
+          description: Published definition.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowDefinitionResponse"
+
+  /api/v1/workflow-definitions/{id}/rollback/{version}:
+    post:
+      operationId: rollbackWorkflowDefinition
+      summary: Rollback to a previous version
+      description: Activates a previous version of a workflow definition.
+      tags: [Workflow Definitions]
+      parameters:
+        - $ref: "#/components/parameters/WorkflowDefinitionId"
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Rolled-back definition.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowDefinitionResponse"
+
+  /api/v1/workflow-definitions/{id}/versions:
+    get:
+      operationId: listWorkflowVersions
+      summary: List workflow versions
+      description: Lists version snapshots of a workflow definition.
+      tags: [Workflow Definitions]
+      parameters:
+        - $ref: "#/components/parameters/WorkflowDefinitionId"
+      responses:
+        "200":
+          description: Versions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkflowVersionResponse"
+
+  /api/v1/workflow-definitions/{id}/versions/{version}/archive:
+    post:
+      operationId: archiveWorkflowVersion
+      summary: Archive a workflow version
+      description: Soft-deletes a workflow version snapshot.
+      tags: [Workflow Definitions]
+      parameters:
+        - $ref: "#/components/parameters/WorkflowDefinitionId"
+        - name: version
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Version archived.
+
+  /api/v1/workflow-instances:
+    get:
+      operationId: listWorkflowInstances
+      summary: List workflow instances
+      description: Lists workflow instances in the current tenant.
+      tags: [Workflow Instances]
+      responses:
+        "200":
+          description: Workflow instances.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WorkflowInstanceResponse"
+    post:
+      operationId: startWorkflowInstance
+      summary: Start a workflow instance
+      description: Starts a new instance from a published workflow version.
+      tags: [Workflow Instances]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [workflowDefinitionId]
+              properties:
+                workflowDefinitionId:
+                  type: string
+                  format: uuid
+                contextJson:
+                  type: string
+                idempotencyKey:
+                  type: string
+                  nullable: true
+      responses:
+        "201":
+          description: Instance started.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowInstanceResponse"
+
+  /api/v1/workflow-instances/{id}:
+    get:
+      operationId: getWorkflowInstance
+      summary: Get a workflow instance
+      description: Returns a single workflow instance.
+      tags: [Workflow Instances]
+      parameters:
+        - $ref: "#/components/parameters/WorkflowInstanceId"
+      responses:
+        "200":
+          description: Workflow instance.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowInstanceResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/workflow-instances/{id}/logs:
+    get:
+      operationId: listWorkflowInstanceLogs
+      summary: List execution logs
+      description: Returns the ordered execution log of an instance.
+      tags: [Workflow Instances]
+      parameters:
+        - $ref: "#/components/parameters/WorkflowInstanceId"
+      responses:
+        "200":
+          description: Execution logs.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExecutionLogResponse"
+
+  /api/v1/workflow-instances/{id}/nodes/{nodeId}/complete:
+    post:
+      operationId: completeWorkflowNode
+      summary: Complete a waiting node
+      description: Completes an external (FORM/APPROVAL/TASK) node with its output.
+      tags: [Workflow Instances]
+      parameters:
+        - $ref: "#/components/parameters/WorkflowInstanceId"
+        - name: nodeId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                outputJson:
+                  type: string
+      responses:
+        "200":
+          description: Node completed.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowInstanceResponse"
+
+  /api/v1/workflow-instances/{id}/complete:
+    post:
+      operationId: completeWorkflowInstance
+      summary: Complete an instance
+      description: Forces the instance into the COMPLETED state.
+      tags: [Workflow Instances]
+      parameters:
+        - $ref: "#/components/parameters/WorkflowInstanceId"
+      responses:
+        "200":
+          description: Completed instance.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowInstanceResponse"
+
+  /api/v1/workflow-instances/{id}/retry:
+    post:
+      operationId: retryWorkflowInstance
+      summary: Retry a failed instance
+      description: Resumes failed nodes of a failed instance.
+      tags: [Workflow Instances]
+      parameters:
+        - $ref: "#/components/parameters/WorkflowInstanceId"
+      responses:
+        "200":
+          description: Retried instance.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowInstanceResponse"
+
+  /api/v1/workflow-instances/{id}/replay:
+    post:
+      operationId: replayWorkflowInstance
+      summary: Replay an instance
+      description: Deterministically re-drives failed nodes from the recorded log.
+      tags: [Workflow Instances]
+      parameters:
+        - $ref: "#/components/parameters/WorkflowInstanceId"
+      responses:
+        "200":
+          description: Replayed instance.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowInstanceResponse"
+
+  /api/v1/workflow-instances/{id}/fail:
+    post:
+      operationId: failWorkflowInstance
+      summary: Fail an instance
+      description: Forces the instance into the FAILED state.
+      tags: [Workflow Instances]
+      parameters:
+        - $ref: "#/components/parameters/WorkflowInstanceId"
+      responses:
+        "200":
+          description: Failed instance.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowInstanceResponse"
+
+  /api/v1/workflow-instances/{id}/cancel:
+    post:
+      operationId: cancelWorkflowInstance
+      summary: Cancel an instance
+      description: Forces the instance into the CANCELLED state.
+      tags: [Workflow Instances]
+      parameters:
+        - $ref: "#/components/parameters/WorkflowInstanceId"
+      responses:
+        "200":
+          description: Cancelled instance.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowInstanceResponse"
+
+  /api/v1/workflow-instances/{id}/pause:
+    post:
+      operationId: pauseWorkflowInstance
+      summary: Pause an instance
+      description: Pauses a RUNNING or WAITING instance.
+      tags: [Workflow Instances]
+      parameters:
+        - $ref: "#/components/parameters/WorkflowInstanceId"
+      responses:
+        "200":
+          description: Paused instance.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowInstanceResponse"
+
+  /api/v1/workflow-instances/{id}/resume:
+    post:
+      operationId: resumeWorkflowInstance
+      summary: Resume an instance
+      description: Resumes a PAUSED instance.
+      tags: [Workflow Instances]
+      parameters:
+        - $ref: "#/components/parameters/WorkflowInstanceId"
+      responses:
+        "200":
+          description: Resumed instance.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowInstanceResponse"
+
+  /api/v1/tasks:
+    get:
+      operationId: listTasks
+      summary: List tasks
+      description: Lists tasks in the current tenant.
+      tags: [Tasks]
+      responses:
+        "200":
+          description: Tasks.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskResponse"
+    post:
+      operationId: createTask
+      summary: Create a task
+      description: Creates a task, optionally linked to a workflow node execution.
+      tags: [Tasks]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [title]
+              properties:
+                title:
+                  type: string
+                description:
+                  type: string
+                  nullable: true
+                workflowInstanceId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                nodeExecutionId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                assigneeId:
+                  type: string
+                  format: uuid
+                  nullable: true
+      responses:
+        "201":
+          description: Task created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+
+  /api/v1/tasks/mine:
+    get:
+      operationId: listMyTasks
+      summary: List my tasks
+      description: Lists tasks assigned to the current user.
+      tags: [Tasks]
+      responses:
+        "200":
+          description: Tasks.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TaskResponse"
+
+  /api/v1/tasks/{id}/assign:
+    post:
+      operationId: assignTask
+      summary: Assign a task
+      description: Assigns a task to a user.
+      tags: [Tasks]
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [assigneeId]
+              properties:
+                assigneeId:
+                  type: string
+                  format: uuid
+      responses:
+        "200":
+          description: Assigned task.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+
+  /api/v1/tasks/{id}/claim:
+    post:
+      operationId: claimTask
+      summary: Claim a task
+      description: Claims an open task for the current user.
+      tags: [Tasks]
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+      responses:
+        "200":
+          description: Claimed task.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+
+  /api/v1/tasks/{id}/approve:
+    post:
+      operationId: approveTask
+      summary: Approve a task
+      description: Approves a task and publishes the completion event.
+      tags: [Tasks]
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comment:
+                  type: string
+                  nullable: true
+      responses:
+        "200":
+          description: Approved task.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+
+  /api/v1/tasks/{id}/reject:
+    post:
+      operationId: rejectTask
+      summary: Reject a task
+      description: Rejects a task and publishes the completion event.
+      tags: [Tasks]
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                comment:
+                  type: string
+                  nullable: true
+      responses:
+        "200":
+          description: Rejected task.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+
+  /api/v1/tasks/{id}/complete:
+    post:
+      operationId: completeTask
+      summary: Complete a task
+      description: Marks an in-progress or assigned task as completed.
+      tags: [Tasks]
+      parameters:
+        - $ref: "#/components/parameters/TaskId"
+      responses:
+        "200":
+          description: Completed task.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaskResponse"
+
+  /api/v1/forms:
+    get:
+      operationId: listForms
+      summary: List form definitions
+      description: Lists form definitions in the current tenant.
+      tags: [Forms]
+      responses:
+        "200":
+          description: Form definitions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FormDefinitionResponse"
+    post:
+      operationId: createFormDefinition
+      summary: Create a form definition
+      description: Creates a form definition with a validated schema.
+      tags: [Forms]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, schemaJson]
+              properties:
+                name:
+                  type: string
+                schemaJson:
+                  type: string
+      responses:
+        "201":
+          description: Form definition created.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FormDefinitionResponse"
+
+  /api/v1/forms/{id}:
+    get:
+      operationId: getFormDefinition
+      summary: Get a form definition
+      description: Returns a single form definition.
+      tags: [Forms]
+      parameters:
+        - $ref: "#/components/parameters/FormId"
+      responses:
+        "200":
+          description: Form definition.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FormDefinitionResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: updateFormDefinition
+      summary: Update a form definition
+      description: Updates a form definition and increments its version.
+      tags: [Forms]
+      parameters:
+        - $ref: "#/components/parameters/FormId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, schemaJson]
+              properties:
+                name:
+                  type: string
+                schemaJson:
+                  type: string
+      responses:
+        "200":
+          description: Updated form definition.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FormDefinitionResponse"
+
+  /api/v1/forms/{id}/submissions:
+    get:
+      operationId: listFormSubmissions
+      summary: List form submissions
+      description: Lists submissions for a form definition.
+      tags: [Forms]
+      parameters:
+        - $ref: "#/components/parameters/FormId"
+      responses:
+        "200":
+          description: Submissions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/FormSubmissionResponse"
+    post:
+      operationId: submitForm
+      summary: Submit a form
+      description: Validates and stores a submission against a form definition.
+      tags: [Forms]
+      parameters:
+        - $ref: "#/components/parameters/FormId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [dataJson]
+              properties:
+                dataJson:
+                  type: string
+                workflowInstanceId:
+                  type: string
+                  format: uuid
+                  nullable: true
+                nodeExecutionId:
+                  type: string
+                  format: uuid
+                  nullable: true
+      responses:
+        "201":
+          description: Submission stored.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/FormSubmissionResponse"
+
+  /api/v1/files:
+    post:
+      operationId: createFileUpload
+      summary: Create a file upload slot
+      description: Creates a presigned MinIO upload slot for a file.
+      tags: [Files]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, size]
+              properties:
+                name:
+                  type: string
+                contentType:
+                  type: string
+                size:
+                  type: integer
+      responses:
+        "201":
+          description: Upload slot created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  fileId:
+                    type: string
+                    format: uuid
+                  uploadUrl:
+                    type: string
+
+  /api/v1/files/{id}:
+    get:
+      operationId: getFileDownloadUrl
+      summary: Get a file download URL
+      description: Returns a presigned download URL for an uploaded file.
+      tags: [Files]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Download URL.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  downloadUrl:
+                    type: string
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >-
+        Access tokens are issued as HttpOnly cookies and may also be sent as a
+        Bearer token. Mutating requests additionally require the CSRF token
+        (X-XSRF-TOKEN header).
+
+  parameters:
+    TenantId:
+      name: id
+      in: path
+      required: true
+      description: Tenant UUID.
+      schema:
+        type: string
+        format: uuid
+    WorkflowDefinitionId:
+      name: id
+      in: path
+      required: true
+      description: Workflow definition UUID.
+      schema:
+        type: string
+        format: uuid
+    WorkflowInstanceId:
+      name: id
+      in: path
+      required: true
+      description: Workflow instance UUID.
+      schema:
+        type: string
+        format: uuid
+    TaskId:
+      name: id
+      in: path
+      required: true
+      description: Task UUID.
+      schema:
+        type: string
+        format: uuid
+    FormId:
+      name: id
+      in: path
+      required: true
+      description: Form definition UUID.
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    NotFound:
+      description: The requested resource was not found.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    Unauthorized:
+      description: Authentication is required.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    Conflict:
+      description: The request conflicts with the current state.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+    TooManyRequests:
+      description: Rate limit exceeded.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+          description: Seconds until the limit resets.
+      content:
+        application/problem+json:
+          schema:
+            $ref: "#/components/schemas/ProblemDetails"
+
+  schemas:
+    ProblemDetails:
+      type: object
+      description: RFC 7807 problem detail.
+      required: [type, title, status, detail]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+        code:
+          type: string
+          example: AWAP-COMMON-0003
+        timestamp:
+          type: string
+          format: date-time
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+
+    TokenResponse:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          nullable: true
+        refreshToken:
+          type: string
+          nullable: true
+        expiresIn:
+          type: integer
+          format: int64
+
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        email:
+          type: string
+        fullName:
+          type: string
+        role:
+          type: string
+
+    TenantMembershipResponse:
+      type: object
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        role:
+          type: string
+
+    TenantResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        slug:
+          type: string
+        name:
+          type: string
+
+    InvitationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        email:
+          type: string
+        role:
+          type: string
+
+    CompanyResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+
+    DepartmentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        companyId:
+          type: string
+          format: uuid
+        parentId:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+
+    TeamResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        departmentId:
+          type: string
+          format: uuid
+        name:
+          type: string
+
+    PositionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+
+    OrgUserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        email:
+          type: string
+        fullName:
+          type: string
+        teamId:
+          type: string
+          format: uuid
+          nullable: true
+        positionId:
+          type: string
+          format: uuid
+          nullable: true
+
+    WorkflowDefinitionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        status:
+          type: string
+        currentVersion:
+          type: integer
+
+    WorkflowVersionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        definitionJson:
+          type: string
+        status:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+
+    WorkflowInstanceResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        workflowDefinitionId:
+          type: string
+          format: uuid
+        workflowVersion:
+          type: integer
+        state:
+          type: string
+        contextJson:
+          type: string
+        idempotencyKey:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    ExecutionLogResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        workflowInstanceId:
+          type: string
+          format: uuid
+        nodeId:
+          type: string
+          nullable: true
+        nodeType:
+          type: string
+          nullable: true
+        action:
+          type: string
+        payload:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    TaskResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        workflowInstanceId:
+          type: string
+          format: uuid
+          nullable: true
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        assigneeId:
+          type: string
+          format: uuid
+          nullable: true
+        status:
+          type: string
+        version:
+          type: integer
+          format: int64
+        decisionComment:
+          type: string
+          nullable: true
+
+    FormDefinitionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        schemaJson:
+          type: string
+        version:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+
+    FormSubmissionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        formId:
+          type: string
+          format: uuid
+        workflowInstanceId:
+          type: string
+          format: uuid
+          nullable: true
+        dataJson:
+          type: string
+        submittedBy:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time

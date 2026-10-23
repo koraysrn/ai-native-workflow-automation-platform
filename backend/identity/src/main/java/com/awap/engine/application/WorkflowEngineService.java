@@ -12,6 +12,7 @@ import com.awap.engine.infrastructure.ExecutionContextRepository;
 import com.awap.engine.infrastructure.ExecutionLogRepository;
 import com.awap.engine.infrastructure.NodeExecutionRepository;
 import com.awap.engine.infrastructure.WorkflowInstanceRepository;
+import com.awap.engine.interfaces.dto.EngineMapper;
 import com.awap.engine.interfaces.dto.ExecutionLogResponse;
 import com.awap.engine.interfaces.dto.StartWorkflowRequest;
 import com.awap.engine.interfaces.dto.WorkflowInstanceResponse;
@@ -52,6 +53,7 @@ public class WorkflowEngineService {
   private final ObjectMapper objectMapper;
   private final UserRepository userRepository;
   private final OutboxEventPublisher outboxEventPublisher;
+  private final EngineMapper engineMapper;
 
   public WorkflowEngineService(
       WorkflowInstanceRepository instanceRepository,
@@ -63,7 +65,8 @@ public class WorkflowEngineService {
       SpelExpressionService spelExpressionService,
       ObjectMapper objectMapper,
       UserRepository userRepository,
-      OutboxEventPublisher outboxEventPublisher) {
+      OutboxEventPublisher outboxEventPublisher,
+      EngineMapper engineMapper) {
     this.instanceRepository = instanceRepository;
     this.executionLogRepository = executionLogRepository;
     this.workflowDefinitionService = workflowDefinitionService;
@@ -74,6 +77,7 @@ public class WorkflowEngineService {
     this.objectMapper = objectMapper;
     this.userRepository = userRepository;
     this.outboxEventPublisher = outboxEventPublisher;
+    this.engineMapper = engineMapper;
   }
 
   @Transactional
@@ -82,7 +86,7 @@ public class WorkflowEngineService {
       var existing =
           instanceRepository.findByTenantIdAndIdempotencyKey(tenantId, request.idempotencyKey());
       if (existing.isPresent()) {
-        return toResponse(existing.get());
+        return engineMapper.toResponse(existing.get());
       }
     }
 
@@ -105,23 +109,23 @@ public class WorkflowEngineService {
     log(instance, null, null, "INSTANCE_STARTED", "Workflow instance started.");
 
     executeStartNode(instance);
-    return toResponse(instance);
+    return engineMapper.toResponse(instance);
   }
 
   public List<WorkflowInstanceResponse> list(UUID tenantId) {
     return instanceRepository.findByTenantIdAndDeletedFalseOrderByCreatedAtDesc(tenantId).stream()
-        .map(this::toResponse)
+        .map(engineMapper::toResponse)
         .toList();
   }
 
   public WorkflowInstanceResponse get(UUID tenantId, UUID id) {
-    return toResponse(find(tenantId, id));
+    return engineMapper.toResponse(find(tenantId, id));
   }
 
   public List<ExecutionLogResponse> logs(UUID tenantId, UUID id) {
     find(tenantId, id);
     return executionLogRepository.findByWorkflowInstanceIdOrderByCreatedAtAsc(id).stream()
-        .map(this::toLogResponse)
+        .map(engineMapper::toLogResponse)
         .toList();
   }
 
@@ -137,7 +141,7 @@ public class WorkflowEngineService {
       log(instance, nodeId, execution.getNodeType(), "NODE_COMPLETED", outputJson);
     }
     advanceFrom(instance, nodeId);
-    return toResponse(instance);
+    return engineMapper.toResponse(instance);
   }
 
   @EventListener
@@ -160,7 +164,7 @@ public class WorkflowEngineService {
     WorkflowInstance instance = find(tenantId, id);
     transition(instance, WorkflowState.RUNNING, "WORKFLOW_RETRIED");
     resumeFailedNodes(instance);
-    return toResponse(instance);
+    return engineMapper.toResponse(instance);
   }
 
   @Transactional
@@ -171,28 +175,28 @@ public class WorkflowEngineService {
     // node types exist in Phase 0).
     transition(instance, WorkflowState.RUNNING, "WORKFLOW_REPLAYED");
     resumeFailedNodes(instance);
-    return toResponse(instance);
+    return engineMapper.toResponse(instance);
   }
 
   @Transactional
   public WorkflowInstanceResponse complete(UUID tenantId, UUID id) {
     WorkflowInstance instance = find(tenantId, id);
     transition(instance, WorkflowState.COMPLETED, "WORKFLOW_COMPLETED");
-    return toResponse(instance);
+    return engineMapper.toResponse(instance);
   }
 
   @Transactional
   public WorkflowInstanceResponse fail(UUID tenantId, UUID id) {
     WorkflowInstance instance = find(tenantId, id);
     transition(instance, WorkflowState.FAILED, "WORKFLOW_FAILED");
-    return toResponse(instance);
+    return engineMapper.toResponse(instance);
   }
 
   @Transactional
   public WorkflowInstanceResponse cancel(UUID tenantId, UUID id) {
     WorkflowInstance instance = find(tenantId, id);
     transition(instance, WorkflowState.CANCELLED, "WORKFLOW_CANCELLED");
-    return toResponse(instance);
+    return engineMapper.toResponse(instance);
   }
 
   @Transactional
@@ -202,7 +206,7 @@ public class WorkflowEngineService {
     log(instance, null, null, "WORKFLOW_PAUSED", "Workflow instance paused.");
     outboxEventPublisher.publish(
         tenantId, "WORKFLOW", instance.getId(), "WORKFLOW_PAUSED", Map.of("state", "PAUSED"));
-    return toResponse(instance);
+    return engineMapper.toResponse(instance);
   }
 
   @Transactional
@@ -216,7 +220,7 @@ public class WorkflowEngineService {
     // instance was paused, so resume actually continues execution instead of
     // leaving the workflow stuck in RUNNING.
     resumeCompletedNodes(instance);
-    return toResponse(instance);
+    return engineMapper.toResponse(instance);
   }
 
   private void executeStartNode(WorkflowInstance instance) {
@@ -472,28 +476,5 @@ public class WorkflowEngineService {
         new ExecutionLog(
             instance.getTenantId(), instance.getId(), nodeId, nodeType, action, payload);
     executionLogRepository.save(log);
-  }
-
-  private WorkflowInstanceResponse toResponse(WorkflowInstance instance) {
-    return new WorkflowInstanceResponse(
-        instance.getId(),
-        instance.getTenantId(),
-        instance.getWorkflowDefinitionId(),
-        instance.getWorkflowVersion(),
-        instance.getState().name(),
-        instance.getContextJson(),
-        instance.getIdempotencyKey(),
-        instance.getCreatedAt());
-  }
-
-  private ExecutionLogResponse toLogResponse(ExecutionLog log) {
-    return new ExecutionLogResponse(
-        log.getId(),
-        log.getWorkflowInstanceId(),
-        log.getNodeId(),
-        log.getNodeType(),
-        log.getAction(),
-        log.getPayload(),
-        log.getCreatedAt());
   }
 }

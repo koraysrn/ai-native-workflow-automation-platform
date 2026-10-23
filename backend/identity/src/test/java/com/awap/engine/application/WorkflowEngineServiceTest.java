@@ -16,6 +16,7 @@ import com.awap.engine.infrastructure.ExecutionContextRepository;
 import com.awap.engine.infrastructure.ExecutionLogRepository;
 import com.awap.engine.infrastructure.NodeExecutionRepository;
 import com.awap.engine.infrastructure.WorkflowInstanceRepository;
+import com.awap.engine.interfaces.dto.EngineMapperImpl;
 import com.awap.engine.interfaces.dto.StartWorkflowRequest;
 import com.awap.identity.infrastructure.UserRepository;
 import com.awap.task.application.TaskService;
@@ -60,7 +61,8 @@ class WorkflowEngineServiceTest {
             spelExpressionService,
             new ObjectMapper(),
             userRepository,
-            outboxEventPublisher);
+            outboxEventPublisher,
+            new EngineMapperImpl());
   }
 
   @Test

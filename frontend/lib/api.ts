@@ -277,3 +277,25 @@ export interface CompanyTreeDto {
 export function fetchOrganizationTree(): Promise<CompanyTreeDto[]> {
   return authFetch<CompanyTreeDto[]>("/api/v1/organizations/tree");
 }
+
+export interface FormDefinitionDetailDto extends FormDefinitionDto {
+  schemaJson: string;
+}
+
+export function fetchFormDefinitions(): Promise<FormDefinitionDto[]> {
+  return authFetch<FormDefinitionDto[]>("/api/v1/forms");
+}
+
+export function fetchFormDefinition(id: string): Promise<FormDefinitionDetailDto> {
+  return authFetch<FormDefinitionDetailDto>(`/api/v1/forms/${id}`);
+}
+
+export interface SubmitFormPayload {
+  dataJson: string;
+  workflowInstanceId?: string | null;
+  nodeExecutionId?: string | null;
+}
+
+export function submitForm(formId: string, payload: SubmitFormPayload): Promise<unknown> {
+  return authPost<unknown>(`/api/v1/forms/${formId}/submissions`, payload);
+}

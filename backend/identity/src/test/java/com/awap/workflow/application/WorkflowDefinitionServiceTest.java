@@ -10,6 +10,7 @@ import com.awap.workflow.infrastructure.TransitionDefinitionRepository;
 import com.awap.workflow.infrastructure.WorkflowDefinitionRepository;
 import com.awap.workflow.infrastructure.WorkflowVariableRepository;
 import com.awap.workflow.infrastructure.WorkflowVersionRepository;
+import com.awap.workflow.interfaces.dto.WorkflowMapperImpl;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Optional;
 import java.util.UUID;
@@ -43,7 +44,8 @@ class WorkflowDefinitionServiceTest {
             workflowVariableRepository,
             new ObjectMapper(),
             spelExpressionService,
-            quotaService);
+            quotaService,
+            new WorkflowMapperImpl());
   }
 
   @Test

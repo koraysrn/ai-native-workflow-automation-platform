@@ -7,6 +7,7 @@ import com.awap.engine.application.OutboxEventPublisher;
 import com.awap.task.domain.Task;
 import com.awap.task.infrastructure.TaskRepository;
 import com.awap.task.interfaces.dto.TaskAssignRequest;
+import com.awap.task.interfaces.dto.TaskMapper;
 import com.awap.task.interfaces.dto.TaskRequest;
 import com.awap.task.interfaces.dto.TaskResponse;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -24,14 +25,17 @@ public class TaskService {
   private final TaskRepository taskRepository;
   private final OutboxEventPublisher outboxEventPublisher;
   private final MeterRegistry meterRegistry;
+  private final TaskMapper taskMapper;
 
   public TaskService(
       TaskRepository taskRepository,
       OutboxEventPublisher outboxEventPublisher,
-      MeterRegistry meterRegistry) {
+      MeterRegistry meterRegistry,
+      TaskMapper taskMapper) {
     this.taskRepository = taskRepository;
     this.outboxEventPublisher = outboxEventPublisher;
     this.meterRegistry = meterRegistry;
+    this.taskMapper = taskMapper;
   }
 
   @Transactional
@@ -45,18 +49,18 @@ public class TaskService {
             request.description(),
             request.assigneeId());
     taskRepository.save(task);
-    return toResponse(task);
+    return taskMapper.toResponse(task);
   }
 
   public List<TaskResponse> list(UUID tenantId) {
     return taskRepository.findByTenantIdAndDeletedFalse(tenantId).stream()
-        .map(this::toResponse)
+        .map(taskMapper::toResponse)
         .toList();
   }
 
   public List<TaskResponse> listMine(UUID tenantId, UUID userId) {
     return taskRepository.findByTenantIdAndAssigneeIdAndDeletedFalse(tenantId, userId).stream()
-        .map(this::toResponse)
+        .map(taskMapper::toResponse)
         .toList();
   }
 
@@ -64,21 +68,21 @@ public class TaskService {
   public TaskResponse assign(UUID tenantId, UUID id, TaskAssignRequest request) {
     Task task = find(tenantId, id);
     runGuarded(() -> task.assign(request.assigneeId()));
-    return toResponse(task);
+    return taskMapper.toResponse(task);
   }
 
   @Transactional
   public TaskResponse reassign(UUID tenantId, UUID id, TaskAssignRequest request) {
     Task task = find(tenantId, id);
     runGuarded(() -> task.reassign(request.assigneeId()));
-    return toResponse(task);
+    return taskMapper.toResponse(task);
   }
 
   @Transactional
   public TaskResponse claim(UUID tenantId, UUID id, UUID userId) {
     Task task = find(tenantId, id);
     runGuarded(() -> task.claim(userId));
-    return toResponse(task);
+    return taskMapper.toResponse(task);
   }
 
   @Transactional
@@ -89,7 +93,7 @@ public class TaskService {
     runGuarded(() -> task.approve(comment));
     publishCompleted(task, "{\"decision\":\"APPROVED\"}");
     recordDecision("APPROVED");
-    return toResponse(task);
+    return taskMapper.toResponse(task);
   }
 
   @Transactional
@@ -100,7 +104,7 @@ public class TaskService {
     runGuarded(() -> task.reject(comment));
     publishCompleted(task, "{\"decision\":\"REJECTED\"}");
     recordDecision("REJECTED");
-    return toResponse(task);
+    return taskMapper.toResponse(task);
   }
 
   @Transactional
@@ -108,14 +112,14 @@ public class TaskService {
     Task task = find(tenantId, id);
     runGuarded(task::complete);
     publishCompleted(task, "{\"decision\":\"COMPLETED\"}");
-    return toResponse(task);
+    return taskMapper.toResponse(task);
   }
 
   @Transactional
   public TaskResponse escalate(UUID tenantId, UUID id, TaskAssignRequest request) {
     Task task = find(tenantId, id);
     runGuarded(() -> task.escalate(request.assigneeId(), Instant.now().plusSeconds(3600)));
-    return toResponse(task);
+    return taskMapper.toResponse(task);
   }
 
   private void recordDecision(String decision) {
@@ -165,18 +169,5 @@ public class TaskService {
     } catch (IllegalStateException ex) {
       throw new AwapException(ErrorCode.VALIDATION_FAILED, HttpStatus.CONFLICT, ex.getMessage());
     }
-  }
-
-  private TaskResponse toResponse(Task task) {
-    return new TaskResponse(
-        task.getId(),
-        task.getTenantId(),
-        task.getWorkflowInstanceId(),
-        task.getTitle(),
-        task.getDescription(),
-        task.getAssigneeId(),
-        task.getStatus().name(),
-        task.getVersion(),
-        task.getDecisionComment());
   }
 }

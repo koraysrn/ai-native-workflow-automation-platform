@@ -22,6 +22,7 @@ import com.awap.organization.interfaces.dto.DepartmentResponse;
 import com.awap.organization.interfaces.dto.DepartmentTreeResponse;
 import com.awap.organization.interfaces.dto.OrgUserRequest;
 import com.awap.organization.interfaces.dto.OrgUserResponse;
+import com.awap.organization.interfaces.dto.OrganizationMapper;
 import com.awap.organization.interfaces.dto.PositionRequest;
 import com.awap.organization.interfaces.dto.PositionResponse;
 import com.awap.organization.interfaces.dto.TeamRequest;
@@ -46,6 +47,7 @@ public class OrganizationService {
   private final OrganizationUserRepository organizationUserRepository;
   private final QuotaService quotaService;
   private final OutboxEventPublisher outboxEventPublisher;
+  private final OrganizationMapper organizationMapper;
 
   public OrganizationService(
       CompanyRepository companyRepository,
@@ -54,7 +56,8 @@ public class OrganizationService {
       PositionRepository positionRepository,
       OrganizationUserRepository organizationUserRepository,
       QuotaService quotaService,
-      OutboxEventPublisher outboxEventPublisher) {
+      OutboxEventPublisher outboxEventPublisher,
+      OrganizationMapper organizationMapper) {
     this.companyRepository = companyRepository;
     this.departmentRepository = departmentRepository;
     this.teamRepository = teamRepository;
@@ -62,6 +65,7 @@ public class OrganizationService {
     this.organizationUserRepository = organizationUserRepository;
     this.quotaService = quotaService;
     this.outboxEventPublisher = outboxEventPublisher;
+    this.organizationMapper = organizationMapper;
   }
 
   @Transactional
@@ -73,12 +77,12 @@ public class OrganizationService {
         "organization.company.created",
         company.getId(),
         Map.of("tenantId", tenantId, "entityId", company.getId(), "name", company.getName()));
-    return toResponse(company);
+    return organizationMapper.toResponse(company);
   }
 
   public List<CompanyResponse> listCompanies(UUID tenantId) {
     return companyRepository.findByTenantIdAndDeletedFalse(tenantId).stream()
-        .map(this::toResponse)
+        .map(organizationMapper::toResponse)
         .toList();
   }
 
@@ -95,14 +99,14 @@ public class OrganizationService {
         "organization.department.created",
         department.getId(),
         Map.of("tenantId", tenantId, "entityId", department.getId(), "name", department.getName()));
-    return toResponse(department);
+    return organizationMapper.toResponse(department);
   }
 
   public List<DepartmentResponse> listDepartments(UUID tenantId, UUID companyId) {
     return departmentRepository
         .findByTenantIdAndCompanyIdAndDeletedFalse(tenantId, companyId)
         .stream()
-        .map(this::toResponse)
+        .map(organizationMapper::toResponse)
         .toList();
   }
 
@@ -118,14 +122,14 @@ public class OrganizationService {
         "organization.team.created",
         team.getId(),
         Map.of("tenantId", tenantId, "entityId", team.getId(), "name", team.getName()));
-    return toResponse(team);
+    return organizationMapper.toResponse(team);
   }
 
   public List<TeamResponse> listTeams(UUID tenantId, UUID departmentId) {
     return teamRepository
         .findByTenantIdAndDepartmentIdAndDeletedFalse(tenantId, departmentId)
         .stream()
-        .map(this::toResponse)
+        .map(organizationMapper::toResponse)
         .toList();
   }
 
@@ -138,12 +142,12 @@ public class OrganizationService {
         "organization.position.created",
         position.getId(),
         Map.of("tenantId", tenantId, "entityId", position.getId(), "name", position.getName()));
-    return toResponse(position);
+    return organizationMapper.toResponse(position);
   }
 
   public List<PositionResponse> listPositions(UUID tenantId) {
     return positionRepository.findByTenantIdAndDeletedFalse(tenantId).stream()
-        .map(this::toResponse)
+        .map(organizationMapper::toResponse)
         .toList();
   }
 
@@ -159,12 +163,12 @@ public class OrganizationService {
         "organization.user.created",
         user.getId(),
         Map.of("tenantId", tenantId, "entityId", user.getId(), "email", user.getEmail()));
-    return toResponse(user);
+    return organizationMapper.toResponse(user);
   }
 
   public List<OrgUserResponse> listUsers(UUID tenantId) {
     return organizationUserRepository.findByTenantIdAndDeletedFalse(tenantId).stream()
-        .map(this::toResponse)
+        .map(organizationMapper::toResponse)
         .toList();
   }
 
@@ -206,7 +210,7 @@ public class OrganizationService {
                                                     usersByTeam
                                                         .getOrDefault(team.getId(), List.of())
                                                         .stream()
-                                                        .map(this::toResponse)
+                                                        .map(organizationMapper::toResponse)
                                                         .toList()))
                                         .toList()))
                         .toList()))
@@ -228,7 +232,7 @@ public class OrganizationService {
         "organization.team.user_assigned",
         user.getId(),
         Map.of("tenantId", tenantId, "entityId", user.getId(), "teamId", teamId));
-    return toResponse(user);
+    return organizationMapper.toResponse(user);
   }
 
   private void publish(UUID tenantId, String eventType, UUID entityId, Object snapshot) {
@@ -237,37 +241,5 @@ public class OrganizationService {
 
   private AwapException notFound(String detail) {
     return new AwapException(ErrorCode.RESOURCE_NOT_FOUND, HttpStatus.NOT_FOUND, detail);
-  }
-
-  private CompanyResponse toResponse(Company company) {
-    return new CompanyResponse(company.getId(), company.getTenantId(), company.getName());
-  }
-
-  private DepartmentResponse toResponse(Department department) {
-    return new DepartmentResponse(
-        department.getId(),
-        department.getTenantId(),
-        department.getCompanyId(),
-        department.getParentId(),
-        department.getName());
-  }
-
-  private TeamResponse toResponse(Team team) {
-    return new TeamResponse(
-        team.getId(), team.getTenantId(), team.getDepartmentId(), team.getName());
-  }
-
-  private PositionResponse toResponse(Position position) {
-    return new PositionResponse(position.getId(), position.getTenantId(), position.getName());
-  }
-
-  private OrgUserResponse toResponse(OrganizationUser user) {
-    return new OrgUserResponse(
-        user.getId(),
-        user.getTenantId(),
-        user.getEmail(),
-        user.getFullName(),
-        user.getTeamId(),
-        user.getPositionId());
   }
 }

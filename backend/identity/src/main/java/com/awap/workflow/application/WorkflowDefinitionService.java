@@ -17,6 +17,7 @@ import com.awap.workflow.infrastructure.WorkflowVariableRepository;
 import com.awap.workflow.infrastructure.WorkflowVersionRepository;
 import com.awap.workflow.interfaces.dto.WorkflowDefinitionRequest;
 import com.awap.workflow.interfaces.dto.WorkflowDefinitionResponse;
+import com.awap.workflow.interfaces.dto.WorkflowMapper;
 import com.awap.workflow.interfaces.dto.WorkflowVersionResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -41,6 +42,7 @@ public class WorkflowDefinitionService {
   private final ObjectMapper objectMapper;
   private final SpelExpressionService spelExpressionService;
   private final QuotaService quotaService;
+  private final WorkflowMapper workflowMapper;
 
   public WorkflowDefinitionService(
       WorkflowDefinitionRepository definitionRepository,
@@ -50,7 +52,8 @@ public class WorkflowDefinitionService {
       WorkflowVariableRepository workflowVariableRepository,
       ObjectMapper objectMapper,
       SpelExpressionService spelExpressionService,
-      QuotaService quotaService) {
+      QuotaService quotaService,
+      WorkflowMapper workflowMapper) {
     this.definitionRepository = definitionRepository;
     this.versionRepository = versionRepository;
     this.nodeDefinitionRepository = nodeDefinitionRepository;
@@ -59,6 +62,7 @@ public class WorkflowDefinitionService {
     this.objectMapper = objectMapper;
     this.spelExpressionService = spelExpressionService;
     this.quotaService = quotaService;
+    this.workflowMapper = workflowMapper;
   }
 
   @Transactional
@@ -73,17 +77,17 @@ public class WorkflowDefinitionService {
             tenantId, definition.getId(), 1, request.definitionJson(), WorkflowStatus.DRAFT);
     versionRepository.save(version);
     persistGraph(tenantId, version.getId(), request.definitionJson());
-    return toResponse(definition);
+    return workflowMapper.toResponse(definition);
   }
 
   public List<WorkflowDefinitionResponse> list(UUID tenantId) {
     return definitionRepository.findByTenantIdAndDeletedFalse(tenantId).stream()
-        .map(this::toResponse)
+        .map(workflowMapper::toResponse)
         .toList();
   }
 
   public WorkflowDefinitionResponse get(UUID tenantId, UUID id) {
-    return toResponse(find(tenantId, id));
+    return workflowMapper.toResponse(find(tenantId, id));
   }
 
   public WorkflowDefinition getPublished(UUID tenantId, UUID id) {
@@ -111,7 +115,7 @@ public class WorkflowDefinitionService {
                         "Workflow version not found."));
     latest.publish();
     definition.publish(latest.getVersion());
-    return toResponse(definition);
+    return workflowMapper.toResponse(definition);
   }
 
   @Transactional
@@ -128,13 +132,13 @@ public class WorkflowDefinitionService {
                         "Target version not found."));
     target.publish();
     definition.rollbackTo(targetVersion);
-    return toResponse(definition);
+    return workflowMapper.toResponse(definition);
   }
 
   public List<WorkflowVersionResponse> versions(UUID tenantId, UUID id) {
     find(tenantId, id);
     return versionRepository.findByWorkflowIdOrderByVersionDesc(id).stream()
-        .map(this::toVersionResponse)
+        .map(workflowMapper::toResponse)
         .toList();
   }
 
@@ -320,24 +324,5 @@ public class WorkflowDefinitionService {
         ErrorCode.VALIDATION_FAILED,
         HttpStatus.BAD_REQUEST,
         "Workflow definition JSON is invalid.");
-  }
-
-  private WorkflowDefinitionResponse toResponse(WorkflowDefinition definition) {
-    return new WorkflowDefinitionResponse(
-        definition.getId(),
-        definition.getTenantId(),
-        definition.getName(),
-        definition.getDescription(),
-        definition.getStatus().name(),
-        definition.getCurrentVersion());
-  }
-
-  private WorkflowVersionResponse toVersionResponse(WorkflowVersion version) {
-    return new WorkflowVersionResponse(
-        version.getId(),
-        version.getVersion(),
-        version.getDefinitionJson(),
-        version.getStatus().name(),
-        version.getCreatedAt());
   }
 }

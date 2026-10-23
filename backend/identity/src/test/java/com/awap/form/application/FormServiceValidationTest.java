@@ -8,6 +8,7 @@ import com.awap.engine.application.OutboxEventPublisher;
 import com.awap.form.domain.FormDefinition;
 import com.awap.form.infrastructure.FormDefinitionRepository;
 import com.awap.form.infrastructure.FormSubmissionRepository;
+import com.awap.form.interfaces.dto.FormMapperImpl;
 import com.awap.form.interfaces.dto.FormSubmissionRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Optional;
@@ -34,7 +35,11 @@ class FormServiceValidationTest {
   void setUp() {
     service =
         new FormService(
-            definitionRepository, submissionRepository, new ObjectMapper(), outboxEventPublisher);
+            definitionRepository,
+            submissionRepository,
+            new ObjectMapper(),
+            outboxEventPublisher,
+            new FormMapperImpl());
   }
 
   private void givenSchema(String schemaJson) {
