@@ -1,11 +1,22 @@
 groups:
   - name: awap
     rules:
+      # A small trickle of DLQ messages is tolerable (transient poison messages are
+      # retried before landing here); alert only once a meaningful backlog forms.
       - alert: AwapDlqMessages
-        expr: increase(awap_dlq_messages_total[5m]) > 0
+        expr: increase(awap_dlq_messages_total[5m]) > 5
         for: 1m
         labels:
           severity: warning
         annotations:
           summary: "Dead-letter messages detected"
           description: "{{ $value }} dead-letter messages were consumed in the last 5 minutes."
+
+      - alert: AwapDlqMessagesCritical
+        expr: increase(awap_dlq_messages_total[5m]) > 50
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Dead-letter backlog is growing fast"
+          description: "{{ $value }} dead-letter messages in 5 minutes; investigate the consumer pipeline immediately."
