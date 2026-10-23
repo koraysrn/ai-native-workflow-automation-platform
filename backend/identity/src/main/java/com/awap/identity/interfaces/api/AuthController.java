@@ -36,12 +36,15 @@ public class AuthController {
 
   private final AuthService authService;
   private final boolean cookieSecure;
+  private final String cookieSameSite;
 
   public AuthController(
       AuthService authService,
-      @Value("${awap.security.cookie-secure:false}") boolean cookieSecure) {
+      @Value("${awap.security.cookie-secure:false}") boolean cookieSecure,
+      @Value("${awap.security.cookie-same-site:Lax}") String cookieSameSite) {
     this.authService = authService;
     this.cookieSecure = cookieSecure;
+    this.cookieSameSite = cookieSameSite;
   }
 
   @PostMapping("/login")
@@ -108,7 +111,7 @@ public class AuthController {
         ResponseCookie.from("awap_access_token", pair.accessToken())
             .httpOnly(true)
             .secure(cookieSecure)
-            .sameSite("Lax")
+            .sameSite(cookieSameSite)
             .path("/")
             .maxAge(pair.expiresIn())
             .build()
@@ -118,7 +121,7 @@ public class AuthController {
         ResponseCookie.from("awap_refresh_token", pair.refreshToken())
             .httpOnly(true)
             .secure(cookieSecure)
-            .sameSite("Lax")
+            .sameSite(cookieSameSite)
             .path("/api/v1/auth")
             .maxAge(Duration.ofDays(7))
             .build()
@@ -128,7 +131,7 @@ public class AuthController {
         ResponseCookie.from("awap_session", "1")
             .httpOnly(false)
             .secure(cookieSecure)
-            .sameSite("Lax")
+            .sameSite(cookieSameSite)
             .path("/")
             .maxAge(Duration.ofDays(7))
             .build()
@@ -142,7 +145,7 @@ public class AuthController {
           ResponseCookie.from(name, "")
               .httpOnly(true)
               .secure(cookieSecure)
-              .sameSite("Lax")
+              .sameSite(cookieSameSite)
               .path("/")
               .maxAge(0)
               .build()

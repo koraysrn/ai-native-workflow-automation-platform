@@ -108,6 +108,11 @@ public class NodeExecution {
     return resumeAt;
   }
 
+  /** Clears the resume instant once a delayed node has actually been resumed. */
+  public void clearResumeAt() {
+    this.resumeAt = null;
+  }
+
   /** Opens the given number of parallel branches and resets the merge counter. */
   public void openBranches(int tokenCount) {
     this.branchTokenCount = tokenCount;

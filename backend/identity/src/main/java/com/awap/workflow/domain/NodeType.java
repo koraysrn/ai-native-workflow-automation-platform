@@ -1,10 +1,11 @@
 package com.awap.workflow.domain;
 
-/** Workflow node types supported in Phase 0. */
+/** Workflow node types supported by the engine. */
 public enum NodeType {
   START,
   END,
   FORM,
   APPROVAL,
-  TASK
+  TASK,
+  DELAY
 }

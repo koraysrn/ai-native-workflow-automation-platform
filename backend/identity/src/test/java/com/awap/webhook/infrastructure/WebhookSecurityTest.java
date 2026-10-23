@@ -57,6 +57,17 @@ class WebhookSecurityTest {
   }
 
   @Test
+  void ssrfGuardBlocksIpv4MappedIpv6() {
+    SsrfGuard guard = new SsrfGuard();
+    assertThatThrownBy(() -> guard.assertSafe("http://[::ffff:127.0.0.1]/hook"))
+        .isInstanceOf(AwapException.class);
+    assertThatThrownBy(() -> guard.assertSafe("http://[::ffff:10.0.0.5]/hook"))
+        .isInstanceOf(AwapException.class);
+    assertThatThrownBy(() -> guard.assertSafe("http://[::ffff:169.254.169.254]/hook"))
+        .isInstanceOf(AwapException.class);
+  }
+
+  @Test
   void allowlistAllowsConfiguredHost() {
     OutboundAllowlist allowlist = new OutboundAllowlist("example.com");
     allowlist.assertAllowed("https://example.com/hook");
