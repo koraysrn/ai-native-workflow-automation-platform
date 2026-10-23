@@ -107,8 +107,24 @@ export async function registerTenant(payload: RegisterTenantPayload): Promise<vo
     body: JSON.stringify(payload),
   });
   if (!response.ok) {
-    throw new Error("Registration failed");
+    throw new Error(await readErrorDetail(response, "Registration failed"));
   }
+}
+
+/** Extracts the RFC 7807 `detail` (or `title`) from a failed response, if present. */
+async function readErrorDetail(response: Response, fallback: string): Promise<string> {
+  try {
+    const body = (await response.json()) as { detail?: unknown; title?: unknown };
+    if (typeof body.detail === "string") {
+      return body.detail;
+    }
+    if (typeof body.title === "string") {
+      return body.title;
+    }
+  } catch {
+    // Response was not JSON; fall through to the generic message.
+  }
+  return `${fallback} (HTTP ${response.status})`;
 }
 
 export async function login(

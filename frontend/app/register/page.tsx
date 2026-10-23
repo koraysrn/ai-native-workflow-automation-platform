@@ -20,8 +20,8 @@ export default function RegisterPage() {
       await registerTenant({ slug, name, adminEmail, adminPassword, adminFullName });
       router.push("/");
       router.refresh();
-    } catch {
-      setMessage("Registration failed");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Registration failed");
     }
   }
 
