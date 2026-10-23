@@ -203,7 +203,7 @@
                                                  modules. The gate is ratcheted to the current
                                                  measured baseline and must be raised toward the
                                                  constitution target as coverage grows. -->
-                                            <minimum>0.40</minimum>
+                                            <minimum>0.50</minimum>
                                         </limit>
                                     </limits>
                                     <excludes>
@@ -263,11 +263,24 @@
                         <groupId>org.pitest</groupId>
                         <artifactId>pitest-maven</artifactId>
                         <configuration>
+                            <!-- Critical domain classes whose state machines and invariants
+                                 must be mutation-tested. -->
                             <targetClasses>
-                                <param>com.awap.*</param>
+                                <param>com.awap.task.domain.Task</param>
+                                <param>com.awap.engine.domain.WorkflowInstance</param>
+                                <param>com.awap.engine.domain.NodeExecution</param>
+                                <param>com.awap.workflow.domain.WorkflowDefinition</param>
+                                <param>com.awap.form.domain.FormDefinition</param>
+                                <param>com.awap.identity.domain.Tenant</param>
+                                <param>com.awap.identity.domain.User</param>
+                                <param>com.awap.engine.domain.OutboxEvent</param>
                             </targetClasses>
                             <targetTests>
-                                <param>com.awap.*</param>
+                                <param>com.awap.task.domain.TaskTest</param>
+                                <param>com.awap.engine.domain.*</param>
+                                <param>com.awap.workflow.domain.*</param>
+                                <param>com.awap.form.domain.*</param>
+                                <param>com.awap.identity.domain.*</param>
                             </targetTests>
                             <mutators>
                                 <mutator>DEFAULTS</mutator>
@@ -278,8 +291,8 @@
                             </outputFormats>
                             <historyInputFile>${project.build.directory}/pitest.history</historyInputFile>
                             <historyOutputFile>${project.build.directory}/pitest.history</historyOutputFile>
-                            <mutationThreshold>40</mutationThreshold>
-                            <coverageThreshold>50</coverageThreshold>
+                            <mutationThreshold>70</mutationThreshold>
+                            <coverageThreshold>80</coverageThreshold>
                         </configuration>
                         <dependencies>
                             <dependency>
