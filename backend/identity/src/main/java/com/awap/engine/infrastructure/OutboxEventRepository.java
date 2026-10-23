@@ -31,4 +31,8 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
   @Modifying
   @Query("delete from OutboxEvent e where e.published = true and e.createdAt < :before")
   int deletePublishedBefore(@Param("before") Instant before);
+
+  /** Returns published events older than the given instant so they can be archived first. */
+  @Query("select e from OutboxEvent e where e.published = true and e.createdAt < :before")
+  List<OutboxEvent> findPublishedBefore(@Param("before") Instant before);
 }

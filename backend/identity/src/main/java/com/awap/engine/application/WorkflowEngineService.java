@@ -31,6 +31,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -223,6 +224,24 @@ public class WorkflowEngineService {
     return engineMapper.toResponse(instance);
   }
 
+  /**
+   * Resumes a delayed node whose resume instant has elapsed. Idempotent: only WAITING nodes with a
+   * scheduled resume time are completed and advanced.
+   */
+  @Transactional
+  public WorkflowInstanceResponse resumeDueNode(UUID tenantId, UUID instanceId, String nodeId) {
+    WorkflowInstance instance = find(tenantId, instanceId);
+    NodeExecution execution = findNodeExecution(instanceId, nodeId);
+    if (execution.getStatus() == NodeExecutionStatus.WAITING && execution.getResumeAt() != null) {
+      execution.clearResumeAt();
+      execution.complete("{}");
+      nodeExecutionRepository.save(execution);
+      log(instance, nodeId, execution.getNodeType(), "NODE_COMPLETED", null);
+      advanceFrom(instance, nodeId);
+    }
+    return engineMapper.toResponse(instance);
+  }
+
   private void executeStartNode(WorkflowInstance instance) {
     NodeDefinition startNode =
         nodesOf(instance).stream()
@@ -283,6 +302,19 @@ public class WorkflowEngineService {
         instance.transitionTo(WorkflowState.WAITING);
         log(instance, node.getNodeId(), node.getNodeType().name(), "NODE_WAITING", null);
       }
+      case DELAY -> {
+        long delaySeconds = readDelaySeconds(node);
+        execution.scheduleResume(Instant.now().plusSeconds(delaySeconds));
+        execution.waitForExternal();
+        nodeExecutionRepository.save(execution);
+        instance.transitionTo(WorkflowState.WAITING);
+        log(
+            instance,
+            node.getNodeId(),
+            node.getNodeType().name(),
+            "NODE_DELAYED",
+            "delaySeconds=" + delaySeconds);
+      }
       case APPROVAL, TASK -> {
         UUID assigneeId = resolveAssignee(instance, node);
         TaskRequest taskRequest =
@@ -321,6 +353,19 @@ public class WorkflowEngineService {
     nodeExecutionRepository
         .findByWorkflowInstanceIdAndStatus(instance.getId(), NodeExecutionStatus.COMPLETED)
         .forEach(execution -> advanceFrom(instance, execution.getNodeId()));
+  }
+
+  private long readDelaySeconds(NodeDefinition node) {
+    String configJson = node.getConfigJson();
+    if (configJson == null || configJson.isBlank()) {
+      return 0;
+    }
+    try {
+      JsonNode config = objectMapper.readTree(configJson);
+      return config.path("delaySeconds").asLong(0);
+    } catch (JsonProcessingException ex) {
+      return 0;
+    }
   }
 
   private UUID resolveAssignee(WorkflowInstance instance, NodeDefinition node) {
