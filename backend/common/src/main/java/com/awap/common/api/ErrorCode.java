@@ -22,7 +22,9 @@ public enum ErrorCode {
   FORM_INVALID_SCHEMA("AWAP-FORM-0001", "The form schema is invalid."),
   ORG_NOT_FOUND("AWAP-ORG-0001", "The organization resource was not found."),
   FILE_NOT_FOUND("AWAP-FILE-0001", "The file was not found."),
-  FILE_SCAN_REJECTED("AWAP-FILE-0002", "The file was rejected by antivirus scanning.");
+  FILE_SCAN_REJECTED("AWAP-FILE-0002", "The file was rejected by antivirus scanning."),
+  FILE_TOO_LARGE("AWAP-FILE-0003", "The file exceeds the maximum allowed size."),
+  FILE_FORMAT_UNSUPPORTED("AWAP-FILE-0004", "The file format is not supported.");
 
   private final String code;
   private final String defaultTitle;

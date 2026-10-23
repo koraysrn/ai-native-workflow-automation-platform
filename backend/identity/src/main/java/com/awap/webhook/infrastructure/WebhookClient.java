@@ -1,0 +1,91 @@
+package com.awap.webhook.infrastructure;
+
+import com.awap.common.api.AwapException;
+import com.awap.common.api.ErrorCode;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpStatus;
+import org.springframework.stereotype.Component;
+
+/** Sends HMAC-signed outbound webhook requests with SSRF and allowlist enforcement. */
+@Component
+public class WebhookClient {
+
+  private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(2);
+  private static final Duration READ_TIMEOUT = Duration.ofSeconds(5);
+
+  private final WebhookSigner signer;
+  private final SsrfGuard ssrfGuard;
+  private final OutboundAllowlist allowlist;
+  private final String secret;
+  private final HttpClient httpClient;
+
+  @Autowired
+  public WebhookClient(
+      WebhookSigner signer,
+      SsrfGuard ssrfGuard,
+      OutboundAllowlist allowlist,
+      @Value("${awap.webhook.secret:}") String secret) {
+    this(
+        signer,
+        ssrfGuard,
+        allowlist,
+        secret,
+        HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build());
+  }
+
+  WebhookClient(
+      WebhookSigner signer,
+      SsrfGuard ssrfGuard,
+      OutboundAllowlist allowlist,
+      String secret,
+      HttpClient httpClient) {
+    this.signer = signer;
+    this.ssrfGuard = ssrfGuard;
+    this.allowlist = allowlist;
+    this.secret = secret;
+    this.httpClient = httpClient;
+  }
+
+  /** Posts the payload and returns the response body. Throws on non-2xx or transport failure. */
+  public String post(String url, String payload) {
+    ssrfGuard.assertSafe(url);
+    allowlist.assertAllowed(url);
+    long timestamp = System.currentTimeMillis();
+    String signature = signer.sign(secret, payload, timestamp);
+
+    HttpRequest request =
+        HttpRequest.newBuilder()
+            .uri(URI.create(url))
+            .timeout(READ_TIMEOUT)
+            .header("Content-Type", "application/json")
+            .header("X-Awap-Signature", signature)
+            .header("X-Awap-Timestamp", String.valueOf(timestamp))
+            .POST(HttpRequest.BodyPublishers.ofString(payload))
+            .build();
+
+    try {
+      HttpResponse<String> response =
+          httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+      if (response.statusCode() >= 400) {
+        throw new AwapException(
+            ErrorCode.GENERIC_INTERNAL_ERROR,
+            HttpStatus.BAD_GATEWAY,
+            "Webhook target returned status " + response.statusCode() + ".");
+      }
+      return response.body();
+    } catch (AwapException ex) {
+      throw ex;
+    } catch (Exception ex) {
+      throw new AwapException(
+          ErrorCode.GENERIC_INTERNAL_ERROR,
+          HttpStatus.BAD_GATEWAY,
+          "Webhook request failed: " + ex.getMessage());
+    }
+  }
+}

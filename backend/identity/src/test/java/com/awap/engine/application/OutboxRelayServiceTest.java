@@ -42,7 +42,8 @@ class OutboxRelayServiceTest {
     OutboxEvent event =
         new OutboxEvent(
             UUID.randomUUID(), "TASK", UUID.randomUUID(), "TASK_COMPLETED", "{\"ok\":true}");
-    when(outboxRepository.findByPublishedFalseOrderByCreatedAtAsc()).thenReturn(List.of(event));
+    when(outboxRepository.findTop100ByPublishedFalseOrderByCreatedAtAsc())
+        .thenReturn(List.of(event));
     when(outboxRepository.claim(event.getId())).thenReturn(1);
     when(kafkaTemplate.send(anyString(), anyString(), anyString()))
         .thenReturn(CompletableFuture.completedFuture(new SendResult<>(null, null)));
@@ -60,7 +61,8 @@ class OutboxRelayServiceTest {
     OutboxEvent event =
         new OutboxEvent(
             UUID.randomUUID(), "FORM", UUID.randomUUID(), "FORM_SUBMITTED", "{\"ok\":true}");
-    when(outboxRepository.findByPublishedFalseOrderByCreatedAtAsc()).thenReturn(List.of(event));
+    when(outboxRepository.findTop100ByPublishedFalseOrderByCreatedAtAsc())
+        .thenReturn(List.of(event));
     when(outboxRepository.claim(event.getId())).thenReturn(0);
 
     service.relayEvents();
@@ -74,7 +76,8 @@ class OutboxRelayServiceTest {
     OutboxEvent event =
         new OutboxEvent(
             UUID.randomUUID(), "FORM", UUID.randomUUID(), "FORM_SUBMITTED", "{\"ok\":true}");
-    when(outboxRepository.findByPublishedFalseOrderByCreatedAtAsc()).thenReturn(List.of(event));
+    when(outboxRepository.findTop100ByPublishedFalseOrderByCreatedAtAsc())
+        .thenReturn(List.of(event));
     when(outboxRepository.claim(event.getId())).thenReturn(1);
     when(kafkaTemplate.send(anyString(), anyString(), anyString()))
         .thenReturn(CompletableFuture.failedFuture(new RuntimeException("broker down")));

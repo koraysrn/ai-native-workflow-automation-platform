@@ -1,0 +1,12 @@
+{
+  "type": "record",
+  "name": "NotificationRequestedEvent",
+  "namespace": "com.awap.engine.event",
+  "fields": [
+    {"name": "tenantId", "type": "string"},
+    {"name": "recipient", "type": "string"},
+    {"name": "channel", "type": "string"},
+    {"name": "templateKey", "type": "string"},
+    {"name": "variablesJson", "type": ["null", "string"], "default": null}
+  ]
+}

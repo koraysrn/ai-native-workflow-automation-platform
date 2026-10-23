@@ -33,7 +33,7 @@ public class OutboxRelayService {
     if (kafkaTemplate == null) {
       return;
     }
-    List<OutboxEvent> events = outboxRepository.findByPublishedFalseOrderByCreatedAtAsc();
+    List<OutboxEvent> events = outboxRepository.findTop100ByPublishedFalseOrderByCreatedAtAsc();
     for (OutboxEvent event : events) {
       // Claim the event atomically. The scheduled task and any other relay instance must never
       // publish the same event twice.

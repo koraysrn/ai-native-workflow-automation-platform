@@ -14,7 +14,6 @@ import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
-import org.springframework.util.backoff.ExponentialBackOff;
 
 /** Kafka consumer configuration with retry (exponential backoff) and a DLQ recoverer. */
 @Configuration
@@ -43,8 +42,7 @@ public class KafkaConsumerConfig {
     factory.setConsumerFactory(consumerFactory);
 
     DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate);
-    DefaultErrorHandler errorHandler =
-        new DefaultErrorHandler(recoverer, new ExponentialBackOff(1000L, 2.0));
+    DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, new JitteredBackOff());
     factory.setCommonErrorHandler(errorHandler);
     return factory;
   }

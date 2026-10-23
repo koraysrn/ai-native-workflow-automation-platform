@@ -45,6 +45,18 @@ public class NodeExecution {
   @Column(columnDefinition = "TEXT")
   private String error;
 
+  @Column(name = "resume_at")
+  private Instant resumeAt;
+
+  @Column(name = "branch_token_count")
+  private Integer branchTokenCount;
+
+  @Column(name = "merged_branch_count")
+  private Integer mergedBranchCount;
+
+  @Column(name = "join_node_id")
+  private String joinNodeId;
+
   @Column(nullable = false)
   private Instant createdAt;
 
@@ -85,6 +97,41 @@ public class NodeExecution {
     this.status = NodeExecutionStatus.COMPLETED;
     this.outputJson = outputJson;
     this.completedAt = Instant.now();
+  }
+
+  /** Schedules a delayed node to be resumed at the given UTC instant. */
+  public void scheduleResume(Instant resumeAt) {
+    this.resumeAt = resumeAt;
+  }
+
+  public Instant getResumeAt() {
+    return resumeAt;
+  }
+
+  /** Opens the given number of parallel branches and resets the merge counter. */
+  public void openBranches(int tokenCount) {
+    this.branchTokenCount = tokenCount;
+    this.mergedBranchCount = 0;
+  }
+
+  public int getBranchTokenCount() {
+    return branchTokenCount == null ? 0 : branchTokenCount;
+  }
+
+  public int getMergedBranchCount() {
+    return mergedBranchCount == null ? 0 : mergedBranchCount;
+  }
+
+  public void recordBranchMerge() {
+    this.mergedBranchCount = getMergedBranchCount() + 1;
+  }
+
+  public String getJoinNodeId() {
+    return joinNodeId;
+  }
+
+  public void setJoinNodeId(String joinNodeId) {
+    this.joinNodeId = joinNodeId;
   }
 
   public void fail(String error) {
