@@ -20,3 +20,36 @@ groups:
         annotations:
           summary: "Dead-letter backlog is growing fast"
           description: "{{ $value }} dead-letter messages in 5 minutes; investigate the consumer pipeline immediately."
+
+  - name: awap-slo
+    rules:
+      - alert: AwapHighErrorRate
+        expr: |
+          sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m]))
+            / clamp_min(sum(rate(http_server_requests_seconds_count[5m])), 1) > 0.05
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Error rate above 5%"
+          description: "{{ $value | humanizePercentage }} of requests are failing (5xx)."
+
+      - alert: AwapHighLatency
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(http_server_requests_seconds_bucket[5m])) by (le)) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "p95 latency above 2s"
+          description: "p95 request latency is {{ $value }}s over the last 5 minutes."
+
+      - alert: AwapInstanceDown
+        expr: up{job="awap-identity"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "AWAP identity instance is down"
+          description: "The awap-identity scrape target has been unreachable for 1 minute."
