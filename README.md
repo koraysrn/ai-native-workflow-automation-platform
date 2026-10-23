@@ -78,43 +78,61 @@ The authoritative compatibility matrix is maintained in
 
 ### Prerequisites
 
-- JDK 25 (Temurin)
-- Node.js 24 LTS + pnpm
-- Python 3.15.0 (uv) for the AI layer
-- Docker + Docker Compose for local infrastructure
+- Docker + Docker Compose (recommended; no local JDK/Node/Python needed)
+- For local development only: JDK 25 (Temurin), Node.js 24 LTS + pnpm, Python 3.15.0 (uv)
 
-### 1. Start local infrastructure
+### Quick start (single command)
 
 ```bash
 cd infra
-docker compose up -d
+docker compose up -d --build
 ```
 
-Starts PostgreSQL, Redis, Kafka (+ Schema Registry), OpenSearch, Vault,
-Prometheus, Grafana and the OpenTelemetry collector. MinIO is opt-in (its public
-Docker image now requires authentication or building from source); start it with
-`docker compose --profile storage up -d minio`.
+This builds and starts the entire stack — PostgreSQL, Redis, Kafka (+ Schema
+Registry), OpenSearch, Vault, Prometheus, Grafana, the OpenTelemetry collector,
+the backend and the frontend. Flyway applies the database migrations
+automatically inside the backend container on startup.
 
-### 2. Run the backend
+| Service | URL |
+|---|---|
+| Frontend | http://localhost:3000 |
+| Backend (REST + actuator) | http://localhost:8080 |
+| Grafana | http://localhost:3001 |
+| Prometheus | http://localhost:9090 |
+| Schema Registry | http://localhost:8081 |
+
+MinIO is opt-in (its public Docker image now requires authentication); start it with:
 
 ```bash
-cd backend
+docker compose --profile storage up -d minio
+```
+
+Secrets and connection settings are configurable via environment variables; see
+[`infra/.env.example`](infra/.env.example).
+
+### Local development (manual)
+
+Run only the databases and brokers in Docker, and each application layer outside
+Docker when iterating on code:
+
+```bash
+# 1. Databases / brokers
+cd infra
+docker compose up -d postgres redis kafka schema-registry
+
+# 2. Backend
+cd ../backend
 ./mvnw verify
-./mvnw -pl identity spring-boot:run
-```
+DB_URL=jdbc:postgresql://localhost:5432/awap DB_USER=awap DB_PASSWORD=awap \
+  ./mvnw -pl identity spring-boot:run
 
-### 3. Run the frontend
-
-```bash
-cd frontend
+# 3. Frontend
+cd ../frontend
 pnpm install
 pnpm dev
-```
 
-### 4. Run the AI layer
-
-```bash
-cd ai-layer
+# 4. AI layer
+cd ../ai-layer
 uv sync --locked
 uv run uvicorn app.main:app --reload
 ```
