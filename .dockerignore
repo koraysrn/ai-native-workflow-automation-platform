@@ -1,0 +1,14 @@
+.git
+.github
+.husky
+docs
+settings
+scripts
+load-test
+**/node_modules
+**/target
+**/.next
+**/out
+**/.venv
+**/__pycache__
+**/*.log

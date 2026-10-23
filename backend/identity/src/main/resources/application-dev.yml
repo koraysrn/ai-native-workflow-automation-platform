@@ -6,3 +6,5 @@ awap:
 logging:
   level:
     com.awap: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG

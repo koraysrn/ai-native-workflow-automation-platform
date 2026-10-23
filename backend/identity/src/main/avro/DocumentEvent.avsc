@@ -1,0 +1,12 @@
+{
+  "type": "record",
+  "name": "DocumentEvent",
+  "namespace": "com.awap.engine.event",
+  "fields": [
+    {"name": "tenantId", "type": "string"},
+    {"name": "fileId", "type": "string"},
+    {"name": "eventType", "type": "string"},
+    {"name": "size", "type": "long"},
+    {"name": "format", "type": ["null", "string"], "default": null}
+  ]
+}

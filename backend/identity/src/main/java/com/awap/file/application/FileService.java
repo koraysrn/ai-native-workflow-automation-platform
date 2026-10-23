@@ -9,7 +9,10 @@ import io.minio.BucketExistsArgs;
 import io.minio.GetPresignedObjectUrlArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
+import io.minio.SetBucketVersioningArgs;
 import io.minio.http.Method;
+import io.minio.messages.VersioningConfiguration;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import org.springframework.http.HttpStatus;
@@ -21,6 +24,9 @@ import org.springframework.transaction.annotation.Transactional;
 public class FileService {
 
   private static final String BUCKET = "awap-files";
+  private static final long MAX_FILE_SIZE_BYTES = 500L * 1024 * 1024;
+  private static final Set<String> ALLOWED_EXTENSIONS =
+      Set.of("pdf", "docx", "xlsx", "pptx", "png", "jpg", "jpeg", "txt");
 
   private final FileRecordRepository repository;
   private final MinioClient minioClient;
@@ -36,6 +42,8 @@ public class FileService {
   @Transactional
   public UploadSlot createUpload(UUID tenantId, String name, String contentType, long size) {
     ensureBucket();
+    validateSize(size);
+    validateFormat(name);
     String objectKey = tenantId + "/" + UUID.randomUUID() + "-" + sanitize(name);
     FileRecord record = new FileRecord(tenantId, name, contentType, size, BUCKET, objectKey);
     repository.save(record);
@@ -68,6 +76,11 @@ public class FileService {
       if (!minioClient.bucketExists(BucketExistsArgs.builder().bucket(BUCKET).build())) {
         minioClient.makeBucket(MakeBucketArgs.builder().bucket(BUCKET).build());
       }
+      minioClient.setBucketVersioning(
+          SetBucketVersioningArgs.builder()
+              .bucket(BUCKET)
+              .config(new VersioningConfiguration(VersioningConfiguration.Status.ENABLED, null))
+              .build());
     } catch (Exception ex) {
       throw new AwapException(
           ErrorCode.GENERIC_INTERNAL_ERROR,
@@ -91,6 +104,30 @@ public class FileService {
           HttpStatus.INTERNAL_SERVER_ERROR,
           "Could not generate presigned URL.");
     }
+  }
+
+  private void validateSize(long size) {
+    if (size > MAX_FILE_SIZE_BYTES) {
+      throw new AwapException(
+          ErrorCode.FILE_TOO_LARGE, HttpStatus.PAYLOAD_TOO_LARGE, "File exceeds the 500 MB limit.");
+    }
+  }
+
+  private void validateFormat(String name) {
+    if (!ALLOWED_EXTENSIONS.contains(extensionOf(name))) {
+      throw new AwapException(
+          ErrorCode.FILE_FORMAT_UNSUPPORTED,
+          HttpStatus.UNSUPPORTED_MEDIA_TYPE,
+          "File format is not supported.");
+    }
+  }
+
+  private String extensionOf(String name) {
+    if (name == null) {
+      return "";
+    }
+    int dot = name.lastIndexOf('.');
+    return dot >= 0 && dot < name.length() - 1 ? name.substring(dot + 1).toLowerCase() : "";
   }
 
   private String sanitize(String name) {

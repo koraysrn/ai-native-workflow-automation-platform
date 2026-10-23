@@ -1,0 +1,13 @@
+{
+  "type": "record",
+  "name": "AnalyticsEvent",
+  "namespace": "com.awap.engine.event",
+  "fields": [
+    {"name": "tenantId", "type": "string"},
+    {"name": "eventType", "type": "string"},
+    {"name": "workflowInstanceId", "type": ["null", "string"], "default": null},
+    {"name": "taskId", "type": ["null", "string"], "default": null},
+    {"name": "durationMs", "type": ["null", "long"], "default": null},
+    {"name": "timestamp", "type": "long"}
+  ]
+}

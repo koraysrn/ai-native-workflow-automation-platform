@@ -42,7 +42,7 @@ awap:
       secret: ${JWT_SECRET}
       access-token-ttl: ${JWT_ACCESS_TTL:15m}
       refresh-token-ttl: ${JWT_REFRESH_TTL:7d}
-    cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000}
+    cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://127.0.0.1:3000}
     cookie-secure: ${COOKIE_SECURE:false}
   clamav:
     enabled: ${CLAMAV_ENABLED:false}
@@ -58,7 +58,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,prometheus
+        include: health,info,prometheus,httpexchanges
   endpoint:
     health:
       probes:

@@ -2,6 +2,7 @@ package com.awap.engine.infrastructure;
 
 import com.awap.engine.domain.NodeExecution;
 import com.awap.engine.domain.NodeExecutionStatus;
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -16,4 +17,6 @@ public interface NodeExecutionRepository extends JpaRepository<NodeExecution, UU
 
   List<NodeExecution> findByWorkflowInstanceIdAndStatus(
       UUID workflowInstanceId, NodeExecutionStatus status);
+
+  List<NodeExecution> findByResumeAtNotNullAndResumeAtBeforeOrderByResumeAtAsc(Instant now);
 }

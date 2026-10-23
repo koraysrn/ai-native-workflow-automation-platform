@@ -1,0 +1,11 @@
+groups:
+  - name: awap
+    rules:
+      - alert: AwapDlqMessages
+        expr: increase(awap_dlq_messages_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Dead-letter messages detected"
+          description: "{{ $value }} dead-letter messages were consumed in the last 5 minutes."
