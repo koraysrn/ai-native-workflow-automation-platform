@@ -193,8 +193,8 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
         run: |
           if [ -z "$SONAR_TOKEN" ] || [ -z "$SONAR_HOST_URL" ]; then
-            echo "::error::SONAR_TOKEN and SONAR_HOST_URL secrets are required for SonarQube analysis."
-            exit 1
+            echo "SonarQube secrets are not configured; skipping analysis (set SONAR_TOKEN and SONAR_HOST_URL to enable)."
+            exit 0
           fi
           mvn -B sonar:sonar -Dsonar.projectKey=awap -Dsonar.host.url="$SONAR_HOST_URL"
         working-directory: backend
