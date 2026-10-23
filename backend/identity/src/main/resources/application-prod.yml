@@ -1,8 +1,43 @@
+spring:
+  config:
+    import: "vault://"
+  cloud:
+    vault:
+      enabled: true
+      kv:
+        default-context: awap/prod
+  datasource:
+    hikari:
+      maximum-pool-size: 40
+      minimum-idle: 10
+      connection-timeout: 30000
+  jpa:
+    open-in-view: false
+
+awap:
+  kafka:
+    enabled: true
+  rate-limit:
+    enabled: true
+  security:
+    cookie-secure: true
+    cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:https://app.awap.dev}
+    jwt:
+      access-token-ttl: ${JWT_ACCESS_TTL:10m}
+      refresh-token-ttl: ${JWT_REFRESH_TTL:7d}
+  clamav:
+    enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus
+  tracing:
+    sampling:
+      probability: 0.1
+
 logging:
   level:
     root: WARN
     com.awap: INFO
-
-awap:
-  clamav:
-    enabled: true

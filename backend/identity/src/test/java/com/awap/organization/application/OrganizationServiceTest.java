@@ -21,6 +21,7 @@ import com.awap.organization.interfaces.dto.CompanyRequest;
 import com.awap.organization.interfaces.dto.CompanyResponse;
 import com.awap.organization.interfaces.dto.DepartmentRequest;
 import com.awap.organization.interfaces.dto.OrgUserResponse;
+import com.awap.organization.interfaces.dto.OrganizationMapperImpl;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -52,7 +53,8 @@ class OrganizationServiceTest {
             positionRepository,
             organizationUserRepository,
             quotaService,
-            outboxEventPublisher);
+            outboxEventPublisher,
+            new OrganizationMapperImpl());
   }
 
   @Test

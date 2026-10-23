@@ -9,6 +9,7 @@ import com.awap.form.domain.FormDefinition;
 import com.awap.form.infrastructure.FormDefinitionRepository;
 import com.awap.form.infrastructure.FormSubmissionRepository;
 import com.awap.form.interfaces.dto.FormDefinitionRequest;
+import com.awap.form.interfaces.dto.FormMapperImpl;
 import com.awap.form.interfaces.dto.FormSubmissionRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Optional;
@@ -35,7 +36,8 @@ class FormServiceTest {
             definitionRepository,
             submissionRepository,
             new ObjectMapper().findAndRegisterModules(),
-            outboxEventPublisher);
+            outboxEventPublisher,
+            new FormMapperImpl());
   }
 
   @Test

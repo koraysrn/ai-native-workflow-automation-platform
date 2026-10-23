@@ -1,7 +1,38 @@
-logging:
-  level:
-    com.awap: INFO
+spring:
+  config:
+    import: "vault://"
+  cloud:
+    vault:
+      enabled: true
+      kv:
+        default-context: awap/staging
+  datasource:
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+  jpa:
+    open-in-view: false
 
 awap:
+  kafka:
+    enabled: true
+  rate-limit:
+    enabled: true
+  security:
+    cookie-secure: true
+    cors-allowed-origins: ${CORS_ALLOWED_ORIGINS:https://staging.awap.dev}
+    jwt:
+      access-token-ttl: ${JWT_ACCESS_TTL:15m}
+      refresh-token-ttl: ${JWT_REFRESH_TTL:7d}
   clamav:
     enabled: true
+
+management:
+  tracing:
+    sampling:
+      probability: 0.5
+
+logging:
+  level:
+    root: INFO
+    com.awap: INFO

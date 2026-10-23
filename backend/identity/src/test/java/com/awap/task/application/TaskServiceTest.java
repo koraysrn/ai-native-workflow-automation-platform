@@ -12,6 +12,7 @@ import com.awap.engine.application.OutboxEventPublisher;
 import com.awap.task.domain.Task;
 import com.awap.task.domain.TaskStatus;
 import com.awap.task.infrastructure.TaskRepository;
+import com.awap.task.interfaces.dto.TaskMapperImpl;
 import com.awap.task.interfaces.dto.TaskRequest;
 import com.awap.task.interfaces.dto.TaskResponse;
 import io.micrometer.core.instrument.Counter;
@@ -39,7 +40,8 @@ class TaskServiceTest {
     lenient()
         .when(meterRegistry.counter(anyString(), anyString(), anyString()))
         .thenReturn(counter);
-    service = new TaskService(taskRepository, outboxEventPublisher, meterRegistry);
+    service =
+        new TaskService(taskRepository, outboxEventPublisher, meterRegistry, new TaskMapperImpl());
   }
 
   @Test
