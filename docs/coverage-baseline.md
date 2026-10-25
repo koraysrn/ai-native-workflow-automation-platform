@@ -14,3 +14,22 @@ Per [`CLAUDE.md`](../CLAUDE.md): line ≥ 80%, branch ≥ 95%. The JaCoCo gate i
 currently ratcheted at 0.40 (line) to keep CI green while the remaining test plan
 (BÖLÜM 2/3) is implemented. The ratchet must be raised incrementally (0.40 → 0.60 →
 0.80) as coverage grows.
+
+## Mutation testing (PIT)
+
+Measured with `./mvnw -pl identity -Ppit org.pitest:pitest-maven:mutationCoverage`
+over the critical domain classes (`Task`, `WorkflowInstance`, `NodeExecution`,
+`WorkflowDefinition`, `FormDefinition`, `Tenant`, `User`, `OutboxEvent`).
+
+| Metric | Value |
+|--------|-------|
+| Mutation score | 85% (113 killed / 133 generated) |
+| Line coverage (mutated classes) | 93% (298 / 319) |
+| Test strength | 88% |
+| Mutations with no coverage | 4 |
+| Threshold (mutation) | 70% |
+| Threshold (coverage) | 80% |
+
+The `mutationThreshold`/`coverageThreshold` gates live in the `pit` profile of
+[`backend/pom.xml`](../backend/pom.xml); the incremental-history config was removed
+because no history plugin was on the classpath.

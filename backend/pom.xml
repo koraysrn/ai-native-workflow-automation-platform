@@ -289,8 +289,6 @@
                                 <outputFormat>HTML</outputFormat>
                                 <outputFormat>XML</outputFormat>
                             </outputFormats>
-                            <historyInputFile>${project.build.directory}/pitest.history</historyInputFile>
-                            <historyOutputFile>${project.build.directory}/pitest.history</historyOutputFile>
                             <mutationThreshold>70</mutationThreshold>
                             <coverageThreshold>80</coverageThreshold>
                         </configuration>
