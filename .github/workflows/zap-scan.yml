@@ -4,6 +4,10 @@ on:
   workflow_dispatch:
   schedule:
     - cron: "0 4 * * 0"
+  # Run on every PR and push to main so the ZAP baseline acts as a merge gate.
+  pull_request:
+  push:
+    branches: [main]
 
 permissions:
   contents: read
