@@ -13,8 +13,8 @@ import org.springframework.test.util.ReflectionTestUtils;
 
 /**
  * Golden-master for the engine's public response shape. Any change to {@code
- * WorkflowInstanceResponse} or the {@code EngineMapper} mapping that breaks these pinned values is a
- * behavioral regression.
+ * WorkflowInstanceResponse} or the {@code EngineMapper} mapping that breaks these pinned values is
+ * a behavioral regression.
  */
 class WorkflowEngineGoldenMasterTest {
 
@@ -26,7 +26,8 @@ class WorkflowEngineGoldenMasterTest {
   @Test
   void publicResponseShapeIsPinned() {
     WorkflowInstance instance =
-        new WorkflowInstance(TENANT_ID, DEFINITION_ID, 1, WorkflowState.RUNNING, "key-1", "{\"x\":1}");
+        new WorkflowInstance(
+            TENANT_ID, DEFINITION_ID, 1, WorkflowState.RUNNING, "key-1", "{\"x\":1}");
     ReflectionTestUtils.setField(instance, "id", INSTANCE_ID);
     ReflectionTestUtils.setField(instance, "createdAt", CREATED_AT);
 
