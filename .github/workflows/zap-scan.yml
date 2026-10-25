@@ -1,0 +1,40 @@
+name: OWASP ZAP scan
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 4 * * 0"
+  # Run on every PR and push to main so the ZAP baseline acts as a merge gate.
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  zap:
+    name: ZAP baseline scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Start the Docker Compose stack
+        run: docker compose up -d --build
+        working-directory: infra
+
+      - name: Wait for backend health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/actuator/health; then exit 0; fi
+            sleep 5
+          done
+          echo "Backend did not become healthy" && exit 1
+
+      - name: ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.15.0
+        with:
+          target: http://localhost:3000
+          cmd_options: "-a"
+          # The job has no issue-write permission; report findings in the log only.
+          allow_issue_writing: false

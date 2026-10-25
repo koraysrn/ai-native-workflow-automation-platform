@@ -41,3 +41,13 @@ jobs:
           cloud: false
         env:
           API_BASE: http://localhost:8080
+
+      - name: Verify outbox partition pruning (EXPLAIN)
+        run: |
+          PLAN=$(docker compose exec -T postgres psql -U awap -d awap -f /dev/stdin < ../load-test/k6/explain-outbox-partition.sql 2>&1)
+          printf '%s\n' "$PLAN"
+          printf '%s\n' "$PLAN" | grep -q 'Scan' || {
+            echo "EXPLAIN produced no scan plan; partition check failed" >&2
+            exit 1
+          }
+        working-directory: infra

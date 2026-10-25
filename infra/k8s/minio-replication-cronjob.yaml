@@ -1,0 +1,69 @@
+# MinIO object replication via mc mirror.
+#
+# Copies the object buckets from the primary MinIO endpoint to a secondary
+# (DR) endpoint every 30 minutes. Source/target endpoints and credentials are
+# injected from the awap-backend-secrets / awap-infra-secrets SealedSecrets.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: awap-minio-replication
+  namespace: awap
+spec:
+  schedule: "*/30 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: awap-minio-replication
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: mirror
+              image: minio/mc:latest
+              env:
+                - name: SRC_ENDPOINT
+                  value: http://minio.awap-infra:9000
+                - name: SRC_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: awap-backend-secrets
+                      key: minio-access-key
+                - name: SRC_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: awap-backend-secrets
+                      key: minio-secret-key
+                # DR target credentials are provided by a separate awap-dr-secrets
+                # SealedSecret so the replication job never embeds plain text.
+                - name: DST_ENDPOINT
+                  valueFrom:
+                    secretKeyRef:
+                      name: awap-dr-secrets
+                      key: minio-endpoint
+                - name: DST_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: awap-dr-secrets
+                      key: minio-access-key
+                - name: DST_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: awap-dr-secrets
+                      key: minio-secret-key
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  set -e
+                  mc alias set src "${SRC_ENDPOINT}" "${SRC_ACCESS_KEY}" "${SRC_SECRET_KEY}"
+                  mc alias set dst "${DST_ENDPOINT}" "${DST_ACCESS_KEY}" "${DST_SECRET_KEY}"
+                  # Mirror document/file buckets used by the platform.
+                  for bucket in awap-documents awap-files awap-postgres-backups; do
+                    mc mb --ignore-existing "dst/${bucket}" || true
+                    mc mirror --overwrite --watch=false "src/${bucket}" "dst/${bucket}"
+                  done

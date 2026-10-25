@@ -1,0 +1,32 @@
+{
+  "consumer": {
+    "name": "awap-ai-layer"
+  },
+  "provider": {
+    "name": "awap-identity"
+  },
+  "messages": [
+    {
+      "description": "a workflow instance state change event",
+      "providerStates": [
+        {
+          "name": "a workflow instance state change is emitted"
+        }
+      ],
+      "contents": {
+        "tenantId": "00000000-0000-0000-0000-000000000001",
+        "workflowInstanceId": "00000000-0000-0000-0000-000000000030",
+        "state": "RUNNING"
+      },
+      "metadata": {
+        "contentType": "application/json",
+        "kafka_topic": "workflow-instance-state"
+      }
+    }
+  ],
+  "metadata": {
+    "pactSpecification": {
+      "version": "3.0.0"
+    }
+  }
+}

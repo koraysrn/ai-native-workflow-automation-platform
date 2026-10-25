@@ -12,13 +12,17 @@ processors:
 exporters:
   prometheus:
     endpoint: "0.0.0.0:8889"
+  debug:
+    verbosity: basic
 
 service:
   pipelines:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [prometheus]
+      # Prometheus is a metrics backend; traces must not be exported there.
+      # Wire a real trace backend (Jaeger/Tempo/OTLP) in production.
+      exporters: [debug]
     metrics:
       receivers: [otlp]
       processors: [batch]

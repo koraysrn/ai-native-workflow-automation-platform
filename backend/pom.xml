@@ -203,7 +203,16 @@
                                                  modules. The gate is ratcheted to the current
                                                  measured baseline and must be raised toward the
                                                  constitution target as coverage grows. -->
-                                            <minimum>0.50</minimum>
+                                            <minimum>0.55</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <!-- Branch ratchet introduced with issue #96. The
+                                                 measured baseline is ~0.39; the minimum is pinned
+                                                 slightly below it so CI stays green while the
+                                                 branch-focused test plan raises it. -->
+                                            <minimum>0.35</minimum>
                                         </limit>
                                     </limits>
                                     <excludes>

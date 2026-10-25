@@ -219,3 +219,38 @@ jobs:
           node-version: 24
       - name: Lint OpenAPI spec
         run: npx --yes @stoplight/spectral-cli@6.14.3 lint docs/openapi/awap-openapi.yaml --fail-severity warn
+
+  pact-gate:
+    name: Pact broker can-i-deploy
+    runs-on: ubuntu-latest
+    needs: backend
+    # Activates once a Pact Broker is configured (PACT_BROKER_BASE_URL repository variable
+    # and PACT_BROKER_TOKEN secret). Without a broker the file-based provider verification in
+    # the backend job remains the merge gate.
+    if: ${{ vars.PACT_BROKER_BASE_URL != '' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Download consumer Pact
+        uses: actions/download-artifact@v6
+        with:
+          name: pact
+          path: frontend/pacts
+      - name: Publish consumer Pact
+        env:
+          PACT_BROKER_BASE_URL: ${{ vars.PACT_BROKER_BASE_URL }}
+          PACT_BROKER_TOKEN: ${{ secrets.PACT_BROKER_TOKEN }}
+        run: |
+          npx --yes @pact-foundation/pact-cli@latest \
+            broker publish frontend/pacts \
+            --consumer-app-version "${GITHUB_SHA}" --branch "${GITHUB_REF_NAME}"
+      - name: can-i-deploy
+        env:
+          PACT_BROKER_BASE_URL: ${{ vars.PACT_BROKER_BASE_URL }}
+          PACT_BROKER_TOKEN: ${{ secrets.PACT_BROKER_TOKEN }}
+        run: |
+          npx --yes @pact-foundation/pact-cli@latest \
+            broker can-i-deploy \
+            --pacticipant awap-frontend --version "${GITHUB_SHA}" --to-environment production

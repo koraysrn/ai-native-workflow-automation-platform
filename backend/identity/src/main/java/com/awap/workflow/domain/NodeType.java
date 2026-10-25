@@ -9,5 +9,6 @@ public enum NodeType {
   TASK,
   DELAY,
   PARALLEL,
-  MERGE
+  MERGE,
+  AI
 }
