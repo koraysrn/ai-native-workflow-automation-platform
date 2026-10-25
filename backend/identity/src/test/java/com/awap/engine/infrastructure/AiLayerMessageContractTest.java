@@ -20,8 +20,8 @@ import org.junit.jupiter.api.extension.ExtendWith;
 /**
  * Verifies the AI-layer message pact with Pact's real message verifier. The consumer contract is a
  * Pact V3 message spec JSON ({@code ai-pacts/awap-ai-layer-awap-identity.json}); this provider test
- * serializes the actual {@link WorkflowInstanceStateEvent} producer and lets Pact compare it against
- * the shape the Python AI layer expects.
+ * serializes the actual {@link WorkflowInstanceStateEvent} producer and lets Pact compare it
+ * against the shape the Python AI layer expects.
  */
 @Provider("awap-identity")
 @PactFolder("src/test/resources/ai-pacts")

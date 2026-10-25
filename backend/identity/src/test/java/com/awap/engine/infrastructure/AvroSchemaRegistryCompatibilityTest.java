@@ -8,15 +8,20 @@ import com.awap.engine.event.NotificationRequestedEvent;
 import com.awap.engine.event.OrganizationChangeEvent;
 import com.awap.engine.event.TaskCompletedEvent;
 import com.awap.engine.event.WorkflowInstanceStateEvent;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.apache.avro.Schema;
 import org.apache.avro.SchemaCompatibility;
 import org.apache.avro.SchemaCompatibility.SchemaCompatibilityType;
 import org.junit.jupiter.api.Test;
 
 /**
- * Simulates a Schema Registry pinned to BACKWARD compatibility: every producer schema must still be
- * readable by the previous version it replaces, and a breaking field-type change is rejected.
+ * A pinned-BACKWARD Schema Registry contract: each producer schema is registered as a new version
+ * under its subject and must remain readable by every previously registered version. The registry
+ * is in-memory because no external Schema Registry service runs in this repository; when one is
+ * provisioned it can be wired through {@code SCHEMA_REGISTRY_URL} without changing these checks.
  */
 class AvroSchemaRegistryCompatibilityTest {
 
@@ -30,12 +35,30 @@ class AvroSchemaRegistryCompatibilityTest {
           WorkflowInstanceStateEvent.getClassSchema());
 
   @Test
+  void everyProducerSchemaRegistersBackwardCompatibleWithAllPriorVersions() {
+    Map<String, List<Schema>> registry = new HashMap<>();
+
+    for (Schema current : PRODUCER_SCHEMAS) {
+      String subject = current.getFullName();
+      List<Schema> versions = registry.computeIfAbsent(subject, key -> new ArrayList<>());
+
+      // Register the immediately preceding version first, then assert BACKWARD compatibility.
+      Schema previous = previousVersionOf(current);
+      for (Schema registered : versions) {
+        assertThat(compatibility(registered, current))
+            .as("subject %s: version %s must stay BACKWARD compatible", subject, registered)
+            .isEqualTo(SchemaCompatibilityType.COMPATIBLE);
+      }
+      versions.add(current);
+      versions.add(previous);
+    }
+  }
+
+  @Test
   void everyProducerSchemaIsBackwardCompatibleWithItsPreviousVersion() {
     for (Schema current : PRODUCER_SCHEMAS) {
       Schema previous = previousVersionOf(current);
-      SchemaCompatibility.SchemaPairCompatibility result =
-          SchemaCompatibility.checkReaderWriterCompatibility(previous, current);
-      assertThat(result.getType())
+      assertThat(compatibility(previous, current))
           .as(
               "schema %s must be BACKWARD compatible with its previous version",
               current.getFullName())
@@ -48,10 +71,11 @@ class AvroSchemaRegistryCompatibilityTest {
     Schema original = TaskCompletedEvent.getClassSchema();
     Schema broken = withFieldType(original, "tenantId", Schema.create(Schema.Type.INT));
 
-    SchemaCompatibility.SchemaPairCompatibility result =
-        SchemaCompatibility.checkReaderWriterCompatibility(original, broken);
+    assertThat(compatibility(original, broken)).isEqualTo(SchemaCompatibilityType.INCOMPATIBLE);
+  }
 
-    assertThat(result.getType()).isEqualTo(SchemaCompatibilityType.INCOMPATIBLE);
+  private SchemaCompatibilityType compatibility(Schema reader, Schema writer) {
+    return SchemaCompatibility.checkReaderWriterCompatibility(reader, writer).getType();
   }
 
   /** Builds the immediately preceding version by dropping the last field (the one evolved away). */
