@@ -4,15 +4,19 @@ function apiBase(): string {
 
 export interface TaskDto {
   id: string;
+  tenantId: string;
+  workflowInstanceId: string | null;
   title: string;
   description: string | null;
   assigneeId: string | null;
   status: string;
+  version: number;
   decisionComment: string | null;
 }
 
 export interface WorkflowDefinitionDto {
   id: string;
+  tenantId: string;
   name: string;
   description: string | null;
   status: string;
@@ -21,15 +25,22 @@ export interface WorkflowDefinitionDto {
 
 export interface WorkflowInstanceDto {
   id: string;
+  tenantId: string;
   workflowDefinitionId: string;
+  workflowVersion: number;
   state: string;
+  contextJson: string;
+  idempotencyKey: string | null;
   createdAt: string;
 }
 
 export interface FormDefinitionDto {
   id: string;
+  tenantId: string;
   name: string;
+  schemaJson: string;
   version: number;
+  createdAt: string;
 }
 
 export interface HealthDto {

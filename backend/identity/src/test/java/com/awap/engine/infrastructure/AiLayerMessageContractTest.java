@@ -1,58 +1,63 @@
 package com.awap.engine.infrastructure;
 
-import static org.assertj.core.api.Assertions.assertThat;
-
+import au.com.dius.pact.provider.PactVerifyProvider;
+import au.com.dius.pact.provider.junit5.MessageTestTarget;
+import au.com.dius.pact.provider.junit5.PactVerificationContext;
+import au.com.dius.pact.provider.junit5.PactVerificationInvocationContextProvider;
+import au.com.dius.pact.provider.junitsupport.Provider;
+import au.com.dius.pact.provider.junitsupport.State;
+import au.com.dius.pact.provider.junitsupport.loader.PactFolder;
 import com.awap.engine.event.WorkflowInstanceStateEvent;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.InputStream;
-import org.apache.avro.Schema;
-import org.junit.jupiter.api.Test;
+import java.io.ByteArrayOutputStream;
+import java.nio.charset.StandardCharsets;
+import org.apache.avro.io.Encoder;
+import org.apache.avro.io.EncoderFactory;
+import org.apache.avro.specific.SpecificDatumWriter;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.TestTemplate;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 /**
- * Verifies the AI-layer consumer message contract against the backend's Avro producer schema.
- *
- * <p>The AI layer is a Python service and has no Pact tooling, so the contract is authored as a
- * Pact V3 message spec JSON consumed by both sides (see {@code
- * ai-pacts/awap-ai-layer-awap-identity.json}). This test proves every field the AI layer expects is
- * present, correctly typed and serializable by the generated {@link WorkflowInstanceStateEvent}
- * producer.
+ * Verifies the AI-layer message pact with Pact's real message verifier. The consumer contract is a
+ * Pact V3 message spec JSON ({@code ai-pacts/awap-ai-layer-awap-identity.json}); this provider test
+ * serializes the actual {@link WorkflowInstanceStateEvent} producer and lets Pact compare it against
+ * the shape the Python AI layer expects.
  */
+@Provider("awap-identity")
+@PactFolder("src/test/resources/ai-pacts")
 class AiLayerMessageContractTest {
 
-  private static final String PACT_RESOURCE = "ai-pacts/awap-ai-layer-awap-identity.json";
-
-  @Test
-  void workflowInstanceStateEventMatchesAiLayerMessageContract() throws Exception {
-    ObjectMapper mapper = new ObjectMapper();
-    try (InputStream in = getClass().getClassLoader().getResourceAsStream(PACT_RESOURCE)) {
-      assertThat(in).as("AI-layer message pact must be on the test classpath").isNotNull();
-      JsonNode pact = mapper.readTree(in);
-      JsonNode contents = pact.path("messages").get(0).path("contents");
-      assertThat(contents.isObject()).as("message contents must be an object").isTrue();
-
-      Schema schema = WorkflowInstanceStateEvent.getClassSchema();
-
-      contents
-          .fieldNames()
-          .forEachRemaining(
-              field -> {
-                Schema.Field schemaField = schema.getField(field);
-                assertThat(schemaField)
-                    .as("field '%s' must exist in the producer schema", field)
-                    .isNotNull();
-                assertThat(schemaField.schema().getType())
-                    .as("field '%s' must be a string in the producer schema", field)
-                    .isEqualTo(Schema.Type.STRING);
-              });
-    }
+  @BeforeEach
+  void setUp(PactVerificationContext context) {
+    context.setTarget(new MessageTestTarget());
   }
 
-  @Test
-  void producerSchemaCarriesEveryExpectedField() {
-    Schema schema = WorkflowInstanceStateEvent.getClassSchema();
-    assertThat(schema.getField("tenantId")).isNotNull();
-    assertThat(schema.getField("workflowInstanceId")).isNotNull();
-    assertThat(schema.getField("state")).isNotNull();
+  @TestTemplate
+  @ExtendWith(PactVerificationInvocationContextProvider.class)
+  void verifyMessageContract(PactVerificationContext context) {
+    context.verifyInteraction();
+  }
+
+  @State("a workflow instance state change is emitted")
+  void workflowInstanceStateChangeEmitted() {
+    // No-op: the message is produced deterministically by the provider method below.
+  }
+
+  @PactVerifyProvider("a workflow instance state change event")
+  String workflowInstanceStateChangeEvent() throws Exception {
+    WorkflowInstanceStateEvent event =
+        WorkflowInstanceStateEvent.newBuilder()
+            .setTenantId("00000000-0000-0000-0000-000000000001")
+            .setWorkflowInstanceId("00000000-0000-0000-0000-000000000030")
+            .setState("RUNNING")
+            .build();
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    Encoder encoder =
+        EncoderFactory.get().jsonEncoder(WorkflowInstanceStateEvent.getClassSchema(), out);
+    SpecificDatumWriter<WorkflowInstanceStateEvent> writer =
+        new SpecificDatumWriter<>(WorkflowInstanceStateEvent.class);
+    writer.write(event, encoder);
+    encoder.flush();
+    return out.toString(StandardCharsets.UTF_8);
   }
 }
