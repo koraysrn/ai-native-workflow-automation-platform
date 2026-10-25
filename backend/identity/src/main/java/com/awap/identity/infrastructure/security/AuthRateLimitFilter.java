@@ -21,12 +21,12 @@ import org.springframework.web.filter.OncePerRequestFilter;
 /**
  * Rate limits auth endpoints (login/register/refresh) per client IP: 10 requests per 60s window.
  *
- * <p>When {@code awap.auth-rate-limit.redis} is enabled the counter lives in Redis behind an
- * atomic {@code INCR + EXPIRE} Lua script, so brute-force protection is correct across multiple
- * backend replicas. When Redis is unreachable the filter fails <b>closed</b> (503) for auth
- * endpoints rather than silently allowing brute-force attempts; this trade-off is documented in
- * {@code docs/operations-runbook.md}. When Redis is disabled it falls back to a per-instance
- * Caffeine counter for local development.
+ * <p>When {@code awap.auth-rate-limit.redis} is enabled the counter lives in Redis behind an atomic
+ * {@code INCR + EXPIRE} Lua script, so brute-force protection is correct across multiple backend
+ * replicas. When Redis is unreachable the filter fails <b>closed</b> (503) for auth endpoints
+ * rather than silently allowing brute-force attempts; this trade-off is documented in {@code
+ * docs/operations-runbook.md}. When Redis is disabled it falls back to a per-instance Caffeine
+ * counter for local development.
  */
 @Component
 public class AuthRateLimitFilter extends OncePerRequestFilter {
@@ -44,7 +44,10 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
   private final StringRedisTemplate redisTemplate;
   private final DefaultRedisScript<Long> script = new DefaultRedisScript<>(SCRIPT, Long.class);
   private final Cache<String, AtomicInteger> local =
-      Caffeine.newBuilder().expireAfterWrite(Duration.ofSeconds(WINDOW_SECONDS)).maximumSize(10_000).build();
+      Caffeine.newBuilder()
+          .expireAfterWrite(Duration.ofSeconds(WINDOW_SECONDS))
+          .maximumSize(10_000)
+          .build();
 
   public AuthRateLimitFilter(
       @Value("${awap.auth-rate-limit.redis:false}") boolean redisEnabled,
