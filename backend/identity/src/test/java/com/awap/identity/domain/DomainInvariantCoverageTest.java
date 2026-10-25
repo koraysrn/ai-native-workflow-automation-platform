@@ -18,8 +18,8 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 /**
- * Exercises every getter, constructor branch and guard of the mutation-tested domain classes so
- * PIT cannot leave unmeasured code paths (issue #85 completeness gate).
+ * Exercises every getter, constructor branch and guard of the mutation-tested domain classes so PIT
+ * cannot leave unmeasured code paths (issue #85 completeness gate).
  */
 class DomainInvariantCoverageTest {
 
