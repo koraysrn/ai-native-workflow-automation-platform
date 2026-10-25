@@ -100,6 +100,17 @@ export async function fetchTenants(): Promise<TenantMembershipDto[]> {
   return (await response.json()) as TenantMembershipDto[];
 }
 
+export interface TenantDto {
+  id: string;
+  slug: string;
+  name: string;
+  plan: string;
+  maxUsers: number;
+  maxWorkflows: number;
+  maxAiCallsPerMonth: number;
+  active: boolean;
+}
+
 export interface RegisterTenantPayload {
   slug: string;
   name: string;
@@ -108,7 +119,7 @@ export interface RegisterTenantPayload {
   adminFullName: string;
 }
 
-export async function registerTenant(payload: RegisterTenantPayload): Promise<void> {
+export async function registerTenant(payload: RegisterTenantPayload): Promise<TenantDto> {
   const started = performance.now();
   const response = await fetch(`${apiBase()}/api/v1/tenants`, {
     method: "POST",
@@ -120,6 +131,7 @@ export async function registerTenant(payload: RegisterTenantPayload): Promise<vo
   if (!response.ok) {
     throw new Error(await readErrorDetail(response, "Registration failed"));
   }
+  return (await response.json()) as TenantDto;
 }
 
 /** Extracts the RFC 7807 `detail` (or `title`) from a failed response, if present. */
@@ -138,11 +150,17 @@ async function readErrorDetail(response: Response, fallback: string): Promise<st
   return `${fallback} (HTTP ${response.status})`;
 }
 
+export interface TokenDto {
+  accessToken: string | null;
+  refreshToken: string | null;
+  expiresIn: number;
+}
+
 export async function login(
   tenantSlug: string,
   email: string,
   password: string,
-): Promise<void> {
+): Promise<TokenDto> {
   const response = await fetch(`${apiBase()}/api/v1/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -152,6 +170,7 @@ export async function login(
   if (!response.ok) {
     throw new Error("Login failed");
   }
+  return (await response.json()) as TokenDto;
 }
 
 async function refreshAccessToken(): Promise<boolean> {

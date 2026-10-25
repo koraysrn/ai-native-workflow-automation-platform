@@ -4,6 +4,175 @@
   },
   "interactions": [
     {
+      "description": "a current user request",
+      "providerStates": [
+        {
+          "name": "an authenticated tenant admin exists"
+        }
+      ],
+      "request": {
+        "headers": {
+          "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDIiLCJ0ZW5hbnRJZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMSIsImVtYWlsIjoiYWRhQGFjbWUuY29tIiwicm9sZSI6IlRFTkFOVF9BRE1JTiIsImlhdCI6MTc5MjkyODE2MSwiZXhwIjoxODI0NDY0MTYxfQ.BUPQQXT8T2606KY2Um54tBDpWGd_Y6fqp5vg8UIAhMo"
+        },
+        "method": "GET",
+        "path": "/api/v1/auth/me"
+      },
+      "response": {
+        "body": {
+          "email": "ada@acme.com",
+          "fullName": "Ada Lovelace",
+          "id": "00000000-0000-0000-0000-000000000002",
+          "role": "TENANT_ADMIN",
+          "tenantId": "00000000-0000-0000-0000-000000000001"
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "body": {
+            "$.email": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.fullName": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.id": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                }
+              ]
+            },
+            "$.role": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.tenantId": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "a form definition list request",
+      "providerStates": [
+        {
+          "name": "an authenticated tenant admin exists"
+        }
+      ],
+      "request": {
+        "headers": {
+          "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDIiLCJ0ZW5hbnRJZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMSIsImVtYWlsIjoiYWRhQGFjbWUuY29tIiwicm9sZSI6IlRFTkFOVF9BRE1JTiIsImlhdCI6MTc5MjkyODE2MSwiZXhwIjoxODI0NDY0MTYxfQ.BUPQQXT8T2606KY2Um54tBDpWGd_Y6fqp5vg8UIAhMo"
+        },
+        "method": "GET",
+        "path": "/api/v1/forms"
+      },
+      "response": {
+        "body": [
+          {
+            "createdAt": "2026-01-01T00:00:00.000Z",
+            "id": "00000000-0000-0000-0000-000000000040",
+            "name": "Onboarding form",
+            "schemaJson": "{\"fields\":[]}",
+            "tenantId": "00000000-0000-0000-0000-000000000001",
+            "version": 1
+          }
+        ],
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "body": {
+            "$": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type",
+                  "min": 1
+                }
+              ]
+            },
+            "$[*].createdAt": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
+                }
+              ]
+            },
+            "$[*].id": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                }
+              ]
+            },
+            "$[*].name": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$[*].schemaJson": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$[*].tenantId": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                }
+              ]
+            },
+            "$[*].version": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "integer"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
       "description": "a health check request",
       "request": {
         "method": "GET",
@@ -15,6 +184,501 @@
         },
         "headers": {
           "Content-Type": "application/vnd.spring-boot.actuator.v3+json"
+        },
+        "matchingRules": {
+          "body": {
+            "$.status": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "a login request",
+      "providerStates": [
+        {
+          "name": "a tenant and an admin user exist"
+        }
+      ],
+      "request": {
+        "body": {
+          "email": "ada@acme.com",
+          "password": "s3cret",
+          "tenantSlug": "acme"
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "method": "POST",
+        "path": "/api/v1/auth/login"
+      },
+      "response": {
+        "body": {
+          "accessToken": null,
+          "expiresIn": 900,
+          "refreshToken": null
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "body": {
+            "$.expiresIn": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "integer"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "a task list request",
+      "providerStates": [
+        {
+          "name": "an authenticated tenant admin exists"
+        }
+      ],
+      "request": {
+        "headers": {
+          "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDIiLCJ0ZW5hbnRJZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMSIsImVtYWlsIjoiYWRhQGFjbWUuY29tIiwicm9sZSI6IlRFTkFOVF9BRE1JTiIsImlhdCI6MTc5MjkyODE2MSwiZXhwIjoxODI0NDY0MTYxfQ.BUPQQXT8T2606KY2Um54tBDpWGd_Y6fqp5vg8UIAhMo"
+        },
+        "method": "GET",
+        "path": "/api/v1/tasks"
+      },
+      "response": {
+        "body": [
+          {
+            "assigneeId": null,
+            "decisionComment": null,
+            "description": null,
+            "id": "00000000-0000-0000-0000-000000000010",
+            "status": "OPEN",
+            "tenantId": "00000000-0000-0000-0000-000000000001",
+            "title": "Review contract",
+            "version": 0,
+            "workflowInstanceId": null
+          }
+        ],
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "body": {
+            "$": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type",
+                  "min": 1
+                }
+              ]
+            },
+            "$[*].id": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                }
+              ]
+            },
+            "$[*].status": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$[*].tenantId": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                }
+              ]
+            },
+            "$[*].title": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$[*].version": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "integer"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "a tenant membership request",
+      "providerStates": [
+        {
+          "name": "an authenticated tenant admin exists"
+        }
+      ],
+      "request": {
+        "headers": {
+          "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDIiLCJ0ZW5hbnRJZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMSIsImVtYWlsIjoiYWRhQGFjbWUuY29tIiwicm9sZSI6IlRFTkFOVF9BRE1JTiIsImlhdCI6MTc5MjkyODE2MSwiZXhwIjoxODI0NDY0MTYxfQ.BUPQQXT8T2606KY2Um54tBDpWGd_Y6fqp5vg8UIAhMo"
+        },
+        "method": "GET",
+        "path": "/api/v1/auth/tenants"
+      },
+      "response": {
+        "body": [
+          {
+            "role": "TENANT_ADMIN",
+            "tenantId": "00000000-0000-0000-0000-000000000001"
+          }
+        ],
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "body": {
+            "$": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type",
+                  "min": 1
+                }
+              ]
+            },
+            "$[*].role": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$[*].tenantId": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "a tenant registration request",
+      "request": {
+        "body": {
+          "adminEmail": "admin@acme-corp.com",
+          "adminFullName": "Ada Lovelace",
+          "adminPassword": "s3cret-pass",
+          "name": "Acme Corporation",
+          "slug": "acme-corp"
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "method": "POST",
+        "path": "/api/v1/tenants"
+      },
+      "response": {
+        "body": {
+          "active": true,
+          "id": "00000000-0000-0000-0000-000000000000",
+          "maxAiCallsPerMonth": 1000,
+          "maxUsers": 100,
+          "maxWorkflows": 50,
+          "name": "Acme Corporation",
+          "plan": "FREE",
+          "slug": "acme-corp"
+        },
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "body": {
+            "$.active": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.id": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                }
+              ]
+            },
+            "$.maxAiCallsPerMonth": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "integer"
+                }
+              ]
+            },
+            "$.maxUsers": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "integer"
+                }
+              ]
+            },
+            "$.maxWorkflows": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "integer"
+                }
+              ]
+            },
+            "$.name": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.plan": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$.slug": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            }
+          }
+        },
+        "status": 201
+      }
+    },
+    {
+      "description": "a workflow definition list request",
+      "providerStates": [
+        {
+          "name": "an authenticated tenant admin exists"
+        }
+      ],
+      "request": {
+        "headers": {
+          "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDIiLCJ0ZW5hbnRJZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMSIsImVtYWlsIjoiYWRhQGFjbWUuY29tIiwicm9sZSI6IlRFTkFOVF9BRE1JTiIsImlhdCI6MTc5MjkyODE2MSwiZXhwIjoxODI0NDY0MTYxfQ.BUPQQXT8T2606KY2Um54tBDpWGd_Y6fqp5vg8UIAhMo"
+        },
+        "method": "GET",
+        "path": "/api/v1/workflow-definitions"
+      },
+      "response": {
+        "body": [
+          {
+            "currentVersion": 0,
+            "description": null,
+            "id": "00000000-0000-0000-0000-000000000020",
+            "name": "Approval flow",
+            "status": "DRAFT",
+            "tenantId": "00000000-0000-0000-0000-000000000001"
+          }
+        ],
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "body": {
+            "$": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type",
+                  "min": 1
+                }
+              ]
+            },
+            "$[*].currentVersion": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "integer"
+                }
+              ]
+            },
+            "$[*].id": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                }
+              ]
+            },
+            "$[*].name": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$[*].status": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$[*].tenantId": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                }
+              ]
+            }
+          }
+        },
+        "status": 200
+      }
+    },
+    {
+      "description": "a workflow instance list request",
+      "providerStates": [
+        {
+          "name": "an authenticated tenant admin exists"
+        }
+      ],
+      "request": {
+        "headers": {
+          "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIwMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDIiLCJ0ZW5hbnRJZCI6IjAwMDAwMDAwLTAwMDAtMDAwMC0wMDAwLTAwMDAwMDAwMDAwMSIsImVtYWlsIjoiYWRhQGFjbWUuY29tIiwicm9sZSI6IlRFTkFOVF9BRE1JTiIsImlhdCI6MTc5MjkyODE2MSwiZXhwIjoxODI0NDY0MTYxfQ.BUPQQXT8T2606KY2Um54tBDpWGd_Y6fqp5vg8UIAhMo"
+        },
+        "method": "GET",
+        "path": "/api/v1/workflow-instances"
+      },
+      "response": {
+        "body": [
+          {
+            "contextJson": "{}",
+            "createdAt": "2026-01-01T00:00:00.000Z",
+            "id": "00000000-0000-0000-0000-000000000030",
+            "idempotencyKey": null,
+            "state": "RUNNING",
+            "tenantId": "00000000-0000-0000-0000-000000000001",
+            "workflowDefinitionId": "00000000-0000-0000-0000-000000000020",
+            "workflowVersion": 1
+          }
+        ],
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "matchingRules": {
+          "body": {
+            "$": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type",
+                  "min": 1
+                }
+              ]
+            },
+            "$[*].contextJson": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$[*].createdAt": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?Z$"
+                }
+              ]
+            },
+            "$[*].id": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                }
+              ]
+            },
+            "$[*].state": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "type"
+                }
+              ]
+            },
+            "$[*].tenantId": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                }
+              ]
+            },
+            "$[*].workflowDefinitionId": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "regex",
+                  "regex": "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+                }
+              ]
+            },
+            "$[*].workflowVersion": {
+              "combine": "AND",
+              "matchers": [
+                {
+                  "match": "integer"
+                }
+              ]
+            }
+          }
         },
         "status": 200
       }
