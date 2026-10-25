@@ -72,11 +72,15 @@ test.describe("login", () => {
 
   test("login -> tenant selection -> dashboard persists state end-to-end", async ({ page }) => {
     await mockLogin(page);
+    // Return two tenants so the picker is shown instead of auto-selecting the single one.
     await page.route(`${API}auth/tenants`, (route) =>
       route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([{ tenantId: "tenant-a", role: "TENANT_ADMIN" }]),
+        body: JSON.stringify([
+          { tenantId: "tenant-a", role: "TENANT_ADMIN" },
+          { tenantId: "tenant-b", role: "EMPLOYEE" },
+        ]),
       }),
     );
     await mockDashboardReads(page);
@@ -124,7 +128,8 @@ test.describe("tenant isolation", () => {
     await page.goto("/dashboard");
 
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
-    expect(seenHeaders).toContain("tenant-b");
+    // The tasks request is issued asynchronously by React Query, so poll until it lands.
+    await expect.poll(() => seenHeaders).toContain("tenant-b");
   });
 });
 
