@@ -36,3 +36,5 @@ jobs:
         with:
           target: http://localhost:3000
           cmd_options: "-a"
+          # The job has no issue-write permission; report findings in the log only.
+          allow_issue_writing: false
