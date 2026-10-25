@@ -39,7 +39,8 @@ class TenantIsolationITest {
         .load()
         .migrate();
 
-    try (Connection admin = adminConnection(); Statement stmt = admin.createStatement()) {
+    try (Connection admin = adminConnection();
+        Statement stmt = admin.createStatement()) {
       stmt.executeUpdate(tenantInsert(TENANT_A, "tenant-a"));
       stmt.executeUpdate(tenantInsert(TENANT_B, "tenant-b"));
       stmt.executeUpdate(userInsert(TENANT_A, "a@example.com"));
@@ -51,7 +52,8 @@ class TenantIsolationITest {
 
   @Test
   void rlsScopesSelectToConfiguredTenant() throws Exception {
-    try (Connection app = appConnection(); Statement stmt = app.createStatement()) {
+    try (Connection app = appConnection();
+        Statement stmt = app.createStatement()) {
       stmt.execute("SET awap.tenant_id = '" + TENANT_A + "'");
       try (ResultSet rs = stmt.executeQuery("SELECT email FROM users ORDER BY email")) {
         assertThat(emails(rs)).containsExactly("a@example.com");
@@ -63,7 +65,8 @@ class TenantIsolationITest {
   void unsetTenantYieldsZeroRows() throws Exception {
     // Fresh session with awap.tenant_id never set: current_setting(..., true)
     // returns NULL, so the V13 predicate evaluates to null and filters every row.
-    try (Connection app = appConnection(); Statement stmt = app.createStatement()) {
+    try (Connection app = appConnection();
+        Statement stmt = app.createStatement()) {
       try (ResultSet rs = stmt.executeQuery("SELECT count(*) FROM users")) {
         rs.next();
         assertThat(rs.getLong(1)).isZero();
@@ -73,7 +76,8 @@ class TenantIsolationITest {
 
   @Test
   void wrongTenantYieldsZeroRows() throws Exception {
-    try (Connection app = appConnection(); Statement stmt = app.createStatement()) {
+    try (Connection app = appConnection();
+        Statement stmt = app.createStatement()) {
       stmt.execute("SET awap.tenant_id = '" + UUID.randomUUID() + "'");
       try (ResultSet rs = stmt.executeQuery("SELECT count(*) FROM users")) {
         rs.next();
@@ -84,7 +88,8 @@ class TenantIsolationITest {
 
   @Test
   void crossTenantUpdateAffectsZeroRows() throws Exception {
-    try (Connection app = appConnection(); Statement stmt = app.createStatement()) {
+    try (Connection app = appConnection();
+        Statement stmt = app.createStatement()) {
       stmt.execute("SET awap.tenant_id = '" + TENANT_A + "'");
       int updated =
           stmt.executeUpdate(
@@ -113,14 +118,25 @@ class TenantIsolationITest {
   private static String tenantInsert(UUID id, String slug) {
     return "INSERT INTO tenants (id, slug, name, plan, max_users, max_workflows,"
         + " max_ai_calls_per_month, active, created_at, updated_at, deleted)"
-        + " VALUES ('" + id + "', '" + slug + "', '" + slug + "', 'FREE', 10, 10, 1000,"
+        + " VALUES ('"
+        + id
+        + "', '"
+        + slug
+        + "', '"
+        + slug
+        + "', 'FREE', 10, 10, 1000,"
         + " true, now(), now(), false)";
   }
 
   private static String userInsert(UUID tenantId, String email) {
     return "INSERT INTO users (id, tenant_id, email, password_hash, full_name, role,"
         + " created_at, updated_at, deleted)"
-        + " VALUES ('" + UUID.randomUUID() + "', '" + tenantId + "', '" + email
+        + " VALUES ('"
+        + UUID.randomUUID()
+        + "', '"
+        + tenantId
+        + "', '"
+        + email
         + "', 'x', 'User', 'MEMBER', now(), now(), false)";
   }
 }
