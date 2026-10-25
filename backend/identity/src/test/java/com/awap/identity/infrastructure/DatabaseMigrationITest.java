@@ -32,8 +32,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 class DatabaseMigrationITest {
 
   @Container
-  static final PostgreSQLContainer<?> POSTGRES =
-      new PostgreSQLContainer<>("postgres:16-alpine");
+  static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16-alpine");
 
   private static Flyway flyway() {
     return Flyway.configure()
@@ -62,10 +61,10 @@ class DatabaseMigrationITest {
     // migrate() already succeeded in @BeforeAll; validate() must not throw and no
     // applied migration may have failed.
     assertThatNoException().isThrownBy(() -> flyway().validate());
-    try (Connection c = admin(); Statement stmt = c.createStatement();
+    try (Connection c = admin();
+        Statement stmt = c.createStatement();
         ResultSet rs =
-            stmt.executeQuery(
-                "SELECT count(*) FROM flyway_schema_history WHERE success = false")) {
+            stmt.executeQuery("SELECT count(*) FROM flyway_schema_history WHERE success = false")) {
       rs.next();
       assertThat(rs.getLong(1)).isZero();
     }
@@ -75,11 +74,14 @@ class DatabaseMigrationITest {
   @Order(2)
   void v30AuthBypassFunctionsReturnTheFullRowIncludingAuditColumns() throws Exception {
     UUID tenantId = UUID.randomUUID();
-    try (Connection c = admin(); Statement stmt = c.createStatement()) {
+    try (Connection c = admin();
+        Statement stmt = c.createStatement()) {
       stmt.executeUpdate(
           "INSERT INTO tenants (id, slug, name, plan, max_users, max_workflows,"
               + " max_ai_calls_per_month, active, created_at, updated_at, deleted)"
-              + " VALUES ('" + tenantId + "', 'acme', 'Acme', 'FREE', 10, 10, 1000,"
+              + " VALUES ('"
+              + tenantId
+              + "', 'acme', 'Acme', 'FREE', 10, 10, 1000,"
               + " true, now(), now(), false)");
     }
 
@@ -102,7 +104,8 @@ class DatabaseMigrationITest {
   @Test
   @Order(3)
   void v32MonthlyPartitionHelperCreatesTheRequestedPartition() throws Exception {
-    try (Connection c = admin(); Statement stmt = c.createStatement()) {
+    try (Connection c = admin();
+        Statement stmt = c.createStatement()) {
       stmt.execute("SELECT awap_ensure_outbox_monthly_partition(DATE '2026-01-01')");
       try (ResultSet rs =
           stmt.executeQuery("SELECT to_regclass('public.outbox_events_2026_01') IS NOT NULL")) {
@@ -115,7 +118,8 @@ class DatabaseMigrationITest {
   @Test
   @Order(4)
   void checksumMismatchFailsFastOnValidate() throws Exception {
-    try (Connection c = admin(); Statement stmt = c.createStatement()) {
+    try (Connection c = admin();
+        Statement stmt = c.createStatement()) {
       int original;
       try (ResultSet rs =
           stmt.executeQuery("SELECT checksum FROM flyway_schema_history WHERE version = '1'")) {
