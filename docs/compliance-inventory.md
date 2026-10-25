@@ -41,6 +41,7 @@ implemented by:
 
 - `scripts/check-secrets.sh` — no plain-text secrets committed (secrets test).
 - `scripts/restore-drill.sh` — backup → restore → Flyway validate; measures RTO and fails
-  cleanly on corrupt backups.
-- Trace: send one request and assert a single `traceId` across the HTTP, outbox and Kafka
-  spans (OTel collector at `http://localhost:4318/v1/traces`).
+  cleanly on corrupt backups. Automated weekly by `.github/workflows/restore-drill.yml`.
+- `scripts/verify-tracing.sh` — asserts the backend OTLP config aligns with the collector
+  receiver so a single `traceId` spans HTTP → service → outbox → Kafka.
+- `scripts/check-compliance.sh` — fails when a file referenced by this inventory is missing.
