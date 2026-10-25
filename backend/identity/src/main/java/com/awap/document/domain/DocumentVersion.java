@@ -36,8 +36,7 @@ public class DocumentVersion {
   @Column(nullable = false)
   private long size;
 
-  @Column
-  private String format;
+  @Column private String format;
 
   @Enumerated(EnumType.STRING)
   @Column(nullable = false)

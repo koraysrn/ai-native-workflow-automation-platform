@@ -35,12 +35,10 @@ public class NotificationRequestedEventListener {
       JsonNode event = objectMapper.readTree(payload);
       UUID tenantId = UUID.fromString(event.path("tenantId").asText());
       String recipient = event.path("recipient").asText();
-      NotificationChannel channel =
-          NotificationChannel.valueOf(event.path("channel").asText());
+      NotificationChannel channel = NotificationChannel.valueOf(event.path("channel").asText());
       String templateKey = event.path("templateKey").asText();
-      String variablesJson = event.path("variablesJson").isNull()
-          ? null
-          : event.path("variablesJson").asText();
+      String variablesJson =
+          event.path("variablesJson").isNull() ? null : event.path("variablesJson").asText();
 
       notificationService.send(tenantId, recipient, channel, templateKey, variablesJson);
     } catch (Exception ex) {

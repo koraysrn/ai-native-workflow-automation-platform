@@ -23,6 +23,9 @@ public class EmailChannelAdapter implements NotificationChannelAdapter {
   @Override
   public void dispatch(NotificationMessage message) {
     log.info(
-        "EMAIL -> {} subject='{}' bytes={}", message.recipient(), message.subject(), message.body().length());
+        "EMAIL -> {} subject='{}' bytes={}",
+        message.recipient(),
+        message.subject(),
+        message.body().length());
   }
 }

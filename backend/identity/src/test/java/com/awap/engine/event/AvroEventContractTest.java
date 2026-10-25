@@ -11,9 +11,9 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /**
- * Contract tests for the producer Avro schemas (issue #97). Asserts every field's presence and
- * type so a rename or type change in the producer schema breaks the build before the Schema
- * Registry compatibility gate runs.
+ * Contract tests for the producer Avro schemas (issue #97). Asserts every field's presence and type
+ * so a rename or type change in the producer schema breaks the build before the Schema Registry
+ * compatibility gate runs.
  */
 class AvroEventContractTest {
 
@@ -64,9 +64,10 @@ class AvroEventContractTest {
     JsonNode root = objectMapper.readTree(Files.readString(schema));
     Map<String, String> fields = new HashMap<>();
     for (JsonNode field : root.path("fields")) {
-      String type = field.path("type").isArray()
-          ? field.path("type").path(0).asText() + "|" + field.path("type").path(1).asText()
-          : field.path("type").asText();
+      String type =
+          field.path("type").isArray()
+              ? field.path("type").path(0).asText() + "|" + field.path("type").path(1).asText()
+              : field.path("type").asText();
       fields.put(field.path("name").asText(), type);
     }
     return fields;

@@ -33,7 +33,12 @@ class AnalyticsServiceTest {
     assertThat(breaches).isEqualTo(1.0);
 
     service.record(tenant, AnalyticsEventType.TASK_COMPLETED, instance, 100L);
-    assertThat(meterRegistry.get("awap.sla.breaches").tag("tenant", tenant.toString()).counter().count())
+    assertThat(
+            meterRegistry
+                .get("awap.sla.breaches")
+                .tag("tenant", tenant.toString())
+                .counter()
+                .count())
         .isEqualTo(1.0);
   }
 }

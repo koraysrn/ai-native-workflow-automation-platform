@@ -37,10 +37,7 @@ public class AiAgentService {
   }
 
   AiAgentService(
-      AiBackendClient backend,
-      long timeoutMs,
-      int maxInputChars,
-      ExecutorService executor) {
+      AiBackendClient backend, long timeoutMs, int maxInputChars, ExecutorService executor) {
     this.backend = backend;
     this.timeoutMs = timeoutMs;
     this.maxInputChars = maxInputChars;

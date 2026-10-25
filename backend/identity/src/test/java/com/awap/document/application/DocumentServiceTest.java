@@ -40,8 +40,7 @@ class DocumentServiceTest {
     DocumentVersion previous = new DocumentVersion(UUID.randomUUID(), file, 5, "b", "k", 1, "txt");
     when(repository.findTopByFileIdOrderByVersionDesc(file)).thenReturn(Optional.of(previous));
 
-    DocumentVersion version =
-        service.createVersion(UUID.randomUUID(), file, 10L, "pdf", "k2");
+    DocumentVersion version = service.createVersion(UUID.randomUUID(), file, 10L, "pdf", "k2");
 
     assertThat(version.getVersion()).isEqualTo(6);
   }

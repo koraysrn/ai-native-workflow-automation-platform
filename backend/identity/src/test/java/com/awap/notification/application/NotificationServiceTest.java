@@ -5,7 +5,6 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -27,8 +26,7 @@ class NotificationServiceTest {
     CountingAdapter adapter = new CountingAdapter(0);
     NotificationService service = new NotificationService(List.of(adapter), renderer, outbox);
 
-    service.send(
-        UUID.randomUUID(), "a@example.com", NotificationChannel.EMAIL, "welcome", null);
+    service.send(UUID.randomUUID(), "a@example.com", NotificationChannel.EMAIL, "welcome", null);
 
     assertThat(adapter.invocations.get()).isEqualTo(1);
     verify(outbox).publish(any(), eq("NOTIFICATION"), any(), eq("NOTIFICATION_SENT"), any());
@@ -43,11 +41,7 @@ class NotificationServiceTest {
     assertThatThrownBy(
             () ->
                 service.send(
-                    UUID.randomUUID(),
-                    "a@example.com",
-                    NotificationChannel.EMAIL,
-                    "welcome",
-                    null))
+                    UUID.randomUUID(), "a@example.com", NotificationChannel.EMAIL, "welcome", null))
         .isInstanceOf(IllegalStateException.class);
 
     assertThat(adapter.invocations.get()).isEqualTo(3);

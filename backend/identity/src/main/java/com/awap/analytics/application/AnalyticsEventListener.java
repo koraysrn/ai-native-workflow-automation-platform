@@ -30,9 +30,10 @@ public class AnalyticsEventListener {
       JsonNode event = objectMapper.readTree(payload);
       UUID tenantId = UUID.fromString(event.path("tenantId").asText());
       AnalyticsEventType type = AnalyticsEventType.valueOf(event.path("eventType").asText());
-      UUID workflowInstanceId = event.path("workflowInstanceId").isNull()
-          ? null
-          : UUID.fromString(event.path("workflowInstanceId").asText());
+      UUID workflowInstanceId =
+          event.path("workflowInstanceId").isNull()
+              ? null
+              : UUID.fromString(event.path("workflowInstanceId").asText());
       long durationMs = event.path("durationMs").isNull() ? 0L : event.path("durationMs").asLong();
 
       analyticsService.record(tenantId, type, workflowInstanceId, durationMs);
