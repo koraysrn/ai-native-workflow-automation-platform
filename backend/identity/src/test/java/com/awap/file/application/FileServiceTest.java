@@ -37,7 +37,9 @@ class FileServiceTest {
     when(minioClient.bucketExists(any(BucketExistsArgs.class))).thenReturn(true);
 
     assertThatThrownBy(
-            () -> service.createUpload(UUID.randomUUID(), "big.pdf", "application/pdf", 501L * 1024 * 1024))
+            () ->
+                service.createUpload(
+                    UUID.randomUUID(), "big.pdf", "application/pdf", 501L * 1024 * 1024))
         .isInstanceOf(AwapException.class)
         .hasMessageContaining("500 MB");
   }
@@ -47,7 +49,9 @@ class FileServiceTest {
     when(minioClient.bucketExists(any(BucketExistsArgs.class))).thenReturn(true);
 
     assertThatThrownBy(
-            () -> service.createUpload(UUID.randomUUID(), "malware.exe", "application/x-msdownload", 10L))
+            () ->
+                service.createUpload(
+                    UUID.randomUUID(), "malware.exe", "application/x-msdownload", 10L))
         .isInstanceOf(AwapException.class)
         .hasMessageContaining("not supported");
   }
@@ -77,7 +81,8 @@ class FileServiceTest {
 
   @Test
   void downloadUrlRejectsInfectedFile() {
-    FileRecord infected = new FileRecord(UUID.randomUUID(), "f.pdf", "application/pdf", 5, "b", "k");
+    FileRecord infected =
+        new FileRecord(UUID.randomUUID(), "f.pdf", "application/pdf", 5, "b", "k");
     infected.markScanResult(FileScanStatus.INFECTED);
     when(repository.findByIdAndTenantId(any(), any())).thenReturn(Optional.of(infected));
 
@@ -102,9 +107,11 @@ class FileServiceTest {
 
   @Test
   void minioDownFailsCleanlyOnBucketCheck() throws Exception {
-    when(minioClient.bucketExists(any(BucketExistsArgs.class))).thenThrow(new RuntimeException("down"));
+    when(minioClient.bucketExists(any(BucketExistsArgs.class)))
+        .thenThrow(new RuntimeException("down"));
 
-    assertThatThrownBy(() -> service.createUpload(UUID.randomUUID(), "a.pdf", "application/pdf", 1L))
+    assertThatThrownBy(
+            () -> service.createUpload(UUID.randomUUID(), "a.pdf", "application/pdf", 1L))
         .isInstanceOf(AwapException.class)
         .hasMessageContaining("MinIO");
   }
