@@ -1,0 +1,94 @@
+# PostgreSQL logical backup (pg_dump) + offload to MinIO.
+#
+# Runs nightly (01:00 UTC). The dump container writes a compressed custom-format
+# dump to a shared emptyDir, then the upload container (minio/mc) copies it into
+# the S3-compatible backup bucket. RPO is therefore <= 24h; combined with WAL
+# archiving (see docker-compose postgres command) the practical RPO is much lower.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: awap-pg-backup
+  namespace: awap
+spec:
+  schedule: "0 1 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 5
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app: awap-pg-backup
+        spec:
+          restartPolicy: OnFailure
+          volumes:
+            - name: backup
+              emptyDir: {}
+          containers:
+            - name: pgdump
+              image: postgres:16-alpine
+              env:
+                - name: DB_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: awap-backend-secrets
+                      key: db-url
+                - name: DB_USER
+                  valueFrom:
+                    secretKeyRef:
+                      name: awap-backend-secrets
+                      key: db-user
+                - name: DB_PASSWORD
+                  valueFrom:
+                    secretKeyRef:
+                      name: awap-backend-secrets
+                      key: db-password
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  set -e
+                  # DB_URL is a JDBC URL: jdbc:postgresql://host:port/dbname
+                  HOST=$(printf '%s' "$DB_URL" | sed -E 's|jdbc:postgresql://([^:/]+)(:([0-9]+))?/(.*)|\1|')
+                  PORT=$(printf '%s' "$DB_URL" | sed -E 's|jdbc:postgresql://([^:/]+)(:([0-9]+))?/(.*)|\3|')
+                  DB=$(printf '%s' "$DB_URL" | sed -E 's|jdbc:postgresql://([^:/]+)(:([0-9]+))?/(.*)|\4|')
+                  PORT=${PORT:-5432}
+                  STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+                  OUTFILE="/backup/awap-${STAMP}.dump.gz"
+                  export PGPASSWORD="$DB_PASSWORD"
+                  pg_dump -h "$HOST" -p "$PORT" -U "$DB_USER" -d "$DB" \
+                    --format=custom --compress=9 --file="$OUTFILE"
+                  # Non-zero exit on a corrupt/empty dump file so the job is retried.
+                  test -s "$OUTFILE"
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup
+            - name: upload
+              image: minio/mc:latest
+              env:
+                - name: MINIO_ENDPOINT
+                  value: http://minio.awap-infra:9000
+                - name: MINIO_ACCESS_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: awap-backend-secrets
+                      key: minio-access-key
+                - name: MINIO_SECRET_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: awap-backend-secrets
+                      key: minio-secret-key
+              command:
+                - /bin/sh
+                - -ec
+                - |
+                  set -e
+                  mc alias set backup "${MINIO_ENDPOINT}" "${MINIO_ACCESS_KEY}" "${MINIO_SECRET_KEY}"
+                  mc mb --ignore-existing backup/awap-postgres-backups
+                  mc cp /backup/*.dump.gz backup/awap-postgres-backups/
+                  mc retention set --default backup/awap-postgres-backups 90d 2>/dev/null || true
+              volumeMounts:
+                - name: backup
+                  mountPath: /backup

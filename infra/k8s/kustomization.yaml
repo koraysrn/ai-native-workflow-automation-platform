@@ -6,6 +6,8 @@ resources:
   - frontend.yaml
   - hpa.yaml
   - ingress.yaml
+  - pg-backup-cronjob.yaml
+  - minio-replication-cronjob.yaml
 images:
   - name: awap-backend
     newTag: latest
