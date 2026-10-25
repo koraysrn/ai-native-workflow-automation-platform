@@ -3,6 +3,7 @@ package com.awap.file.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -18,21 +19,13 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
-/** Unit tests for the file/document use cases: size/format limits, versioning and scan gate. */
-@ExtendWith(MockitoExtension.class)
 class FileServiceTest {
 
-  @Mock private FileRecordRepository repository;
-  @Mock private MinioClient minioClient;
-  @Mock private ClamAvScanner clamAvScanner;
-
+  private final FileRecordRepository repository = mock(FileRecordRepository.class);
+  private final MinioClient minioClient = mock(MinioClient.class);
+  private final ClamAvScanner clamAvScanner = mock(ClamAvScanner.class);
   private FileService service;
-  private final UUID tenantId = UUID.randomUUID();
-  private final UUID fileId = UUID.randomUUID();
 
   @BeforeEach
   void setUp() {
@@ -40,12 +33,13 @@ class FileServiceTest {
   }
 
   @Test
-  void createUploadRejectsOversizeFile() throws Exception {
-    long overLimit = 500L * 1024 * 1024 + 1;
+  void createUploadRejectsOversizedFile() throws Exception {
+    when(minioClient.bucketExists(any(BucketExistsArgs.class))).thenReturn(true);
 
     assertThatThrownBy(
-            () -> service.createUpload(tenantId, "huge.pdf", "application/pdf", overLimit))
-        .isInstanceOf(AwapException.class);
+            () -> service.createUpload(UUID.randomUUID(), "big.pdf", "application/pdf", 501L * 1024 * 1024))
+        .isInstanceOf(AwapException.class)
+        .hasMessageContaining("500 MB");
   }
 
   @Test
@@ -53,63 +47,65 @@ class FileServiceTest {
     when(minioClient.bucketExists(any(BucketExistsArgs.class))).thenReturn(true);
 
     assertThatThrownBy(
-            () -> service.createUpload(tenantId, "malware.exe", "application/octet-stream", 10))
-        .isInstanceOf(AwapException.class);
+            () -> service.createUpload(UUID.randomUUID(), "malware.exe", "application/x-msdownload", 10L))
+        .isInstanceOf(AwapException.class)
+        .hasMessageContaining("not supported");
   }
 
   @Test
-  void createUploadAcceptsSupportedFormatAndReturnsSlot() throws Exception {
+  void createUploadReturnsPresignedSlot() throws Exception {
     when(minioClient.bucketExists(any(BucketExistsArgs.class))).thenReturn(true);
     when(minioClient.getPresignedObjectUrl(any(GetPresignedObjectUrlArgs.class)))
-        .thenReturn("http://presigned-upload");
+        .thenReturn("http://minio/upload-url");
 
     FileService.UploadSlot slot =
-        service.createUpload(tenantId, "report.pdf", "application/pdf", 1024);
+        service.createUpload(UUID.randomUUID(), "doc.pdf", "application/pdf", 10L);
 
-    assertThat(slot.fileId()).isNotNull();
-    assertThat(slot.uploadUrl()).isEqualTo("http://presigned-upload");
-  }
-
-  @Test
-  void createUploadEnablesBucketVersioning() throws Exception {
-    when(minioClient.bucketExists(any(BucketExistsArgs.class))).thenReturn(true);
-    when(minioClient.getPresignedObjectUrl(any(GetPresignedObjectUrlArgs.class)))
-        .thenReturn("http://presigned-upload");
-
-    service.createUpload(tenantId, "report.pdf", "application/pdf", 1024);
-
+    assertThat(slot.uploadUrl()).isEqualTo("http://minio/upload-url");
+    verify(repository).save(any(FileRecord.class));
     verify(minioClient).setBucketVersioning(any(SetBucketVersioningArgs.class));
   }
 
   @Test
-  void downloadUrlScansPendingFileAndBlocksInfected() throws Exception {
-    FileRecord record = new FileRecord(tenantId, "a.pdf", "application/pdf", 10, "b", "k");
-    when(repository.findByIdAndTenantId(fileId, tenantId)).thenReturn(Optional.of(record));
-    when(clamAvScanner.scan(record.getBucket(), record.getObjectKey()))
-        .thenReturn(FileScanStatus.INFECTED);
+  void downloadUrlThrowsNotFoundForMissingRecord() {
+    when(repository.findByIdAndTenantId(any(), any())).thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.downloadUrl(tenantId, fileId))
-        .isInstanceOf(AwapException.class);
+    assertThatThrownBy(() -> service.downloadUrl(UUID.randomUUID(), UUID.randomUUID()))
+        .isInstanceOf(AwapException.class)
+        .hasMessageContaining("not found");
   }
 
   @Test
-  void downloadUrlAllowsCleanFile() throws Exception {
-    FileRecord record = new FileRecord(tenantId, "a.pdf", "application/pdf", 10, "b", "k");
-    record.markScanResult(FileScanStatus.CLEAN);
-    when(repository.findByIdAndTenantId(fileId, tenantId)).thenReturn(Optional.of(record));
+  void downloadUrlRejectsInfectedFile() {
+    FileRecord infected = new FileRecord(UUID.randomUUID(), "f.pdf", "application/pdf", 5, "b", "k");
+    infected.markScanResult(FileScanStatus.INFECTED);
+    when(repository.findByIdAndTenantId(any(), any())).thenReturn(Optional.of(infected));
+
+    assertThatThrownBy(() -> service.downloadUrl(UUID.randomUUID(), infected.getId()))
+        .isInstanceOf(AwapException.class)
+        .hasMessageContaining("antivirus");
+  }
+
+  @Test
+  void downloadUrlScansPendingFileBeforeReturningUrl() throws Exception {
+    FileRecord pending = new FileRecord(UUID.randomUUID(), "f.pdf", "application/pdf", 5, "b", "k");
+    when(repository.findByIdAndTenantId(any(), any())).thenReturn(Optional.of(pending));
+    when(clamAvScanner.scan("b", "k")).thenReturn(FileScanStatus.CLEAN);
     when(minioClient.getPresignedObjectUrl(any(GetPresignedObjectUrlArgs.class)))
-        .thenReturn("http://presigned-download");
+        .thenReturn("http://minio/download-url");
 
-    String url = service.downloadUrl(tenantId, fileId);
+    String url = service.downloadUrl(UUID.randomUUID(), pending.getId());
 
-    assertThat(url).isEqualTo("http://presigned-download");
+    assertThat(url).isEqualTo("http://minio/download-url");
+    assertThat(pending.getStatus()).isEqualTo(FileScanStatus.CLEAN);
   }
 
   @Test
-  void downloadUrlRejectsUnknownFile() {
-    when(repository.findByIdAndTenantId(fileId, tenantId)).thenReturn(Optional.empty());
+  void minioDownFailsCleanlyOnBucketCheck() throws Exception {
+    when(minioClient.bucketExists(any(BucketExistsArgs.class))).thenThrow(new RuntimeException("down"));
 
-    assertThatThrownBy(() -> service.downloadUrl(tenantId, fileId))
-        .isInstanceOf(AwapException.class);
+    assertThatThrownBy(() -> service.createUpload(UUID.randomUUID(), "a.pdf", "application/pdf", 1L))
+        .isInstanceOf(AwapException.class)
+        .hasMessageContaining("MinIO");
   }
 }
