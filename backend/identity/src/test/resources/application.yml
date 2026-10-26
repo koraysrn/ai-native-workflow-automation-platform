@@ -20,6 +20,14 @@ management:
       enabled: false
 
 awap:
+  outbox:
+    datasource:
+      enabled: false
+  analytics:
+    opensearch:
+      enabled: false
+  kafka:
+    enabled: false
   security:
     jwt:
       secret: test-secret-0123456789abcdef0123456789abcdef

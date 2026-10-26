@@ -360,3 +360,83 @@ export interface SubmitFormPayload {
 export function submitForm(formId: string, payload: SubmitFormPayload): Promise<unknown> {
   return authPost<unknown>(`/api/v1/forms/${formId}/submissions`, payload);
 }
+
+export interface AnalyticsAggregateDto {
+  day: string;
+  eventType: string;
+  count: number;
+  totalDurationMs: number;
+  averageDurationMs: number;
+}
+
+export function fetchAnalyticsSummary(
+  from?: string,
+  to?: string,
+): Promise<AnalyticsAggregateDto[]> {
+  const params = new URLSearchParams();
+  if (from) {
+    params.set("from", from);
+  }
+  if (to) {
+    params.set("to", to);
+  }
+  const query = params.toString();
+  return authFetch<AnalyticsAggregateDto[]>(
+    `/api/v1/analytics/summary${query ? `?${query}` : ""}`,
+  );
+}
+
+export interface DocumentVersionDto {
+  id: string;
+  fileId: string;
+  version: number;
+  size: number;
+  format: string | null;
+  status: string;
+  createdAt: string;
+}
+
+export interface CreateDocumentResponseDto {
+  fileId: string;
+  uploadUrl: string;
+  version: DocumentVersionDto;
+}
+
+export function listDocuments(): Promise<DocumentVersionDto[]> {
+  return authFetch<DocumentVersionDto[]>("/api/v1/documents");
+}
+
+export function createDocumentUpload(
+  name: string,
+  contentType: string,
+  size: number,
+): Promise<CreateDocumentResponseDto> {
+  return authPost<CreateDocumentResponseDto>("/api/v1/documents", {
+    name,
+    contentType,
+    size,
+  });
+}
+
+export function getDocumentDownloadUrl(fileId: string): Promise<{ downloadUrl: string }> {
+  return authFetch<{ downloadUrl: string }>(`/api/v1/documents/${fileId}/download`);
+}
+
+export function archiveDocumentVersion(versionId: string): Promise<DocumentVersionDto> {
+  return authPost<DocumentVersionDto>(`/api/v1/documents/versions/${versionId}/archive`, {});
+}
+
+export interface NotificationDeliveryDto {
+  id: string;
+  channel: string;
+  recipient: string;
+  templateKey: string | null;
+  status: string;
+  attempts: number;
+  lastError: string | null;
+  createdAt: string;
+}
+
+export function listNotifications(): Promise<NotificationDeliveryDto[]> {
+  return authFetch<NotificationDeliveryDto[]>("/api/v1/notifications");
+}

@@ -41,7 +41,14 @@ public class KafkaConsumerConfig {
         new ConcurrentKafkaListenerContainerFactory<>();
     factory.setConsumerFactory(consumerFactory);
 
-    DeadLetterPublishingRecoverer recoverer = new DeadLetterPublishingRecoverer(kafkaTemplate);
+    // Per-topic DLQ: every consumed topic gets its own "<topic>.dlq" so a poison record in
+    // analytics cannot hide behind workflow failures and vice versa.
+    DeadLetterPublishingRecoverer recoverer =
+        new DeadLetterPublishingRecoverer(
+            kafkaTemplate,
+            (record, ex) ->
+                new org.apache.kafka.common.TopicPartition(
+                    record.topic() + ".dlq", record.partition()));
     DefaultErrorHandler errorHandler = new DefaultErrorHandler(recoverer, new JitteredBackOff());
     factory.setCommonErrorHandler(errorHandler);
     return factory;

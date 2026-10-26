@@ -10,6 +10,8 @@ import static org.mockito.Mockito.when;
 
 import com.awap.engine.application.OutboxEventPublisher;
 import com.awap.notification.domain.NotificationChannel;
+import com.awap.notification.domain.NotificationDelivery;
+import com.awap.notification.infrastructure.NotificationDeliveryRepository;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -58,6 +60,62 @@ class NotificationServiceTest {
 
     assertThat(adapter.invocations.get()).isEqualTo(2);
     verify(outbox).publish(any(), eq("NOTIFICATION"), any(), eq("NOTIFICATION_SENT"), any());
+  }
+
+  @Test
+  void duplicateDedupeKeyIsSuppressedWhenAlreadySent() {
+    NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
+    UUID tenant = UUID.randomUUID();
+    NotificationDelivery sent =
+        new NotificationDelivery(
+            tenant, "dedupe-1", NotificationChannel.EMAIL, "a@example.com", "welcome");
+    sent.markSent();
+    when(repository.findByTenantIdAndDedupeKey(tenant, "dedupe-1"))
+        .thenReturn(java.util.Optional.of(sent));
+    CountingAdapter adapter = new CountingAdapter(0);
+    NotificationService service =
+        new NotificationService(
+            List.of(adapter), renderer, outbox, repository, new long[] {1_000L}, millis -> {});
+
+    service.send(
+        tenant, "a@example.com", NotificationChannel.EMAIL, "welcome", "en", null, "dedupe-1");
+
+    assertThat(adapter.invocations.get()).isZero();
+  }
+
+  @Test
+  void retriesUseConfiguredExponentialBackoff() {
+    java.util.List<Long> delays = new java.util.ArrayList<>();
+    CountingAdapter adapter = new CountingAdapter(2);
+    NotificationService service =
+        new NotificationService(
+            List.of(adapter),
+            renderer,
+            outbox,
+            null,
+            new long[] {1_000L, 5_000L, 25_000L},
+            delays::add);
+
+    service.send(UUID.randomUUID(), "a@example.com", NotificationChannel.EMAIL, "welcome", null);
+
+    assertThat(delays).containsExactly(1_000L, 5_000L);
+  }
+
+  @Test
+  void rendersTheRequestedLocale() {
+    NotificationService service =
+        new NotificationService(List.of(new CountingAdapter(0)), renderer, outbox);
+
+    service.send(
+        UUID.randomUUID(),
+        "a@example.com",
+        NotificationChannel.EMAIL,
+        "welcome",
+        "tr",
+        "{\"name\":\"Ada\"}",
+        null);
+
+    verify(renderer).render("welcome", "tr", "{\"name\":\"Ada\"}");
   }
 
   @Test

@@ -29,6 +29,14 @@ const nodeColors: Record<string, string> = {
   FORM: "#2563eb",
   APPROVAL: "#f59e0b",
   TASK: "#8b5cf6",
+  DECISION: "#0ea5e9",
+  CONDITION: "#06b6d4",
+  PARALLEL_GATEWAY: "#7c3aed",
+  MERGE_GATEWAY: "#a855f7",
+  DELAY: "#f97316",
+  WEBHOOK: "#dc2626",
+  SUB_PROCESS: "#475569",
+  AI: "#10b981",
 };
 
 function WorkflowNode({ data }: { data: WorkflowNodeData }) {
@@ -120,7 +128,7 @@ export default function DesignerPage() {
             type="button"
             onClick={() => addNode(type)}
             style={{
-              background: nodeColors[type],
+              background: nodeColors[type] ?? "#4f46e5",
               color: "#fff",
               border: "none",
               padding: "6px 10px",
@@ -202,7 +210,152 @@ export default function DesignerPage() {
                 />
               </label>
             )}
-            {(selected.data.type === "START" || selected.data.type === "END") && (
+            {(selected.data.type === "DECISION" || selected.data.type === "CONDITION") && (
+              <label style={{ display: "block", marginBottom: 8 }}>
+                Fallback guard expression
+                <textarea
+                  placeholder="#amount > 100"
+                  value={(selected.data.config?.expression as string) ?? ""}
+                  onChange={(event) =>
+                    updateSelectedConfig({
+                      ...selected.data.config,
+                      expression: event.target.value,
+                    })
+                  }
+                  style={{ width: "100%", minHeight: 64, display: "block" }}
+                />
+                <span style={{ color: "#6b7280", fontSize: 12 }}>
+                  Branch conditions are evaluated in declaration order (DECISION takes the first
+                  match, CONDITION takes every match).
+                </span>
+              </label>
+            )}
+            {selected.data.type === "DELAY" && (
+              <label style={{ display: "block", marginBottom: 8 }}>
+                Delay seconds
+                <input
+                  type="number"
+                  min={0}
+                  value={(selected.data.config?.delaySeconds as number) ?? 0}
+                  onChange={(event) =>
+                    updateSelectedConfig({
+                      ...selected.data.config,
+                      delaySeconds: Number(event.target.value),
+                    })
+                  }
+                  style={{ width: "100%", display: "block" }}
+                />
+              </label>
+            )}
+            {selected.data.type === "PARALLEL_GATEWAY" && (
+              <label style={{ display: "block", marginBottom: 8 }}>
+                Join node id
+                <input
+                  value={(selected.data.config?.joinNodeId as string) ?? ""}
+                  onChange={(event) =>
+                    updateSelectedConfig({
+                      ...selected.data.config,
+                      joinNodeId: event.target.value,
+                    })
+                  }
+                  style={{ width: "100%", display: "block" }}
+                />
+              </label>
+            )}
+            {selected.data.type === "WEBHOOK" && (
+              <>
+                <label style={{ display: "block", marginBottom: 8 }}>
+                  Target URL
+                  <input
+                    placeholder="https://hooks.example.com"
+                    value={(selected.data.config?.url as string) ?? ""}
+                    onChange={(event) =>
+                      updateSelectedConfig({ ...selected.data.config, url: event.target.value })
+                    }
+                    style={{ width: "100%", display: "block" }}
+                  />
+                </label>
+                <label style={{ display: "block", marginBottom: 8 }}>
+                  Payload JSON
+                  <textarea
+                    value={(selected.data.config?.payload as string) ?? "{}"}
+                    onChange={(event) =>
+                      updateSelectedConfig({
+                        ...selected.data.config,
+                        payload: event.target.value,
+                      })
+                    }
+                    style={{ width: "100%", minHeight: 64, display: "block" }}
+                  />
+                </label>
+                <label style={{ display: "block", marginBottom: 8 }}>
+                  Timeout seconds
+                  <input
+                    type="number"
+                    min={1}
+                    value={(selected.data.config?.timeoutSeconds as number) ?? 10}
+                    onChange={(event) =>
+                      updateSelectedConfig({
+                        ...selected.data.config,
+                        timeoutSeconds: Number(event.target.value),
+                      })
+                    }
+                    style={{ width: "100%", display: "block" }}
+                  />
+                </label>
+                <label style={{ display: "block", marginBottom: 8 }}>
+                  Max attempts
+                  <input
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={(selected.data.config?.maxAttempts as number) ?? 3}
+                    onChange={(event) =>
+                      updateSelectedConfig({
+                        ...selected.data.config,
+                        maxAttempts: Number(event.target.value),
+                      })
+                    }
+                    style={{ width: "100%", display: "block" }}
+                  />
+                </label>
+              </>
+            )}
+            {selected.data.type === "SUB_PROCESS" && (
+              <>
+                <label style={{ display: "block", marginBottom: 8 }}>
+                  Child workflow definition ID
+                  <input
+                    value={(selected.data.config?.workflowDefinitionId as string) ?? ""}
+                    onChange={(event) =>
+                      updateSelectedConfig({
+                        ...selected.data.config,
+                        workflowDefinitionId: event.target.value,
+                      })
+                    }
+                    style={{ width: "100%", display: "block" }}
+                  />
+                </label>
+                <label style={{ display: "block", marginBottom: 8 }}>
+                  Version (optional)
+                  <input
+                    type="number"
+                    min={1}
+                    value={(selected.data.config?.version as number) ?? ""}
+                    onChange={(event) =>
+                      updateSelectedConfig({
+                        ...selected.data.config,
+                        version: event.target.value ? Number(event.target.value) : undefined,
+                      })
+                    }
+                    style={{ width: "100%", display: "block" }}
+                  />
+                </label>
+              </>
+            )}
+            {(selected.data.type === "START" ||
+              selected.data.type === "END" ||
+              selected.data.type === "MERGE_GATEWAY") && (
               <p style={{ color: "#6b7280" }}>No configuration for this node type.</p>
             )}
           </div>

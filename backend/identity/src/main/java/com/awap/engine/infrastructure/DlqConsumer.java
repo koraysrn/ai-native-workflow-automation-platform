@@ -20,7 +20,7 @@ public class DlqConsumer {
     this.meterRegistry = meterRegistry;
   }
 
-  @KafkaListener(topics = "${awap.kafka.dlq-topic:awap.dlq}", groupId = "awap-dlq")
+  @KafkaListener(topicPattern = "${awap.kafka.dlq-topic-pattern:.*\\.dlq}", groupId = "awap-dlq")
   public void handle(String message) {
     meterRegistry.counter("awap.dlq.messages").increment();
     log.warn("Dead-letter message received: {}", message);

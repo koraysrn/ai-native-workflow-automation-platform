@@ -41,6 +41,7 @@ class NodeExecutorTest {
   @Mock TaskService taskService;
   @Mock UserRepository userRepository;
   @Mock WorkflowEnginePort port;
+  @Mock WebhookInvoker webhookInvoker;
 
   private NodeExecutor executor;
   private final UUID tenantId = UUID.randomUUID();
@@ -55,7 +56,8 @@ class NodeExecutorTest {
             new NodeConfigReader(new ObjectMapper().findAndRegisterModules()),
             taskService,
             userRepository,
-            port);
+            port,
+            webhookInvoker);
   }
 
   private WorkflowInstance instance(WorkflowState state) {
@@ -224,5 +226,96 @@ class NodeExecutorTest {
     executor.executeNode(instance, node("start", NodeType.START, null));
 
     verify(nodeExecutionRepository, org.mockito.Mockito.never()).save(any(NodeExecution.class));
+  }
+
+  @Test
+  void decisionNodeCompletesAndAdvances() {
+    WorkflowInstance instance = instance(WorkflowState.RUNNING);
+    stubFreshExecution();
+
+    executor.executeNode(instance, node("decide", NodeType.DECISION, "{}"));
+
+    assertThat(capturedExecution().getStatus()).isEqualTo(NodeExecutionStatus.COMPLETED);
+    verify(port).advanceFrom(instance, "decide");
+  }
+
+  @Test
+  void webhookNodeInvokesExternalCallAndCompletesWithResponse() {
+    WorkflowInstance instance = instance(WorkflowState.RUNNING);
+    stubFreshExecution();
+    when(webhookInvoker.invoke(any(), any(), any())).thenReturn("{\"ok\":true}");
+
+    executor.executeNode(
+        instance, node("hook", NodeType.WEBHOOK, "{\"url\":\"https://hooks.example.com\"}"));
+
+    assertThat(capturedExecution().getStatus()).isEqualTo(NodeExecutionStatus.COMPLETED);
+    assertThat(capturedExecution().getOutputJson()).isEqualTo("{\"ok\":true}");
+    verify(port).advanceFrom(instance, "hook");
+  }
+
+  @Test
+  void webhookFailureSchedulesRetryWhenAttemptsRemain() {
+    WorkflowInstance instance = instance(WorkflowState.RUNNING);
+    stubFreshExecution();
+    when(webhookInvoker.invoke(any(), any(), any()))
+        .thenThrow(new IllegalStateException("target timeout"));
+
+    executor.executeNode(
+        instance,
+        node(
+            "hook", NodeType.WEBHOOK, "{\"url\":\"https://hooks.example.com\",\"maxAttempts\":2}"));
+
+    assertThat(capturedExecution().getStatus()).isEqualTo(NodeExecutionStatus.FAILED);
+    assertThat(capturedExecution().getResumeAt()).isNotNull();
+    verify(port, org.mockito.Mockito.never())
+        .transition(any(), eq(WorkflowState.FAILED), anyString());
+  }
+
+  @Test
+  void webhookFailureFailsWorkflowWhenAttemptsExhausted() {
+    WorkflowInstance instance = instance(WorkflowState.RUNNING);
+    stubFreshExecution();
+    when(webhookInvoker.invoke(any(), any(), any()))
+        .thenThrow(new IllegalStateException("target timeout"));
+
+    executor.executeNode(
+        instance,
+        node(
+            "hook", NodeType.WEBHOOK, "{\"url\":\"https://hooks.example.com\",\"maxAttempts\":1}"));
+
+    assertThat(capturedExecution().getStatus()).isEqualTo(NodeExecutionStatus.FAILED);
+    verify(port).transition(instance, WorkflowState.FAILED, "NODE_FAILED");
+  }
+
+  @Test
+  void subProcessNodeWaitsAndStartsChildInstance() {
+    WorkflowInstance instance = instance(WorkflowState.RUNNING);
+    stubFreshExecution();
+
+    executor.executeNode(
+        instance,
+        node(
+            "sub",
+            NodeType.SUB_PROCESS,
+            "{\"workflowDefinitionId\":\"00000000-0000-0000-0000-000000000001\"}"));
+
+    assertThat(instance.getState()).isEqualTo(WorkflowState.WAITING);
+    assertThat(capturedExecution().getStatus()).isEqualTo(NodeExecutionStatus.WAITING);
+    verify(port).startSubProcess(eq(instance), any(), any());
+  }
+
+  @Test
+  void replaySkipsWebhookInvocationAndReusesRecordedOutput() {
+    WorkflowInstance instance = instance(WorkflowState.RUNNING);
+    NodeExecution recorded = new NodeExecution(tenantId, instance.getId(), "hook", "WEBHOOK");
+    recorded.complete("{\"replayed\":true}");
+    when(nodeExecutionRepository.findByWorkflowInstanceIdAndNodeId(any(), anyString()))
+        .thenReturn(Optional.of(recorded));
+
+    executor.executeNode(
+        instance, node("hook", NodeType.WEBHOOK, "{\"url\":\"https://hooks.example.com\"}"), true);
+
+    verify(webhookInvoker, org.mockito.Mockito.never()).invoke(any(), any(), any());
+    verify(port).advanceFrom(instance, "hook");
   }
 }

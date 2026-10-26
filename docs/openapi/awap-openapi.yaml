@@ -35,6 +35,12 @@ tags:
     description: Form definitions and submissions.
   - name: Files
     description: MinIO-backed file upload slots and download URLs.
+  - name: Documents
+    description: Versioned documents, upload slots and presigned downloads.
+  - name: Notifications
+    description: Tenant notification inbox and delivery history.
+  - name: Analytics
+    description: Process, task and approval analytics aggregates.
 
 paths:
   /actuator/health:
@@ -1282,6 +1288,204 @@ paths:
                   downloadUrl:
                     type: string
 
+  /api/v1/workflow-instances/{id}/recover:
+    post:
+      operationId: recoverWorkflowInstance
+      summary: Recover a workflow instance
+      description: Continues a RUNNING or FAILED instance from its last durable node execution.
+      tags: [Workflow Instances]
+      parameters:
+        - $ref: "#/components/parameters/WorkflowInstanceId"
+      responses:
+        "200":
+          description: Recovered instance.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WorkflowInstanceResponse"
+
+  /api/v1/documents:
+    post:
+      operationId: createDocumentUpload
+      summary: Create a document upload slot
+      description: >-
+        Creates a presigned MinIO PUT slot and registers a PENDING document version. The file is
+        only downloadable after the antivirus scan clears it.
+      tags: [Documents]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, size]
+              properties:
+                name:
+                  type: string
+                contentType:
+                  type: string
+                size:
+                  type: integer
+                  format: int64
+                  minimum: 0
+      responses:
+        "201":
+          description: Upload slot and PENDING version.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CreateDocumentResponse"
+    get:
+      operationId: listDocuments
+      summary: List tenant document versions
+      description: Returns every live document version owned by the caller's tenant.
+      tags: [Documents]
+      responses:
+        "200":
+          description: Document versions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DocumentVersionResponse"
+
+  /api/v1/documents/{fileId}/versions:
+    get:
+      operationId: listDocumentVersions
+      summary: List versions of one document
+      description: Returns the version history of a document, tenant-scoped in the query.
+      tags: [Documents]
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Document versions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DocumentVersionResponse"
+
+  /api/v1/documents/{fileId}/download:
+    get:
+      operationId: getDocumentDownloadUrl
+      summary: Get a presigned document download URL
+      description: Rejects the request when the file is still PENDING or was found infected.
+      tags: [Documents]
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Download URL.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  downloadUrl:
+                    type: string
+        "403":
+          $ref: "#/components/responses/Unauthorized"
+
+  /api/v1/documents/versions/{versionId}/archive:
+    post:
+      operationId: archiveDocumentVersion
+      summary: Archive a document version
+      description: Marks the version archived for retention while keeping its metadata.
+      tags: [Documents]
+      parameters:
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Archived version.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentVersionResponse"
+
+  /api/v1/documents/versions/{versionId}:
+    delete:
+      operationId: deleteDocumentVersion
+      summary: Soft-delete a document version
+      description: Keeps the row for audit/retention while hiding it from listings.
+      tags: [Documents]
+      parameters:
+        - name: versionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Soft-deleted version.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentVersionResponse"
+
+  /api/v1/notifications:
+    get:
+      operationId: listNotifications
+      summary: List notification deliveries
+      description: Tenant-scoped inbox and delivery history, including web notifications.
+      tags: [Notifications]
+      responses:
+        "200":
+          description: Notification deliveries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NotificationDeliveryResponse"
+
+  /api/v1/analytics/summary:
+    get:
+      operationId: getAnalyticsSummary
+      summary: Get process analytics aggregates
+      description: Returns tenant/day process, task and approval aggregates for the selected window.
+      tags: [Analytics]
+      parameters:
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Tenant/day aggregates.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AnalyticsAggregateResponse"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1695,3 +1899,82 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    DocumentVersionResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        fileId:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        size:
+          type: integer
+          format: int64
+        format:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [PENDING, AVAILABLE, ARCHIVED]
+        createdAt:
+          type: string
+          format: date-time
+
+    CreateDocumentResponse:
+      type: object
+      properties:
+        fileId:
+          type: string
+          format: uuid
+        uploadUrl:
+          type: string
+          format: uri
+        version:
+          $ref: "#/components/schemas/DocumentVersionResponse"
+
+    NotificationDeliveryResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        channel:
+          type: string
+          enum: [EMAIL, SMS, PUSH, WEB, WEBHOOK]
+        recipient:
+          type: string
+        templateKey:
+          type: string
+          nullable: true
+        status:
+          type: string
+        attempts:
+          type: integer
+        lastError:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+
+    AnalyticsAggregateResponse:
+      type: object
+      properties:
+        day:
+          type: string
+          format: date
+        eventType:
+          type: string
+        count:
+          type: integer
+          format: int64
+        totalDurationMs:
+          type: integer
+          format: int64
+        averageDurationMs:
+          type: integer
+          format: int64

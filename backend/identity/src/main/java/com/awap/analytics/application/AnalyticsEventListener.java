@@ -3,6 +3,7 @@ package com.awap.analytics.application;
 import com.awap.analytics.domain.AnalyticsEventType;
 import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
+import com.awap.identity.infrastructure.security.KafkaTenantContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.UUID;
@@ -18,10 +19,15 @@ public class AnalyticsEventListener {
 
   private final ObjectMapper objectMapper;
   private final AnalyticsService analyticsService;
+  private final KafkaTenantContext tenantContext;
 
-  public AnalyticsEventListener(ObjectMapper objectMapper, AnalyticsService analyticsService) {
+  public AnalyticsEventListener(
+      ObjectMapper objectMapper,
+      AnalyticsService analyticsService,
+      KafkaTenantContext tenantContext) {
     this.objectMapper = objectMapper;
     this.analyticsService = analyticsService;
+    this.tenantContext = tenantContext;
   }
 
   @KafkaListener(topics = "analytics.events")
@@ -34,10 +40,15 @@ public class AnalyticsEventListener {
           event.path("workflowInstanceId").isNull()
               ? null
               : UUID.fromString(event.path("workflowInstanceId").asText());
+      UUID taskId =
+          event.path("taskId").isNull() ? null : UUID.fromString(event.path("taskId").asText());
       long durationMs = event.path("durationMs").isNull() ? 0L : event.path("durationMs").asLong();
 
-      analyticsService.record(tenantId, type, workflowInstanceId, durationMs);
+      tenantContext.run(
+          tenantId,
+          () -> analyticsService.record(tenantId, type, workflowInstanceId, taskId, durationMs));
     } catch (Exception ex) {
+      // Throwing hands the malformed record to the Kafka error handler and then the per-topic DLQ.
       throw new AwapException(
           ErrorCode.GENERIC_INTERNAL_ERROR,
           HttpStatus.BAD_REQUEST,

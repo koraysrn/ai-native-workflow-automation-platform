@@ -5,6 +5,7 @@ import com.awap.common.api.ErrorCode;
 import com.awap.engine.domain.NodeExecution;
 import com.awap.engine.domain.NodeExecutionStatus;
 import com.awap.engine.domain.WorkflowInstance;
+import com.awap.engine.domain.WorkflowState;
 import com.awap.engine.infrastructure.ExecutionContextRepository;
 import com.awap.engine.infrastructure.NodeExecutionRepository;
 import com.awap.workflow.application.SpelExpressionService;
@@ -29,6 +30,7 @@ final class TransitionResolver {
   private final SpelExpressionService spelExpressionService;
   private final ObjectMapper objectMapper;
   private final WorkflowEnginePort port;
+  private final NodeConfigReader configReader;
 
   TransitionResolver(
       NodeExecutionRepository nodeExecutionRepository,
@@ -43,52 +45,116 @@ final class TransitionResolver {
     this.spelExpressionService = spelExpressionService;
     this.objectMapper = objectMapper;
     this.port = port;
+    this.configReader = new NodeConfigReader(objectMapper);
   }
 
-  /** Follows every matching transition out of {@code fromNodeId}, executing or merging targets. */
+  /** Follows the outgoing transitions of {@code fromNodeId} according to the node's semantics. */
   void advanceFrom(WorkflowInstance instance, String fromNodeId) {
+    if (instance.getState() == WorkflowState.FAILED
+        || instance.getState() == WorkflowState.CANCELLED
+        || instance.getState() == WorkflowState.COMPLETED) {
+      return;
+    }
     Map<String, Object> variables = readVariables(instance.getId());
     List<NodeDefinition> nodes = nodesOf(instance);
+    if (nodes.isEmpty()) {
+      // A definition without a persisted graph has nothing to advance (empty draft/test fixture).
+      return;
+    }
+    NodeDefinition from =
+        nodes.stream()
+            .filter(node -> node.getNodeId().equals(fromNodeId))
+            .findFirst()
+            .orElseThrow(
+                () ->
+                    new AwapException(
+                        ErrorCode.WORKFLOW_INVALID_DEFINITION,
+                        HttpStatus.BAD_REQUEST,
+                        "Source node not found: " + fromNodeId));
 
-    transitionsOf(instance).stream()
-        .filter(transition -> transition.getFromNodeId().equals(fromNodeId))
-        .filter(transition -> evaluateCondition(transition, variables))
-        .forEach(
-            transition ->
-                nodes.stream()
-                    .filter(node -> node.getNodeId().equals(transition.getToNodeId()))
-                    .findFirst()
-                    .ifPresentOrElse(
-                        target -> {
-                          if (target.getNodeType() == NodeType.MERGE) {
-                            reportBranchMerge(instance, target);
-                          } else {
-                            port.executeNode(instance, target);
-                          }
-                        },
-                        () -> {
-                          throw new AwapException(
-                              ErrorCode.VALIDATION_FAILED,
-                              HttpStatus.BAD_REQUEST,
-                              "Transition target node not found: " + transition.getToNodeId());
-                        }));
+    List<TransitionDefinition> outgoing =
+        transitionsOf(instance).stream()
+            .filter(transition -> transition.getFromNodeId().equals(fromNodeId))
+            .toList();
+
+    List<TransitionDefinition> selected = selectTransitions(from, outgoing, variables);
+    if (selected.isEmpty()
+        && (from.getNodeType() == NodeType.DECISION || from.getNodeType() == NodeType.CONDITION)) {
+      throw new AwapException(
+          ErrorCode.WORKFLOW_STATE_CONFLICT,
+          HttpStatus.CONFLICT,
+          "No matching " + from.getNodeType() + " branch for node " + fromNodeId + ".");
+    }
+
+    selected.forEach(transition -> follow(instance, nodes, transition));
   }
 
-  /** A blank condition is an unconditional transition; otherwise the SpEL result must be TRUE. */
+  /** DECISION takes the first matching branch; CONDITION follows every matching branch. */
+  private List<TransitionDefinition> selectTransitions(
+      NodeDefinition from, List<TransitionDefinition> outgoing, Map<String, Object> variables) {
+    if (from.getNodeType() == NodeType.DECISION) {
+      return outgoing.stream()
+          .filter(transition -> evaluateCondition(from, transition, variables))
+          .findFirst()
+          .map(List::of)
+          .orElse(List.of());
+    }
+    if (from.getNodeType() == NodeType.CONDITION) {
+      return outgoing.stream()
+          .filter(transition -> evaluateCondition(from, transition, variables))
+          .toList();
+    }
+    return outgoing.stream()
+        .filter(transition -> evaluateCondition(from, transition, variables))
+        .toList();
+  }
+
+  private void follow(
+      WorkflowInstance instance, List<NodeDefinition> nodes, TransitionDefinition transition) {
+    NodeDefinition target =
+        nodes.stream()
+            .filter(node -> node.getNodeId().equals(transition.getToNodeId()))
+            .findFirst()
+            .orElseThrow(
+                () ->
+                    new AwapException(
+                        ErrorCode.WORKFLOW_INVALID_DEFINITION,
+                        HttpStatus.BAD_REQUEST,
+                        "Transition target node not found: " + transition.getToNodeId()));
+    if (target.getNodeType().isMergeGateway()) {
+      reportBranchMerge(instance, target);
+    } else {
+      port.executeNode(instance, target);
+    }
+  }
+
   boolean evaluateCondition(TransitionDefinition transition, Map<String, Object> variables) {
-    if (transition.getConditionExpression() == null
-        || transition.getConditionExpression().isBlank()) {
+    return evaluateCondition(null, transition, variables);
+  }
+
+  private boolean evaluateCondition(
+      NodeDefinition from, TransitionDefinition transition, Map<String, Object> variables) {
+    String expression = transition.getConditionExpression();
+    if ((expression == null || expression.isBlank()) && from != null) {
+      expression = configReader.readExpression(from).orElse(null);
+    }
+    if (expression == null || expression.isBlank()) {
       return true;
     }
-    Object result = spelExpressionService.evaluate(transition.getConditionExpression(), variables);
+    Object result = spelExpressionService.evaluate(expression, variables);
     return Boolean.TRUE.equals(result);
   }
 
   /**
    * Records that a parallel branch reached the merge gateway. The join fires (executes the MERGE
-   * node) only once every branch opened by the matching PARALLEL gateway has reported.
+   * node) only once every branch opened by the matching parallel gateway has reported.
    */
   void reportBranchMerge(WorkflowInstance instance, NodeDefinition mergeNode) {
+    if (instance.getState() == WorkflowState.FAILED
+        || instance.getState() == WorkflowState.CANCELLED
+        || instance.getState() == WorkflowState.COMPLETED) {
+      return;
+    }
     NodeExecution parallel =
         nodeExecutionRepository
             .findByWorkflowInstanceIdAndJoinNodeId(instance.getId(), mergeNode.getNodeId())
@@ -100,7 +166,8 @@ final class TransitionResolver {
                         "Merge node has no matching parallel gateway: " + mergeNode.getNodeId()));
     parallel.recordBranchMerge();
     nodeExecutionRepository.save(parallel);
-    if (parallel.getMergedBranchCount() >= parallel.getBranchTokenCount()) {
+    if (parallel.getMergedBranchCount() >= parallel.getBranchTokenCount()
+        && instance.getState() != WorkflowState.FAILED) {
       port.executeNode(instance, mergeNode);
     }
   }

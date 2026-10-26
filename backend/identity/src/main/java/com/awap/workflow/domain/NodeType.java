@@ -1,6 +1,12 @@
 package com.awap.workflow.domain;
 
-/** Workflow node types supported by the engine. */
+/**
+ * Workflow node types supported by the engine.
+ *
+ * <p>{@code PARALLEL} / {@code MERGE} are kept as aliases of the explicit gateway types so already
+ * published workflow versions keep executing after the gateway naming was aligned with the
+ * specification.
+ */
 public enum NodeType {
   START,
   END,
@@ -9,6 +15,25 @@ public enum NodeType {
   TASK,
   DELAY,
   PARALLEL,
+  PARALLEL_GATEWAY,
   MERGE,
-  AI
+  MERGE_GATEWAY,
+  DECISION,
+  CONDITION,
+  WEBHOOK,
+  SUB_PROCESS,
+  AI;
+
+  public boolean isParallelGateway() {
+    return this == PARALLEL || this == PARALLEL_GATEWAY;
+  }
+
+  public boolean isMergeGateway() {
+    return this == MERGE || this == MERGE_GATEWAY;
+  }
+
+  /** External-call nodes must never be invoked again while replaying recorded state. */
+  public boolean isExternalCall() {
+    return this == WEBHOOK;
+  }
 }

@@ -5,5 +5,6 @@ public enum NotificationChannel {
   EMAIL,
   SMS,
   PUSH,
+  WEB,
   WEBHOOK
 }

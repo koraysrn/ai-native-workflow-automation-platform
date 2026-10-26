@@ -22,6 +22,7 @@ class ModuleSkeletonTest {
             NotificationChannel.EMAIL,
             NotificationChannel.SMS,
             NotificationChannel.PUSH,
+            NotificationChannel.WEB,
             NotificationChannel.WEBHOOK);
   }
 
@@ -30,8 +31,11 @@ class ModuleSkeletonTest {
     assertThat(AnalyticsService.class.getAnnotation(Service.class)).isNotNull();
     assertThat(AnalyticsEventType.values())
         .containsExactly(
-            AnalyticsEventType.TASK_COMPLETED,
+            AnalyticsEventType.WORKFLOW_STARTED,
             AnalyticsEventType.WORKFLOW_COMPLETED,
+            AnalyticsEventType.WORKFLOW_FAILED,
+            AnalyticsEventType.TASK_COMPLETED,
+            AnalyticsEventType.APPROVAL_COMPLETED,
             AnalyticsEventType.SLA_BREACHED);
   }
 
