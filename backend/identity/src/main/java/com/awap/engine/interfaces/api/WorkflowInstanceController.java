@@ -86,6 +86,12 @@ public class WorkflowInstanceController {
     return ResponseEntity.ok(engineService.replay(currentTenantId(), id));
   }
 
+  @PostMapping("/{id}/recover")
+  @PreAuthorize("hasAuthority('INSTANCE_MANAGE')")
+  public ResponseEntity<WorkflowInstanceResponse> recover(@PathVariable UUID id) {
+    return ResponseEntity.ok(engineService.recover(currentTenantId(), id));
+  }
+
   @PostMapping("/{id}/fail")
   @PreAuthorize("hasAuthority('INSTANCE_MANAGE')")
   public ResponseEntity<WorkflowInstanceResponse> fail(@PathVariable UUID id) {

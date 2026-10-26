@@ -16,5 +16,7 @@ export const config = {
     "/instances/:path*",
     "/organizations/:path*",
     "/forms/:path*",
+    "/documents/:path*",
+    "/analytics/:path*",
   ],
 };

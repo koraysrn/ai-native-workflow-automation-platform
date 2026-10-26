@@ -38,6 +38,18 @@ awap:
   outbox:
     retention-days: ${OUTBOX_RETENTION_DAYS:7}
     archive-path: ${OUTBOX_ARCHIVE_PATH:target/outbox-archive/outbox.jsonl}
+    batch-size: ${OUTBOX_BATCH_SIZE:100}
+    datasource:
+      enabled: ${OUTBOX_SEPARATE_POOL:true}
+      maximum-pool-size: ${OUTBOX_POOL_SIZE:4}
+  notification:
+    retention-days: ${NOTIFICATION_RETENTION_DAYS:30}
+    retry-delays-ms: ${NOTIFICATION_RETRY_DELAYS_MS:1000,5000,25000}
+  analytics:
+    opensearch:
+      enabled: ${OPENSEARCH_ENABLED:false}
+      endpoint: ${OPENSEARCH_ENDPOINT:http://localhost:9200}
+      index: ${OPENSEARCH_ANALYTICS_INDEX:awap-analytics}
   rate-limit:
     enabled: ${RATE_LIMIT_ENABLED:false}
   security:

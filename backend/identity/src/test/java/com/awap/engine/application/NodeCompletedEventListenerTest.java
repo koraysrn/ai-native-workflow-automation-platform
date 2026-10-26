@@ -2,8 +2,10 @@ package com.awap.engine.application;
 
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.verify;
 
+import com.awap.identity.infrastructure.security.KafkaTenantContext;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -16,14 +18,24 @@ import org.mockito.junit.jupiter.MockitoExtension;
 class NodeCompletedEventListenerTest {
 
   @Mock private WorkflowEngineService workflowEngineService;
+  @Mock private KafkaTenantContext tenantContext;
 
   private NodeCompletedEventListener listener;
 
   @BeforeEach
   void setUp() {
+    lenient()
+        .doAnswer(
+            invocation -> {
+              Runnable action = invocation.getArgument(1);
+              action.run();
+              return null;
+            })
+        .when(tenantContext)
+        .run(any(), any());
     listener =
         new NodeCompletedEventListener(
-            new ObjectMapper().findAndRegisterModules(), workflowEngineService);
+            new ObjectMapper().findAndRegisterModules(), workflowEngineService, tenantContext);
   }
 
   @Test

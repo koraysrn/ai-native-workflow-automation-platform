@@ -1,5 +1,6 @@
 package com.awap.engine.application;
 
+import com.awap.engine.domain.NodeExecution;
 import com.awap.engine.domain.WorkflowInstance;
 import com.awap.engine.domain.WorkflowState;
 import com.awap.workflow.domain.NodeDefinition;
@@ -19,4 +20,6 @@ interface WorkflowEnginePort {
   void executeNode(WorkflowInstance instance, NodeDefinition node);
 
   void advanceFrom(WorkflowInstance instance, String fromNodeId);
+
+  void startSubProcess(WorkflowInstance parent, NodeDefinition node, NodeExecution execution);
 }

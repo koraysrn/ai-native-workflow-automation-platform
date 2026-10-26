@@ -172,8 +172,7 @@ class WorkflowEngineServiceTest {
   void replayTransitionsFailedInstanceToRunning() {
     WorkflowInstance instance = instance(WorkflowState.FAILED);
     stubFoundInstance(instance);
-    when(nodeExecutionRepository.findByWorkflowInstanceIdAndStatus(
-            any(), eq(NodeExecutionStatus.FAILED)))
+    when(nodeExecutionRepository.findByWorkflowInstanceIdOrderByCreatedAtAsc(instance.getId()))
         .thenReturn(List.of());
 
     WorkflowInstanceResponse response = service.replay(tenantId, instance.getId());
@@ -227,7 +226,6 @@ class WorkflowEngineServiceTest {
     when(nodeExecutionRepository.findByWorkflowInstanceIdAndNodeId(instance.getId(), "delay"))
         .thenReturn(Optional.of(execution));
     when(workflowDefinitionService.nodesOf(any(), anyInt())).thenReturn(List.of());
-    when(workflowDefinitionService.transitionsOf(any(), anyInt())).thenReturn(List.of());
     when(executionContextRepository.findByWorkflowInstanceId(any())).thenReturn(Optional.empty());
 
     service.resumeDueNode(tenantId, instance.getId(), "delay");
@@ -245,7 +243,6 @@ class WorkflowEngineServiceTest {
     when(nodeExecutionRepository.findByWorkflowInstanceIdAndNodeId(instance.getId(), "form"))
         .thenReturn(Optional.of(execution));
     when(workflowDefinitionService.nodesOf(any(), anyInt())).thenReturn(List.of());
-    when(workflowDefinitionService.transitionsOf(any(), anyInt())).thenReturn(List.of());
     when(executionContextRepository.findByWorkflowInstanceId(any())).thenReturn(Optional.empty());
 
     WorkflowInstanceResponse response =
@@ -253,6 +250,54 @@ class WorkflowEngineServiceTest {
 
     assertThat(execution.getStatus()).isEqualTo(NodeExecutionStatus.COMPLETED);
     assertThat(response.state()).isEqualTo("RUNNING");
+  }
+
+  @Test
+  void recoverContinuesFailedInstanceFromRecordedState() {
+    WorkflowInstance instance = instance(WorkflowState.FAILED);
+    stubFoundInstance(instance);
+    when(nodeExecutionRepository.findByWorkflowInstanceIdAndStatus(
+            instance.getId(), NodeExecutionStatus.FAILED))
+        .thenReturn(List.of());
+
+    WorkflowInstanceResponse response = service.recover(tenantId, instance.getId());
+
+    assertThat(response.state()).isEqualTo("RUNNING");
+  }
+
+  @Test
+  void subProcessSuccessCompletesParentNodeAndAdvances() {
+    WorkflowInstance parent = instance(WorkflowState.WAITING);
+    NodeExecution execution = new NodeExecution(tenantId, parent.getId(), "sub", "SUB_PROCESS");
+    execution.waitForExternal();
+    stubFoundInstance(parent);
+    when(nodeExecutionRepository.findByWorkflowInstanceIdAndNodeId(parent.getId(), "sub"))
+        .thenReturn(Optional.of(execution));
+    when(executionContextRepository.findByWorkflowInstanceId(parent.getId()))
+        .thenReturn(Optional.empty());
+    when(workflowDefinitionService.nodesOf(any(), anyInt())).thenReturn(List.of());
+
+    service.onSubProcessCompleted(
+        new SubProcessCompletedEvent(tenantId, parent.getId(), "sub", UUID.randomUUID(), true));
+
+    assertThat(execution.getStatus()).isEqualTo(NodeExecutionStatus.COMPLETED);
+    assertThat(parent.getState()).isEqualTo(WorkflowState.RUNNING);
+  }
+
+  @Test
+  void subProcessFailureFailsParentInstance() {
+    WorkflowInstance parent = instance(WorkflowState.WAITING);
+    NodeExecution execution = new NodeExecution(tenantId, parent.getId(), "sub", "SUB_PROCESS");
+    execution.waitForExternal();
+    stubFoundInstance(parent);
+    when(nodeExecutionRepository.findByWorkflowInstanceIdAndNodeId(parent.getId(), "sub"))
+        .thenReturn(Optional.of(execution));
+
+    service.onSubProcessCompleted(
+        new SubProcessCompletedEvent(tenantId, parent.getId(), "sub", UUID.randomUUID(), false));
+
+    assertThat(execution.getStatus()).isEqualTo(NodeExecutionStatus.FAILED);
+    assertThat(parent.getState()).isEqualTo(WorkflowState.FAILED);
   }
 
   @Test

@@ -11,8 +11,11 @@ import com.awap.task.interfaces.dto.TaskMapper;
 import com.awap.task.interfaces.dto.TaskRequest;
 import com.awap.task.interfaces.dto.TaskResponse;
 import io.micrometer.core.instrument.MeterRegistry;
+import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -92,6 +95,7 @@ public class TaskService {
     requireDecisionRight(task, actorId, actorRole);
     runGuarded(() -> task.approve(comment));
     publishCompleted(task, "{\"decision\":\"APPROVED\"}");
+    publishAnalytics(task, "APPROVAL_COMPLETED");
     recordDecision("APPROVED");
     return taskMapper.toResponse(task);
   }
@@ -103,6 +107,7 @@ public class TaskService {
     requireDecisionRight(task, actorId, actorRole);
     runGuarded(() -> task.reject(comment));
     publishCompleted(task, "{\"decision\":\"REJECTED\"}");
+    publishAnalytics(task, "APPROVAL_COMPLETED");
     recordDecision("REJECTED");
     return taskMapper.toResponse(task);
   }
@@ -112,6 +117,7 @@ public class TaskService {
     Task task = find(tenantId, id);
     runGuarded(task::complete);
     publishCompleted(task, "{\"decision\":\"COMPLETED\"}");
+    publishAnalytics(task, "TASK_COMPLETED");
     return taskMapper.toResponse(task);
   }
 
@@ -124,6 +130,21 @@ public class TaskService {
 
   private void recordDecision(String decision) {
     meterRegistry.counter("awap.task.decisions", "decision", decision).increment();
+  }
+
+  private void publishAnalytics(Task task, String eventType) {
+    long durationMs = Math.max(0L, Duration.between(task.getCreatedAt(), Instant.now()).toMillis());
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("tenantId", task.getTenantId().toString());
+    payload.put("eventType", eventType);
+    payload.put(
+        "workflowInstanceId",
+        task.getWorkflowInstanceId() == null ? null : task.getWorkflowInstanceId().toString());
+    payload.put("taskId", task.getId().toString());
+    payload.put("durationMs", durationMs);
+    payload.put("timestamp", Instant.now().toEpochMilli());
+    outboxEventPublisher.publish(
+        task.getTenantId(), "TASK", task.getId(), "ANALYTICS_EVENT", payload);
   }
 
   private void publishCompleted(Task task, String outputJson) {

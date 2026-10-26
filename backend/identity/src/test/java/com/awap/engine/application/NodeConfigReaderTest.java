@@ -77,4 +77,44 @@ class NodeConfigReaderTest {
     assertThat(reader.readApprovers(node("{\"approvers\":[null,\"role:TENANT_ADMIN\"]}")))
         .isEqualTo(List.of("role:TENANT_ADMIN"));
   }
+
+  @Test
+  void readsWebhookAndSubProcessSettingsWithSafeDefaults() {
+    NodeDefinition configured =
+        node(
+            "{\"url\":\"https://hooks.example.com\",\"payload\":\"{}\","
+                + "\"timeoutSeconds\":3,\"maxAttempts\":4,\"retryBackoffMs\":250,"
+                + "\"workflowDefinitionId\":\"00000000-0000-0000-0000-000000000001\","
+                + "\"version\":2,\"expression\":\"#amount > 10\"}");
+
+    assertThat(reader.readWebhookUrl(configured)).isEqualTo("https://hooks.example.com");
+    assertThat(reader.readWebhookPayload(configured)).isEqualTo("{}");
+    assertThat(reader.readTimeoutSeconds(configured)).isEqualTo(3);
+    assertThat(reader.readMaxAttempts(configured)).isEqualTo(4);
+    assertThat(reader.readRetryBackoffMs(configured)).isEqualTo(250);
+    assertThat(reader.readSubProcessDefinitionId(configured))
+        .isEqualTo("00000000-0000-0000-0000-000000000001");
+    assertThat(reader.readSubProcessVersion(configured)).contains(2);
+    assertThat(reader.readExpression(configured)).contains("#amount > 10");
+  }
+
+  @Test
+  void newSettingsFallBackOnMalformedConfig() {
+    NodeDefinition broken = node("not-json");
+
+    assertThat(reader.readWebhookUrl(broken)).isNull();
+    assertThat(reader.readWebhookPayload(broken)).isEqualTo("{}");
+    assertThat(reader.readTimeoutSeconds(broken)).isEqualTo(10);
+    assertThat(reader.readMaxAttempts(broken)).isEqualTo(3);
+    assertThat(reader.readRetryBackoffMs(broken)).isEqualTo(1000);
+    assertThat(reader.readSubProcessDefinitionId(broken)).isNull();
+    assertThat(reader.readSubProcessVersion(broken)).isEmpty();
+    assertThat(reader.readExpression(broken)).isEmpty();
+  }
+
+  @Test
+  void maxAttemptsIsClampedToTen() {
+    assertThat(reader.readMaxAttempts(node("{\"maxAttempts\":99}"))).isEqualTo(10);
+    assertThat(reader.readMaxAttempts(node("{\"maxAttempts\":0}"))).isEqualTo(1);
+  }
 }

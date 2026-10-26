@@ -2,6 +2,7 @@ package com.awap.document.application;
 
 import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
+import com.awap.identity.infrastructure.security.KafkaTenantContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.UUID;
@@ -17,10 +18,15 @@ public class DocumentEventListener {
 
   private final ObjectMapper objectMapper;
   private final DocumentService documentService;
+  private final KafkaTenantContext tenantContext;
 
-  public DocumentEventListener(ObjectMapper objectMapper, DocumentService documentService) {
+  public DocumentEventListener(
+      ObjectMapper objectMapper,
+      DocumentService documentService,
+      KafkaTenantContext tenantContext) {
     this.objectMapper = objectMapper;
     this.documentService = documentService;
+    this.tenantContext = tenantContext;
   }
 
   @KafkaListener(topics = "document.events")
@@ -33,7 +39,8 @@ public class DocumentEventListener {
       String format = event.path("format").isNull() ? null : event.path("format").asText();
       String objectKey = fileId + "/" + UUID.randomUUID();
 
-      documentService.createVersion(tenantId, fileId, size, format, objectKey);
+      tenantContext.run(
+          tenantId, () -> documentService.createVersion(tenantId, fileId, size, format, objectKey));
     } catch (Exception ex) {
       throw new AwapException(
           ErrorCode.GENERIC_INTERNAL_ERROR,

@@ -154,4 +154,93 @@ class TransitionResolverTest {
     assertThat(parallel.getMergedBranchCount()).isEqualTo(2);
     verify(port).executeNode(instance, merge);
   }
+
+  @Test
+  void decisionFollowsOnlyTheFirstMatchingBranch() {
+    WorkflowInstance instance = instance();
+    NodeDefinition decision = node("decide", NodeType.DECISION);
+    NodeDefinition low = node("low", NodeType.TASK);
+    NodeDefinition high = node("high", NodeType.TASK);
+    when(executionContextRepository.findByWorkflowInstanceId(any())).thenReturn(Optional.empty());
+    when(workflowDefinitionService.nodesOf(workflowDefinitionId, 1))
+        .thenReturn(List.of(decision, low, high));
+    when(workflowDefinitionService.transitionsOf(workflowDefinitionId, 1))
+        .thenReturn(
+            List.of(
+                new TransitionDefinition(tenantId, versionId, "decide", "low", "#amount < 100"),
+                new TransitionDefinition(tenantId, versionId, "decide", "high", "#amount >= 100")));
+    when(spelExpressionService.evaluate("#amount < 100", Map.of())).thenReturn(false);
+    when(spelExpressionService.evaluate("#amount >= 100", Map.of())).thenReturn(true);
+
+    resolver.advanceFrom(instance, "decide");
+
+    verify(port).executeNode(instance, high);
+    verify(port, org.mockito.Mockito.never()).executeNode(instance, low);
+  }
+
+  @Test
+  void conditionFollowsEveryMatchingBranch() {
+    WorkflowInstance instance = instance();
+    NodeDefinition condition = node("condition", NodeType.CONDITION);
+    NodeDefinition audit = node("audit", NodeType.TASK);
+    NodeDefinition notify = node("notify", NodeType.TASK);
+    when(executionContextRepository.findByWorkflowInstanceId(any())).thenReturn(Optional.empty());
+    when(workflowDefinitionService.nodesOf(workflowDefinitionId, 1))
+        .thenReturn(List.of(condition, audit, notify));
+    when(workflowDefinitionService.transitionsOf(workflowDefinitionId, 1))
+        .thenReturn(
+            List.of(
+                new TransitionDefinition(tenantId, versionId, "condition", "audit", "#audit"),
+                new TransitionDefinition(tenantId, versionId, "condition", "notify", "#notify")));
+    when(spelExpressionService.evaluate("#audit", Map.of())).thenReturn(true);
+    when(spelExpressionService.evaluate("#notify", Map.of())).thenReturn(true);
+
+    resolver.advanceFrom(instance, "condition");
+
+    verify(port).executeNode(instance, audit);
+    verify(port).executeNode(instance, notify);
+  }
+
+  @Test
+  void decisionWithoutMatchingBranchFailsDeterministically() {
+    WorkflowInstance instance = instance();
+    NodeDefinition decision = node("decide", NodeType.DECISION);
+    NodeDefinition target = node("target", NodeType.TASK);
+    when(executionContextRepository.findByWorkflowInstanceId(any())).thenReturn(Optional.empty());
+    when(workflowDefinitionService.nodesOf(workflowDefinitionId, 1))
+        .thenReturn(List.of(decision, target));
+    when(workflowDefinitionService.transitionsOf(workflowDefinitionId, 1))
+        .thenReturn(
+            List.of(new TransitionDefinition(tenantId, versionId, "decide", "target", "#never")));
+    when(spelExpressionService.evaluate("#never", Map.of())).thenReturn(false);
+
+    assertThatThrownBy(() -> resolver.advanceFrom(instance, "decide"))
+        .isInstanceOf(AwapException.class);
+  }
+
+  @Test
+  void mergeGatewayAliasIsRecognised() {
+    WorkflowInstance instance = instance();
+    NodeDefinition merge = node("merge", NodeType.MERGE_GATEWAY);
+    NodeExecution parallel =
+        new NodeExecution(tenantId, instance.getId(), "fork", "PARALLEL_GATEWAY");
+    parallel.openBranches(1);
+    when(nodeExecutionRepository.findByWorkflowInstanceIdAndJoinNodeId(any(), eq("merge")))
+        .thenReturn(Optional.of(parallel));
+
+    resolver.reportBranchMerge(instance, merge);
+
+    verify(port).executeNode(instance, merge);
+  }
+
+  @Test
+  void failedInstanceNeverFiresMerge() {
+    WorkflowInstance instance = instance();
+    instance.transitionTo(WorkflowState.FAILED);
+    NodeDefinition merge = node("merge", NodeType.MERGE_GATEWAY);
+
+    resolver.reportBranchMerge(instance, merge);
+
+    verify(port, org.mockito.Mockito.never()).executeNode(any(), any());
+  }
 }

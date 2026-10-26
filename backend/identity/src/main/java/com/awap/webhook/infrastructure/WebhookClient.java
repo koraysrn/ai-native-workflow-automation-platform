@@ -54,20 +54,31 @@ public class WebhookClient {
 
   /** Posts the payload and returns the response body. Throws on non-2xx or transport failure. */
   public String post(String url, String payload) {
+    return post(url, payload, null, READ_TIMEOUT);
+  }
+
+  /**
+   * Posts the payload with a stable idempotency key and a per-call timeout. The key lets external
+   * receivers de-duplicate retries triggered by node-level recovery.
+   */
+  public String post(String url, String payload, String idempotencyKey, Duration timeout) {
     ssrfGuard.assertSafe(url);
     allowlist.assertAllowed(url);
     long timestamp = System.currentTimeMillis();
     String signature = signer.sign(secret, payload, timestamp);
 
-    HttpRequest request =
+    HttpRequest.Builder builder =
         HttpRequest.newBuilder()
             .uri(URI.create(url))
-            .timeout(READ_TIMEOUT)
+            .timeout(timeout == null ? READ_TIMEOUT : timeout)
             .header("Content-Type", "application/json")
             .header("X-Awap-Signature", signature)
             .header("X-Awap-Timestamp", String.valueOf(timestamp))
-            .POST(HttpRequest.BodyPublishers.ofString(payload))
-            .build();
+            .POST(HttpRequest.BodyPublishers.ofString(payload));
+    if (idempotencyKey != null && !idempotencyKey.isBlank()) {
+      builder.header("Idempotency-Key", idempotencyKey);
+    }
+    HttpRequest request = builder.build();
 
     try {
       HttpResponse<String> response =

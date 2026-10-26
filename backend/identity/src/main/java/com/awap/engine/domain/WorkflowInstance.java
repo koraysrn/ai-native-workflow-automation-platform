@@ -40,6 +40,12 @@ public class WorkflowInstance {
   @Column(name = "idempotency_key")
   private String idempotencyKey;
 
+  @Column(name = "parent_instance_id")
+  private UUID parentInstanceId;
+
+  @Column(name = "parent_node_id")
+  private String parentNodeId;
+
   @Version
   @Column(nullable = false)
   private long version;
@@ -62,6 +68,26 @@ public class WorkflowInstance {
       WorkflowState state,
       String idempotencyKey,
       String contextJson) {
+    this(
+        tenantId,
+        workflowDefinitionId,
+        workflowVersion,
+        state,
+        idempotencyKey,
+        contextJson,
+        null,
+        null);
+  }
+
+  public WorkflowInstance(
+      UUID tenantId,
+      UUID workflowDefinitionId,
+      int workflowVersion,
+      WorkflowState state,
+      String idempotencyKey,
+      String contextJson,
+      UUID parentInstanceId,
+      String parentNodeId) {
     this.id = UUID.randomUUID();
     this.tenantId = tenantId;
     this.workflowDefinitionId = workflowDefinitionId;
@@ -69,6 +95,8 @@ public class WorkflowInstance {
     this.state = state;
     this.idempotencyKey = idempotencyKey;
     this.contextJson = contextJson;
+    this.parentInstanceId = parentInstanceId;
+    this.parentNodeId = parentNodeId;
     this.createdAt = Instant.now();
     this.updatedAt = Instant.now();
     this.deleted = false;
@@ -127,6 +155,14 @@ public class WorkflowInstance {
 
   public String getIdempotencyKey() {
     return idempotencyKey;
+  }
+
+  public UUID getParentInstanceId() {
+    return parentInstanceId;
+  }
+
+  public String getParentNodeId() {
+    return parentNodeId;
   }
 
   public long getVersion() {

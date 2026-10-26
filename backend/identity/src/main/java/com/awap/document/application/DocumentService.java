@@ -32,6 +32,22 @@ public class DocumentService {
     this.outboxEventPublisher = outboxEventPublisher;
   }
 
+  /** Registers a freshly uploaded file whose antivirus scan has not completed yet. */
+  @Transactional
+  public DocumentVersion registerPending(UUID tenantId, UUID fileId) {
+    DocumentVersion version =
+        new DocumentVersion(tenantId, fileId, 1, BUCKET, fileId + "/v1", 0, null);
+    repository.save(version);
+    publish(tenantId, fileId, "DOCUMENT_REGISTERED", version);
+    return version;
+  }
+
+  /** Lists every live document version owned by the tenant. */
+  @Transactional(readOnly = true)
+  public List<DocumentVersion> list(UUID tenantId) {
+    return repository.findByTenantIdAndDeletedFalseOrderByCreatedAtDesc(tenantId);
+  }
+
   /** Registers a brand-new document (version 1) or the first observed event for a file. */
   @Transactional
   public DocumentVersion register(UUID tenantId, UUID fileId, DocumentStatus status) {
@@ -64,9 +80,7 @@ public class DocumentService {
   /** Lists the live (non-soft-deleted) versions of a document, oldest first. */
   @Transactional(readOnly = true)
   public List<DocumentVersion> listVersions(UUID tenantId, UUID fileId) {
-    return repository.findByFileIdAndDeletedFalseOrderByVersionAsc(fileId).stream()
-        .filter(v -> v.getTenantId().equals(tenantId))
-        .toList();
+    return repository.findByTenantIdAndFileIdAndDeletedFalseOrderByVersionAsc(tenantId, fileId);
   }
 
   /** Archives a document version without deleting it (retention-compatible). */

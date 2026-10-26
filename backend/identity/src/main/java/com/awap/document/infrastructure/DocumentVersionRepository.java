@@ -13,5 +13,10 @@ public interface DocumentVersionRepository extends JpaRepository<DocumentVersion
 
   List<DocumentVersion> findByFileIdAndDeletedFalseOrderByVersionAsc(UUID fileId);
 
+  List<DocumentVersion> findByTenantIdAndFileIdAndDeletedFalseOrderByVersionAsc(
+      UUID tenantId, UUID fileId);
+
+  List<DocumentVersion> findByTenantIdAndDeletedFalseOrderByCreatedAtDesc(UUID tenantId);
+
   Optional<DocumentVersion> findByIdAndTenantId(UUID id, UUID tenantId);
 }

@@ -89,6 +89,13 @@ public class NodeExecution {
     this.attempt = this.attempt + 1;
   }
 
+  /** Re-arms a failed execution for the next attempt while keeping the attempt counter. */
+  public void resetForRetry() {
+    this.status = NodeExecutionStatus.PENDING;
+    this.error = null;
+    this.resumeAt = null;
+  }
+
   public void waitForExternal() {
     this.status = NodeExecutionStatus.WAITING;
   }

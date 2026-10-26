@@ -51,7 +51,8 @@ class DocumentServiceTest {
     UUID file = UUID.randomUUID();
     DocumentVersion version = new DocumentVersion(tenant, file, 1, "b", "k", 5, "pdf");
     when(repository.findByIdAndTenantId(version.getId(), tenant)).thenReturn(Optional.of(version));
-    when(repository.findByFileIdAndDeletedFalseOrderByVersionAsc(file)).thenReturn(List.of());
+    when(repository.findByTenantIdAndFileIdAndDeletedFalseOrderByVersionAsc(tenant, file))
+        .thenReturn(List.of());
 
     service.softDelete(tenant, version.getId());
 
@@ -60,14 +61,25 @@ class DocumentServiceTest {
   }
 
   @Test
-  void listVersionsFiltersOtherTenants() {
+  void listVersionsIsTenantScopedInTheQuery() {
     UUID tenantA = UUID.randomUUID();
-    UUID tenantB = UUID.randomUUID();
     UUID file = UUID.randomUUID();
     DocumentVersion a = new DocumentVersion(tenantA, file, 1, "b", "k", 5, "pdf");
-    DocumentVersion b = new DocumentVersion(tenantB, file, 2, "b", "k", 5, "pdf");
-    when(repository.findByFileIdAndDeletedFalseOrderByVersionAsc(file)).thenReturn(List.of(a, b));
+    when(repository.findByTenantIdAndFileIdAndDeletedFalseOrderByVersionAsc(tenantA, file))
+        .thenReturn(List.of(a));
 
     assertThat(service.listVersions(tenantA, file)).containsExactly(a);
+  }
+
+  @Test
+  void registerPendingCreatesVersionOnePending() {
+    UUID tenant = UUID.randomUUID();
+    UUID file = UUID.randomUUID();
+
+    DocumentVersion version = service.registerPending(tenant, file);
+
+    assertThat(version.getVersion()).isEqualTo(1);
+    assertThat(version.getStatus()).isEqualTo(DocumentStatus.PENDING);
+    verify(repository).save(version);
   }
 }
