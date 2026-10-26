@@ -30,6 +30,12 @@
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <spring-cloud.version>2025.1.2</spring-cloud.version>
 
+        <!-- Security patch overrides for the Jackson BOMs managed by Spring Boot 4.1.1.
+             CVE-2026-89407 / CVE-2026-89425 / CVE-2026-68497 / CVE-2026-91776 /
+             CVE-2026-91777 are fixed in 2.21.7 (Jackson 2) and 3.1.7 (Jackson 3). -->
+        <jackson-2-bom.version>2.21.7</jackson-2-bom.version>
+        <jackson-bom.version>3.1.7</jackson-bom.version>
+
         <mapstruct.version>1.6.3</mapstruct.version>
         <archunit.version>1.5.1</archunit.version>
         <springdoc.version>3.1.1</springdoc.version>
