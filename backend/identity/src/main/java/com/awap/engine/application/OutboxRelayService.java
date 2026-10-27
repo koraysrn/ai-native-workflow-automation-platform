@@ -102,6 +102,7 @@ public class OutboxRelayService {
       case "TASK_COMPLETED", "TASK_ESCALATION_DUE" -> "workflow.task.events";
       case "FORM_SUBMITTED" -> "workflow.instance.events";
       case "SUB_PROCESS_COMPLETED" -> "workflow.subprocess.events";
+      case "WEBHOOK_DELIVERY_DEAD" -> "webhook.delivery.dlq";
       case "ANALYTICS_EVENT" -> "analytics.events";
       case "NOTIFICATION_REQUESTED" -> "notification.send";
       case "DOCUMENT_REGISTERED",

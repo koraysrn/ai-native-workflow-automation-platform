@@ -2,6 +2,7 @@ package com.awap.webhook.infrastructure;
 
 import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
+import com.awap.webhook.application.WebhookAttemptResult;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -62,6 +63,29 @@ public class WebhookClient {
    * receivers de-duplicate retries triggered by node-level recovery.
    */
   public String post(String url, String payload, String idempotencyKey, Duration timeout) {
+    WebhookAttemptResult result = attempt(url, payload, idempotencyKey, timeout);
+    if (result.transportFailure()) {
+      throw new AwapException(
+          ErrorCode.GENERIC_INTERNAL_ERROR,
+          HttpStatus.BAD_GATEWAY,
+          "Webhook request failed: " + result.error().orElse("unknown transport error"));
+    }
+    if (result.statusCode() >= 400) {
+      throw new AwapException(
+          ErrorCode.GENERIC_INTERNAL_ERROR,
+          HttpStatus.BAD_GATEWAY,
+          "Webhook target returned status " + result.statusCode() + ".");
+    }
+    return result.body();
+  }
+
+  /**
+   * Performs exactly one signed request and reports the outcome instead of throwing for HTTP error
+   * statuses, so the retry policy can classify them. The SSRF guard, the outbound allowlist and the
+   * HMAC signature are re-applied on every call (i.e. on every retry).
+   */
+  public WebhookAttemptResult attempt(
+      String url, String payload, String idempotencyKey, Duration timeout) {
     ssrfGuard.assertSafe(url);
     allowlist.assertAllowed(url);
     long timestamp = System.currentTimeMillis();
@@ -84,19 +108,18 @@ public class WebhookClient {
       HttpResponse<String> response =
           httpClient.send(request, HttpResponse.BodyHandlers.ofString());
       if (response.statusCode() >= 400) {
-        throw new AwapException(
-            ErrorCode.GENERIC_INTERNAL_ERROR,
-            HttpStatus.BAD_GATEWAY,
-            "Webhook target returned status " + response.statusCode() + ".");
+        return WebhookAttemptResult.httpError(
+            response.statusCode(),
+            response.body(),
+            response.headers().firstValue("Retry-After").orElse(null));
       }
-      return response.body();
-    } catch (AwapException ex) {
-      throw ex;
+      return WebhookAttemptResult.success(response.statusCode(), response.body());
+    } catch (InterruptedException ex) {
+      Thread.currentThread().interrupt();
+      return WebhookAttemptResult.transportFailure("Webhook request was interrupted.");
     } catch (Exception ex) {
-      throw new AwapException(
-          ErrorCode.GENERIC_INTERNAL_ERROR,
-          HttpStatus.BAD_GATEWAY,
-          "Webhook request failed: " + ex.getMessage());
+      return WebhookAttemptResult.transportFailure(
+          "Webhook request failed: " + ex.getClass().getSimpleName());
     }
   }
 }

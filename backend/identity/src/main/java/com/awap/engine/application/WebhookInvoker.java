@@ -1,106 +1,83 @@
 package com.awap.engine.application;
 
-import com.awap.common.api.AwapException;
-import com.awap.common.api.ErrorCode;
 import com.awap.engine.domain.NodeExecution;
 import com.awap.engine.domain.WorkflowInstance;
-import com.awap.engine.infrastructure.JitteredBackOff;
+import com.awap.webhook.application.WebhookAttemptResult;
 import com.awap.webhook.infrastructure.WebhookClient;
 import com.awap.workflow.domain.NodeDefinition;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
-import org.springframework.util.backoff.BackOffExecution;
 
 /**
- * Executes a WEBHOOK node: validates the target, signs the payload, retries transient failures with
- * the shared 1s/5s/25s jittered backoff and forwards a stable idempotency key so a receiver can
- * de-duplicate retries caused by recovery.
+ * Performs the synchronous (first) attempt of a WEBHOOK node. Only one HTTP request is issued here:
+ * retryable failures are handed over to the durable {@code webhook_deliveries} queue instead of
+ * being retried in-thread. Validation failures are reported as permanent (400/413) so the caller
+ * can persist an operator-visible DEAD row.
  */
 @Component
 public class WebhookInvoker {
 
-  private static final Logger log = LoggerFactory.getLogger(WebhookInvoker.class);
+  static final int MAX_PAYLOAD_BYTES = 1_048_576;
 
   private final WebhookClient webhookClient;
   private final NodeConfigReader configReader;
-  private final Sleeper sleeper;
+  private final ObjectMapper objectMapper;
 
   @Autowired
   public WebhookInvoker(WebhookClient webhookClient, ObjectMapper objectMapper) {
-    this(webhookClient, new NodeConfigReader(objectMapper), Sleeper.system());
+    this(webhookClient, new NodeConfigReader(objectMapper), objectMapper);
   }
 
-  WebhookInvoker(WebhookClient webhookClient, NodeConfigReader configReader, Sleeper sleeper) {
+  WebhookInvoker(WebhookClient webhookClient, NodeConfigReader configReader, ObjectMapper mapper) {
     this.webhookClient = webhookClient;
     this.configReader = configReader;
-    this.sleeper = sleeper;
+    this.objectMapper = mapper;
   }
 
-  String invoke(WorkflowInstance instance, NodeDefinition node, NodeExecution execution) {
+  /** Runs the synchronous first attempt and returns its classified outcome. */
+  public WebhookAttemptResult invoke(
+      WorkflowInstance instance, NodeDefinition node, NodeExecution execution) {
     String url = configReader.readWebhookUrl(node);
     if (url == null) {
-      throw new AwapException(
-          ErrorCode.WORKFLOW_INVALID_DEFINITION,
-          HttpStatus.BAD_REQUEST,
-          "WEBHOOK node '" + node.getNodeId() + "' requires a url in its config.");
+      return WebhookAttemptResult.rejected(
+          400, "WEBHOOK node '" + node.getNodeId() + "' requires a url in its config.");
     }
     String payload = configReader.readWebhookPayload(node);
-    Duration timeout = Duration.ofSeconds(Math.max(1, configReader.readTimeoutSeconds(node)));
-    String idempotencyKey = idempotencyKey(instance, node, execution);
-    int maxAttempts = configReader.readMaxAttempts(node);
-    BackOffExecution backOff = new JitteredBackOff().start();
-
-    RuntimeException last = null;
-    for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        String response = webhookClient.post(url, payload, idempotencyKey, timeout);
-        return response == null ? "{}" : response;
-      } catch (RuntimeException ex) {
-        last = ex;
-        log.warn(
-            "WEBHOOK node {} attempt {}/{} failed: {}",
-            node.getNodeId(),
-            attempt,
-            maxAttempts,
-            ex.getMessage());
-        if (attempt < maxAttempts) {
-          long delay = backOff.nextBackOff();
-          sleeper.sleep(delay == BackOffExecution.STOP ? 1000L : delay);
-        }
-      }
+    if (payload.getBytes(StandardCharsets.UTF_8).length > MAX_PAYLOAD_BYTES) {
+      return WebhookAttemptResult.rejected(413, "Webhook payload exceeds the 1 MB limit.");
     }
-    throw last == null
-        ? new AwapException(
-            ErrorCode.GENERIC_INTERNAL_ERROR,
-            HttpStatus.BAD_GATEWAY,
-            "WEBHOOK node failed without a provider error.")
-        : last;
+    if (!isJson(payload)) {
+      return WebhookAttemptResult.rejected(400, "Webhook payload is not valid JSON.");
+    }
+    Duration timeout = Duration.ofSeconds(Math.max(1, configReader.readTimeoutSeconds(node)));
+    return webhookClient.attempt(url, payload, idempotencyKey(instance, node, execution), timeout);
   }
 
-  private String idempotencyKey(
-      WorkflowInstance instance, NodeDefinition node, NodeExecution execution) {
+  /** Configured target URL of the node, or {@code null} when the node is misconfigured. */
+  public String targetUrl(NodeDefinition node) {
+    return configReader.readWebhookUrl(node);
+  }
+
+  /** Immutable payload of the node; unchanged for every retry attempt. */
+  public String payload(NodeDefinition node) {
+    return configReader.readWebhookPayload(node);
+  }
+
+  /** Stable across every attempt and replica: {@code instanceId:nodeId:executionId}. */
+  String idempotencyKey(WorkflowInstance instance, NodeDefinition node, NodeExecution execution) {
     return instance.getId() + ":" + node.getNodeId() + ":" + execution.getId();
   }
 
-  /** Test seam so retry tests do not sleep for real. */
-  @FunctionalInterface
-  interface Sleeper {
-    void sleep(long millis);
-
-    static Sleeper system() {
-      return millis -> {
-        try {
-          Thread.sleep(millis);
-        } catch (InterruptedException ex) {
-          Thread.currentThread().interrupt();
-          throw new IllegalStateException("Webhook retry sleep interrupted.", ex);
-        }
-      };
+  private boolean isJson(String payload) {
+    try {
+      objectMapper.readTree(payload);
+      return true;
+    } catch (JsonProcessingException ex) {
+      return false;
     }
   }
 }
