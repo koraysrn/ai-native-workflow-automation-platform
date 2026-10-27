@@ -3,7 +3,16 @@
     "list": []
   },
   "editable": true,
-  "graphTooltip": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [
+    {
+      "title": "Operations runbook",
+      "type": "link",
+      "url": "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md",
+      "targetBlank": true
+    }
+  ],
   "panels": [
     {
       "datasource": {
@@ -12,7 +21,7 @@
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "short"
+          "unit": "reqps"
         },
         "overrides": []
       },
@@ -29,29 +38,409 @@
           "placement": "bottom"
         },
         "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (tenant) (rate(awap_workflow_success_total{tenant=~\"$tenant\"}[5m]))",
+          "legendFormat": "success {{tenant}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (tenant) (rate(awap_workflow_failure_total{tenant=~\"$tenant\"}[5m]))",
+          "legendFormat": "failure {{tenant}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Workflow success vs failure rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "max": 1,
+          "min": 0
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "id": 2,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
           "mode": "single"
         }
       },
       "targets": [
         {
-          "expr": "increase(awap_task_decisions_total[5m])",
+          "expr": "sum(rate(awap_workflow_failure_total{tenant=~\"$tenant\"}[5m])) / clamp_min(sum(rate(awap_workflow_success_total{tenant=~\"$tenant\"}[5m])) + sum(rate(awap_workflow_failure_total{tenant=~\"$tenant\"}[5m])), 0.001)",
+          "legendFormat": "failure ratio",
+          "refId": "A"
+        }
+      ],
+      "title": "Workflow failure ratio",
+      "type": "stat"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 0,
+        "y": 8
+      },
+      "id": 3,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (tenant) (rate(awap_task_completed_total{tenant=~\"$tenant\"}[5m]))",
+          "legendFormat": "completed {{tenant}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Task completion rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 8,
+        "y": 8
+      },
+      "id": 4,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (decision) (increase(awap_task_decisions_total[5m]))",
           "legendFormat": "{{decision}}",
           "refId": "A"
         }
       ],
       "title": "Task decisions",
       "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 8,
+        "x": 16,
+        "y": 8
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, tenant) (rate(awap_process_duration_seconds_bucket{tenant=~\"$tenant\"}[5m])))",
+          "legendFormat": "p95 {{tenant}}",
+          "refId": "A"
+        }
+      ],
+      "title": "Workflow process duration p95",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 16
+      },
+      "id": 6,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (tenant) (increase(awap_sla_breaches_total{tenant=~\"$tenant\"}[1h]))",
+          "legendFormat": "breaches {{tenant}}",
+          "refId": "A"
+        }
+      ],
+      "title": "SLA breaches (1h)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 16
+      },
+      "id": 7,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "sum by (result) (rate(awap_notification_deliveries_total{channel=~\"$channel\"}[5m]))",
+          "legendFormat": "deliveries {{result}}",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (channel) (rate(awap_notification_attempts_total{channel=~\"$channel\",result=\"failed\"}[5m]))",
+          "legendFormat": "failed attempts {{channel}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Notification deliveries and failures",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 24
+      },
+      "id": 8,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, channel) (rate(awap_notification_retry_lag_seconds_bucket{channel=~\"$channel\"}[5m])))",
+          "legendFormat": "retry lag p95 {{channel}}",
+          "refId": "A"
+        },
+        {
+          "expr": "histogram_quantile(0.95, sum by (le, channel) (rate(awap_notification_dispatch_latency_seconds_bucket{channel=~\"$channel\"}[5m])))",
+          "legendFormat": "dispatch p95 {{channel}}",
+          "refId": "B"
+        }
+      ],
+      "title": "Notification retry lag and dispatch latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 24
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "targets": [
+        {
+          "expr": "awap_outbox_pending",
+          "legendFormat": "pending rows",
+          "refId": "A"
+        },
+        {
+          "expr": "sum by (result) (rate(awap_outbox_events_total[5m]))",
+          "legendFormat": "relay {{result}}",
+          "refId": "B"
+        },
+        {
+          "expr": "sum(rate(http_server_requests_seconds_count{status=~\"5..\"}[5m]))",
+          "legendFormat": "http 5xx",
+          "refId": "C"
+        },
+        {
+          "expr": "increase(awap_dlq_messages_total[5m])",
+          "legendFormat": "dlq messages",
+          "refId": "D"
+        }
+      ],
+      "title": "Outbox backlog, relay rate and DLQ",
+      "type": "timeseries"
     }
   ],
   "refresh": "30s",
   "schemaVersion": 39,
-  "tags": ["awap"],
+  "tags": ["awap", "workflow", "notification", "outbox"],
+  "templating": {
+    "list": [
+      {
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(awap_workflow_success_total, tenant)",
+        "includeAll": true,
+        "label": "Tenant",
+        "multi": true,
+        "name": "tenant",
+        "options": [],
+        "query": {
+          "query": "label_values(awap_workflow_success_total, tenant)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "definition": "label_values(awap_notification_deliveries_total, channel)",
+        "includeAll": true,
+        "label": "Channel",
+        "multi": true,
+        "name": "channel",
+        "options": [],
+        "query": {
+          "query": "label_values(awap_notification_deliveries_total, channel)",
+          "refId": "StandardVariableQuery"
+        },
+        "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
   "time": {
-    "from": "now-1h",
+    "from": "now-6h",
     "to": "now"
   },
   "timezone": "browser",
-  "title": "AWAP Overview",
+  "title": "AWAP platform overview",
   "uid": "awap-overview",
-  "version": 1
+  "version": 2
 }
