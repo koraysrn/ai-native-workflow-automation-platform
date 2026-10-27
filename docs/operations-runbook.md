@@ -72,3 +72,76 @@ incident ticket. The target is RPO ≤ 24h / RTO ≤ 4h.
 The control-to-policy mapping (SOC 2 / ISO 27001 / GDPR-KVKK) lives in
 [`compliance-inventory.md`](../docs/compliance-inventory.md): retention windows, right-to-erasure
 behaviour and the outbox/execution-log retention mapping.
+
+## O7 — Webhook delivery queue and dead-letter handling
+
+WEBHOOK workflow nodes make the first HTTP attempt synchronously. Retryable failures (transport
+errors, 5xx, 408, 429) are persisted in `webhook_deliveries` and retried by `WebhookRetryScheduler`
+(5s fixed delay, `FOR UPDATE SKIP LOCKED` claim with a lease token). Permanent failures (any other
+4xx) and exhausted budgets end in `status = DEAD` and fail the node and its instance.
+
+Retry schedule: 1s, 5s, 25s, 2m, 10m with up to 20% jitter; `429` honours `Retry-After`. The attempt
+budget comes from the node config (`maxAttempts`, default 3, capped at 10) and is stored on the row
+as `max_attempts`.
+
+### Metrics and alerts
+
+| Metric | Meaning | Action |
+|---|---|---|
+| `awap.webhook.attempts{result,status}` | One increment per HTTP attempt (`sent`/`retry`/`dead`) | `dead` rising means a target is down |
+| `awap.webhook.dead` | Deliveries that exhausted their budget / hit a permanent error | Page on-call when it increases |
+| `awap.webhook.retry_lag_seconds` | Scheduled instant vs. actual claim instant | p95 > 5s means the queue is backlogged: raise `WEBHOOK_RETRY_BATCH_SIZE` / add replicas |
+
+A `WEBHOOK_DELIVERY_DEAD` outbox event is written to the `webhook.delivery.dlq` topic (it matches the
+`.*\.dlq` pattern of `DlqConsumer`, which increments `awap.dlq.messages`). Alert on
+`rate(awap.webhook.dead[5m]) > 0` and on a `awap.dlq.messages` increase.
+
+### Inspecting DEAD rows
+
+```sh
+# Tenant-scoped API (requires INSTANCE_READ; tenant comes from the session)
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "https://api.example.com/api/v1/webhook-deliveries?status=DEAD&limit=50"
+```
+
+```sql
+-- Direct inspection as a DBA role (RLS applies to awap_app, so set the tenant first)
+SET awap.tenant_id = '<tenant-uuid>';
+SELECT id, workflow_instance_id, node_id, attempts, max_attempts, last_status_code,
+       left(last_error, 200) AS error, created_at, expires_at
+FROM webhook_deliveries
+WHERE status = 'DEAD'
+ORDER BY created_at DESC;
+```
+
+Never select `payload_json` or log it: it may contain personal data. `target_url` may contain a
+query string that is already redacted in the API but not in the table.
+
+### Re-queue procedure
+
+1. Identify the root cause (target downtime, wrong allowlist, secret rotation). `403` rows usually
+   mean the SSRF guard/allowlist rejected the host, so fix config first.
+2. Re-queue the row (keeps the original `idempotency_key`, so the receiver de-duplicates):
+
+```sql
+SET awap.tenant_id = '<tenant-uuid>';
+UPDATE webhook_deliveries
+SET status = 'PENDING', attempts = 0, next_attempt_at = now(), lease_token = NULL,
+    lease_until = NULL, updated_at = now()
+WHERE id = '<delivery-id>' AND status = 'DEAD';
+```
+
+3. The scheduler picks the row up within 5s and performs exactly one attempt per claim. A successful
+   retry completes the node via the outbox `NodeCompletedEvent`; another failure returns the row to
+   `DEAD` and fails the instance again.
+4. If the target is permanently gone, cancel instead of re-queueing (`status = 'CANCELLED'`) and
+   cancel the workflow instance through the API.
+
+### Other operational notes
+
+- Cancelling a workflow instance marks its open deliveries `CANCELLED`; no further attempt is made.
+- `expires_at` (default 7 days, `WEBHOOK_RETRY_RETENTION_DAYS`) bounds the queue: expired rows are
+  cancelled by the scheduler sweep and can be purged with
+  `DELETE FROM webhook_deliveries WHERE expires_at < now() - interval '1 day'`.
+- URL, payload, idempotency key and HMAC signing are immutable across retries; SSRF guard and
+  allowlist run on every attempt. Never disable them to "unstick" a delivery.
