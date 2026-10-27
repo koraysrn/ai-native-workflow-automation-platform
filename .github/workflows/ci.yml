@@ -40,6 +40,9 @@ jobs:
       - name: Format check (Spotless)
         run: mvn -B spotless:check
         working-directory: backend
+      - name: Check Jackson BOM override floor
+        run: ./scripts/check-jackson-versions.sh
+        working-directory: backend
       - name: Generate SBOM
         run: mvn -B org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom
         working-directory: backend
