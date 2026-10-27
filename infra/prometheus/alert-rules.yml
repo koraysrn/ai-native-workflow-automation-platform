@@ -53,3 +53,50 @@ groups:
         annotations:
           summary: "AWAP identity instance is down"
           description: "The awap-identity scrape target has been unreachable for 1 minute."
+
+  - name: awap-usage
+    rules:
+      - alert: AwapUsageQuotaExceeded
+        expr: increase(awap_usage_quota_exceeded_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tenant usage quota exceeded"
+          description: "{{ $value }} requests were rejected with 429 because the tenant daily quota for {{ $labels.metric }} was reached."
+
+      - alert: AwapUsageQuotaNearLimit
+        expr: increase(awap_usage_quota_near_limit_total[1h]) > 0
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "Tenant usage is approaching its daily quota"
+          description: "{{ $labels.metric }} usage crossed 80% of the tenant daily limit; quota rejections are likely if traffic continues."
+
+      - alert: AwapUsageMeteringFailures
+        expr: increase(awap_usage_metering_failures_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Usage metering is failing"
+          description: "Metering writes for {{ $labels.metric }} failed; observational meters are fail-open while quota-enforcing calls are fail-closed (503)."
+
+      - alert: AwapUsageReconciliationDrift
+        expr: increase(awap_usage_reconciliation_drift_total[1h]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Usage counters drifted from the raw event ledger"
+          description: "{{ $value }} counter rows for {{ $labels.metric }} were repaired by reconciliation; investigate the write path that lost increments."
+
+      - alert: AwapUsageReconciliationStale
+        expr: absent_over_time(awap_usage_reconciliation_runs_total[25h])
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Nightly usage reconciliation did not run"
+          description: "No reconciliation run was observed in the last 25 hours; check USAGE_RECONCILIATION_CRON and the application logs."
