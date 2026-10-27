@@ -58,7 +58,7 @@ public class WorkflowEngineService implements WorkflowEnginePort {
   private final TransitionResolver transitionResolver;
   private final NodeExecutor nodeExecutor;
 
-  /** Test/backward-compatible constructor without the webhook invoker (WEBHOOK fails closed). */
+  /** Test/backward-compatible constructor without external adapters (nodes fail closed). */
   WorkflowEngineService(
       WorkflowInstanceRepository instanceRepository,
       ExecutionLogRepository executionLogRepository,
@@ -83,6 +83,8 @@ public class WorkflowEngineService implements WorkflowEnginePort {
         userRepository,
         outboxEventPublisher,
         engineMapper,
+        null,
+        null,
         null);
   }
 
@@ -99,7 +101,9 @@ public class WorkflowEngineService implements WorkflowEnginePort {
       UserRepository userRepository,
       OutboxEventPublisher outboxEventPublisher,
       EngineMapper engineMapper,
-      WebhookInvoker webhookInvoker) {
+      WebhookInvoker webhookInvoker,
+      com.awap.ai.application.AiNodeService aiNodeService,
+      com.awap.script.application.ScriptNodeService scriptNodeService) {
     this.instanceRepository = instanceRepository;
     this.executionLogRepository = executionLogRepository;
     this.workflowDefinitionService = workflowDefinitionService;
@@ -126,7 +130,9 @@ public class WorkflowEngineService implements WorkflowEnginePort {
             taskService,
             userRepository,
             this,
-            webhookInvoker);
+            webhookInvoker,
+            aiNodeService,
+            scriptNodeService);
   }
 
   @Transactional
