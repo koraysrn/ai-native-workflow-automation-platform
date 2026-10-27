@@ -45,6 +45,18 @@ awap:
   notification:
     retention-days: ${NOTIFICATION_RETENTION_DAYS:30}
     retry-delays-ms: ${NOTIFICATION_RETRY_DELAYS_MS:1000,5000,25000}
+  ai:
+    # Fail-closed: the AI workflow node refuses to run until an operator enables it.
+    node-enabled: ${AI_NODE_ENABLED:false}
+    confidence-threshold: ${AI_CONFIDENCE_THRESHOLD:0.7}
+    monthly-token-budget: ${AI_MONTHLY_TOKEN_BUDGET:200000}
+    cost-micros-per-token: ${AI_COST_MICROS_PER_TOKEN:2}
+  script:
+    # Fail-closed: the SCRIPT node is disabled unless the sandbox is explicitly enabled.
+    enabled: ${SCRIPT_NODE_ENABLED:false}
+    timeout-ms: ${SCRIPT_TIMEOUT_MS:10000}
+    max-output-chars: ${SCRIPT_MAX_OUTPUT_CHARS:8192}
+    max-context-chars: ${SCRIPT_MAX_CONTEXT_CHARS:32768}
   analytics:
     opensearch:
       enabled: ${OPENSEARCH_ENABLED:false}
