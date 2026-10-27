@@ -41,7 +41,7 @@ class NotificationTemplateITest {
     Flyway.configure()
         .dataSource(POSTGRES.getJdbcUrl(), POSTGRES.getUsername(), POSTGRES.getPassword())
         .locations("classpath:db/migration")
-        .target(MigrationVersion.fromVersion("46"))
+        .target(MigrationVersion.fromVersion("37"))
         .load()
         .migrate();
     try (Connection admin = adminConnection();
