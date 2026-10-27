@@ -233,6 +233,36 @@ async function authFetch<T>(path: string, retried = false): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function authPatch<T>(path: string, retried = false): Promise<T> {
+  const headers: Record<string, string> = {};
+  const token = csrfToken();
+  if (token) {
+    headers["X-XSRF-TOKEN"] = token;
+  }
+  const tenant = activeTenantId();
+  if (tenant) {
+    headers["X-Tenant-Id"] = tenant;
+  }
+  const started = performance.now();
+  const response = await fetch(`${apiBase()}${path}`, {
+    method: "PATCH",
+    headers,
+    credentials: "include",
+  });
+  logApi("PATCH", path, response.status, started);
+
+  if (response.status === 401 && !retried && (await refreshAccessToken())) {
+    return authPatch<T>(path, true);
+  }
+  if (response.status === 401) {
+    redirectToLogin();
+  }
+  if (!response.ok) {
+    throw new Error(`Request failed with status ${response.status}`);
+  }
+  return (await response.json()) as T;
+}
+
 async function authPut<T>(path: string, body: unknown, retried = false): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   const token = csrfToken();
@@ -538,8 +568,29 @@ export interface NotificationDeliveryDto {
   attempts: number;
   lastError: string | null;
   createdAt: string;
+  read: boolean;
+  readAt: string | null;
 }
 
-export function listNotifications(): Promise<NotificationDeliveryDto[]> {
-  return authFetch<NotificationDeliveryDto[]>("/api/v1/notifications");
+export interface UnreadNotificationCountDto {
+  count: number;
+}
+
+export function listNotifications(unreadOnly = false): Promise<NotificationDeliveryDto[]> {
+  const query = unreadOnly ? "?unreadOnly=true" : "";
+  return authFetch<NotificationDeliveryDto[]>(`/api/v1/notifications${query}`);
+}
+
+export function fetchUnreadNotificationCount(): Promise<UnreadNotificationCountDto> {
+  return authFetch<UnreadNotificationCountDto>("/api/v1/notifications/unread-count");
+}
+
+export function markNotificationRead(id: string): Promise<NotificationDeliveryDto> {
+  return authPatch<NotificationDeliveryDto>(`/api/v1/notifications/${encodeURIComponent(id)}/read`);
+}
+
+export function markNotificationUnread(id: string): Promise<NotificationDeliveryDto> {
+  return authPatch<NotificationDeliveryDto>(
+    `/api/v1/notifications/${encodeURIComponent(id)}/unread`,
+  );
 }
