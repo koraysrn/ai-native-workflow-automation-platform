@@ -16,6 +16,12 @@ public enum ErrorCode {
   WORKFLOW_INVALID_DEFINITION("AWAP-ENG-0001", "The workflow definition is invalid."),
   WORKFLOW_NOT_PUBLISHED("AWAP-ENG-0002", "The workflow definition is not published."),
   WORKFLOW_STATE_CONFLICT("AWAP-ENG-0003", "The workflow state transition is not allowed."),
+  REPLAY_DIVERGENCE(
+      "AWAP-ENG-0004", "The replayed execution log diverges from the persisted state."),
+  REPLAY_CONFLICT("AWAP-ENG-0005", "A replay is already running for this workflow instance."),
+  REPLAY_LOG_TOO_LARGE("AWAP-ENG-0006", "The execution log exceeds the replay row limit."),
+  REPLAY_TIMEOUT("AWAP-ENG-0007", "The execution log replay exceeded its time budget."),
+  REPLAY_LOG_UNAVAILABLE("AWAP-ENG-0008", "The execution log could not be read for replay."),
   TASK_NOT_FOUND("AWAP-TASK-0001", "The task was not found."),
   TASK_ACCESS_DENIED("AWAP-TASK-0002", "The task is assigned to another user."),
   TASK_STATE_CONFLICT("AWAP-TASK-0003", "The task state transition is not allowed."),

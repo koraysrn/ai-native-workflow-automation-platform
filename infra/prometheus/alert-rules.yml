@@ -21,6 +21,29 @@ groups:
           summary: "Dead-letter backlog is growing fast"
           description: "{{ $value }} dead-letter messages in 5 minutes; investigate the consumer pipeline immediately."
 
+  - name: awap-replay
+    rules:
+      # A single divergence means the execution log no longer explains the persisted state.
+      # Replay must never be "fixed" by silently republishing; see docs/operations-runbook.md (O7).
+      - alert: AwapReplayDivergence
+        expr: increase(awap_replay_divergences_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Deterministic replay divergence detected"
+          description: "{{ $value }} replay divergence(s) in the last 5 minutes; open the replay_runs audit row and follow runbook O7."
+
+      # Controlled rejections (row cap, timeout, concurrent replay) are a capacity signal.
+      - alert: AwapReplayRejected
+        expr: increase(awap_replay_limits_total{reason="timeout"}[15m]) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Replay timeouts are frequent"
+          description: "{{ $value }} replay timeouts in 15 minutes; check awap.replay.timeout and log growth."
+
   - name: awap-slo
     rules:
       - alert: AwapHighErrorRate

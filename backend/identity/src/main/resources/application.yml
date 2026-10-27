@@ -73,6 +73,10 @@ awap:
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
     access-key: ${MINIO_ACCESS_KEY:awapadmin}
     secret-key: ${MINIO_SECRET_KEY:awapadmin123}
+  replay:
+    max-rows: ${REPLAY_MAX_ROWS:100000}
+    page-size: ${REPLAY_PAGE_SIZE:500}
+    timeout: ${REPLAY_TIMEOUT:30s}
 
 management:
   endpoints:
