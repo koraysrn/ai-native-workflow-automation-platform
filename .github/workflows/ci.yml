@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
     types: [opened, synchronize, reopened]
+  # Nightly full-stack E2E run in addition to PR runs (issue #128).
+  schedule:
+    - cron: "0 2 * * *"
 
 permissions:
   contents: read
@@ -127,9 +130,87 @@ jobs:
       - name: Lint
         run: pnpm lint
         working-directory: frontend
-      - name: E2E accessibility tests (axe)
-        run: pnpm exec playwright install chromium && pnpm test:e2e
+      # The browser suite runs in the dedicated `e2e` job against the Compose stack.
+
+  e2e:
+    name: E2E (Playwright / Compose)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Resolve Playwright version
+        id: playwright-version
         working-directory: frontend
+        run: |
+          VERSION=$(node -p "require('@playwright/test/package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+      - name: Cache Playwright browsers
+        uses: actions/cache@v6
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: frontend
+      - name: Install Chromium
+        run: pnpm exec playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Start Compose stack
+        run: docker compose -f infra/docker-compose.yml up -d --build
+      - name: Wait for backend health
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://localhost:8080/actuator/health >/dev/null; then
+              echo "Backend healthy after $attempt attempt(s)."
+              exit 0
+            fi
+            sleep 5
+          done
+          docker compose -f infra/docker-compose.yml logs --tail=200 backend
+          exit 1
+      - name: Wait for frontend
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://localhost:3000 >/dev/null; then
+              echo "Frontend ready after $attempt attempt(s)."
+              exit 0
+            fi
+            sleep 5
+          done
+          docker compose -f infra/docker-compose.yml logs --tail=200 frontend
+          exit 1
+      - name: Run Playwright suite
+        working-directory: frontend
+        env:
+          CI: "true"
+          E2E_EXTERNAL_STACK: "1"
+          E2E_LIVE_STACK: "1"
+          E2E_BASE_URL: http://localhost:3000
+          E2E_API_URL: http://localhost:8080
+          E2E_SEED_SUFFIX: ${{ github.run_id }}-${{ github.run_attempt }}
+        run: pnpm exec playwright test --workers=1
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-report
+          path: frontend/playwright-report
+          retention-days: 14
+      - name: Upload traces, screenshots and videos
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-failures
+          path: frontend/test-results
+          retention-days: 14
+      - name: Stop Compose stack
+        if: always()
+        run: docker compose -f infra/docker-compose.yml down -v
 
   ai-layer:
     name: AI Layer (Python 3.15 / FastAPI)
