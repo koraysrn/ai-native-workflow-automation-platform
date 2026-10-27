@@ -128,7 +128,7 @@ class NotificationServiceTest {
 
   @Test
   void recordsDeliveryLatencyAndRetryLagMetrics() {
-    when(renderer.render(any(), any(), any())).thenReturn("Hello world");
+    when(renderer.render(any(), any(), any(), any())).thenReturn(rendered("Hello world"));
     SimpleMeterRegistry registry = new SimpleMeterRegistry();
     NotificationService service =
         new NotificationService(
