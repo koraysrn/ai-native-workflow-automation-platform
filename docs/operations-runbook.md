@@ -72,3 +72,55 @@ incident ticket. The target is RPO ≤ 24h / RTO ≤ 4h.
 The control-to-policy mapping (SOC 2 / ISO 27001 / GDPR-KVKK) lives in
 [`compliance-inventory.md`](../docs/compliance-inventory.md): retention windows, right-to-erasure
 behaviour and the outbox/execution-log retention mapping.
+
+## O7 — Legacy `awap.dlq` dual-consume and removal
+
+The DLQ listener consumes every `<source>.dlq` topic and, for one release, the legacy `awap.dlq`
+topic as well. Older deployments that still publish to `awap.dlq` are therefore no longer invisible.
+The subscription pattern is anchored, so unrelated topics such as `not-a-dlq-topic` never match.
+
+- Flag: `awap.kafka.legacy-dlq-enabled` (`KAFKA_LEGACY_DLQ_ENABLED`), default `true`.
+- Legacy topic: `awap.kafka.legacy-dlq-topic` (`KAFKA_LEGACY_DLQ_TOPIC`), default `awap.dlq`.
+- Metrics: `awap_dlq_messages_total{topic,legacy}` (bounded `topic` values, unknown DLQ topics are
+  folded into `other`), `awap_dlq_legacy_messages_total`, `awap_dlq_quarantined_total{topic}` and
+  `awap_dlq_duplicates_total{topic}`. Alerts: `AwapLegacyDlqMessages`,
+  `AwapDlqQuarantine` and the existing backlog warnings.
+- The handler is idempotent (per topic-partition offset) and has no producer dependency: a
+  dead-letter record is never republished to its source topic or to another `.dlq` topic.
+- Malformed payloads (blank, or JSON that cannot be parsed) are appended to
+  `awap.kafka.dlq-quarantine-path` (`DLQ_QUARANTINE_PATH`, default
+  `target/dlq-quarantine/legacy-dlq-quarantine.jsonl`) and counted; the listener keeps running.
+- Large backlogs are drained with `awap.kafka.max-poll-records` (`KAFKA_MAX_POLL_RECORDS`, default
+  50), and consumer reconnect backoff keeps the listener retrying when Kafka is unavailable at
+  startup.
+
+### Copying the legacy backlog
+
+Build the jar, dry-run, then run twice. The checkpoint makes the second run a no-op:
+
+```sh
+backend/mvnw -B -pl identity -am -DskipTests package
+scripts/dlq-legacy-copy.sh --dry-run --bootstrap-servers=localhost:9092
+scripts/dlq-legacy-copy.sh --bootstrap-servers=localhost:9092
+scripts/dlq-legacy-copy.sh --bootstrap-servers=localhost:9092
+```
+
+The script copies each source record to `<original-topic>.dlq` when the
+`kafka_dlt-original-topic`/`x-original-topic` header is present, and to `awap.legacy.dlq` otherwise.
+It never writes to `awap.dlq`. The checkpoint (default
+`target/legacy-dlq-copy-state.properties`) stores the highest copied offset per partition; it is
+written only after `producer.flush()`, so an interrupted run loses nothing (at worst it recopies the
+current batch, which the idempotent handler tolerates). `--max-messages` bounds one invocation.
+
+### Deprecation window and removal step
+
+- Window: the dual-consume flag stays `true` for one release (the release containing issue #123 and
+  the following patch/minor). Do not set it to `false` on a half-migrated environment.
+- Before removal, run `scripts/dlq-legacy-copy.sh` to drain the backlog and confirm
+  `increase(awap_dlq_legacy_messages_total[7d]) == 0` for at least 14 days.
+- Removal PR (one release later): set `KAFKA_LEGACY_DLQ_ENABLED=false` in staging, verify the
+  per-topic DLQ path still consumes and counts, then delete `DlqTopicSubscription`, the
+  `awap.kafka.legacy-dlq-*` properties and the legacy-specific runbook steps. No database migration
+  is involved, so rollback is simply re-enabling the flag in the previous image.
+- Do not delete the `awap.dlq` Kafka topic until the retention window of the oldest supported
+  deployment has passed.
