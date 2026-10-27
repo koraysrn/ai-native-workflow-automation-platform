@@ -138,3 +138,41 @@ the schema back requires dropping the functions, the indexes and then `read_at` 
 acknowledgement history, so prefer a restore from a pre-V46 backup when acknowledgement state must
 be preserved. Purging can be paused without a deploy by setting both retention windows to a very
 large value and restarting the scheduler.
+
+## Notification templates, cache and rendering metrics
+
+Tenant templates live in `notification_templates` (unique per `(tenant_id, template_key, locale)`)
+with every saved revision copied to `notification_template_versions`. The `version` column is the
+optimistic locking token: a stale `PUT` returns `409`, and concurrent edits never overwrite each
+other silently. Built-in EN/TR templates are seeded by `V47__notification_template.sql` for tenants
+that exist when the migration runs; new tenants rely on the code fallback in
+`NotificationTemplateRenderer`, so a missing row never blocks a delivery.
+
+Resolution order for a delivery: tenant template for the requested locale → tenant template for
+`en` → built-in code default → the raw template key. Archived templates are excluded, which makes
+archive a safe rollback to the built-in default.
+
+| Metric | Type | Tags | Use |
+|---|---|---|---|
+| `awap.notification.template.cache` | counter | `result` (`hit`/`miss`) | Template cache efficiency |
+| `awap.notification.template.render.failures` | counter | – | Placeholder/variable render failures (should stay at 0) |
+
+```promql
+# Cache hit ratio (target > 0.9 for steady traffic).
+sum(rate(awap_notification_template_cache_total{result="hit"}[5m]))
+  / sum(rate(awap_notification_template_cache_total[5m]))
+# Any render failure is a template bug; alert on a non-zero rate.
+sum(rate(awap_notification_template_render_failures_total[5m])) > 0
+```
+
+Template rules enforced by `NotificationTemplateValidator`: placeholders must look like
+`{{name}}` (letters, digits, `.`, `_`, `-`), every `{{` needs a `}}`, the body is capped at 1 MiB and
+every substituted value is HTML-escaped (`&`, `<`, `>`, `"`, `'`). Preview rejects placeholders the
+supplied variables do not cover with `400`.
+
+### Rollback and data migration
+
+V47 is additive (two tables, two indexes). Rolling the application back is safe: the previous
+release ignores the new tables and keeps using the code defaults. Rolling the schema back drops the
+audit history, so restore from a pre-V47 backup when revisions must be preserved. Editing is guarded
+by `INSTANCE_MANAGE`; reads require `INSTANCE_READ`.

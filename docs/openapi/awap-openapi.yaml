@@ -1547,6 +1547,215 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/v1/notification-templates:
+    get:
+      operationId: listNotificationTemplates
+      summary: List tenant notification templates
+      description: >-
+        Returns the current revision of every template owned by the tenant,
+        optionally filtered by template key.
+      tags: [Notifications]
+      parameters:
+        - name: templateKey
+          in: query
+          required: false
+          schema:
+            type: string
+            maxLength: 128
+      responses:
+        "200":
+          description: Current template revisions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NotificationTemplateResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      operationId: createNotificationTemplate
+      summary: Create a notification template
+      description: >-
+        Placeholders must look like `{{name}}`; the body is limited to 1 MiB and
+        HTML in variables is escaped at render time.
+      tags: [Notifications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateNotificationTemplateRequest"
+      responses:
+        "201":
+          description: Created template.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTemplateResponse"
+        "400":
+          description: Invalid template payload or placeholders.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/notification-templates/preview:
+    post:
+      operationId: previewNotificationTemplate
+      summary: Preview a notification template
+      description: >-
+        Renders the supplied (or stored) template with the variables and returns
+        the escaped subject/body. Nothing is sent. Unknown placeholders are
+        rejected with 400.
+      tags: [Notifications]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PreviewNotificationTemplateRequest"
+      responses:
+        "200":
+          description: Rendered preview.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTemplatePreviewResponse"
+        "400":
+          description: Invalid placeholders, variables or template body.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/notification-templates/{id}:
+    get:
+      operationId: getNotificationTemplate
+      summary: Get one notification template
+      description: Returns the current revision of one tenant template.
+      tags: [Notifications]
+      parameters:
+        - $ref: "#/components/parameters/NotificationTemplateId"
+      responses:
+        "200":
+          description: Template revision.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTemplateResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      operationId: updateNotificationTemplate
+      summary: Save a new template revision
+      description: >-
+        Requires the revision the editor based its change on. A stale
+        `expectedVersion` returns 409 and the previous revision stays in the
+        audit trail.
+      tags: [Notifications]
+      parameters:
+        - $ref: "#/components/parameters/NotificationTemplateId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateNotificationTemplateRequest"
+      responses:
+        "200":
+          description: Updated template.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTemplateResponse"
+        "400":
+          description: Invalid template payload or placeholders.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/notification-templates/{id}/versions:
+    get:
+      operationId: listNotificationTemplateVersions
+      summary: List the template revision history
+      description: Returns the audited revisions of one template, newest first.
+      tags: [Notifications]
+      parameters:
+        - $ref: "#/components/parameters/NotificationTemplateId"
+      responses:
+        "200":
+          description: Audited revisions, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/NotificationTemplateVersionResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/notification-templates/{id}/archive:
+    post:
+      operationId: archiveNotificationTemplate
+      summary: Archive a notification template
+      description: >-
+        Deactivates the template so delivery falls back to the built-in default.
+        Idempotent.
+      tags: [Notifications]
+      parameters:
+        - $ref: "#/components/parameters/NotificationTemplateId"
+      responses:
+        "200":
+          description: Archived template.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTemplateResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/notification-templates/{id}/activate:
+    post:
+      operationId: activateNotificationTemplate
+      summary: Re-activate a notification template
+      description: Restores an archived template to the active delivery path. Idempotent.
+      tags: [Notifications]
+      parameters:
+        - $ref: "#/components/parameters/NotificationTemplateId"
+      responses:
+        "200":
+          description: Activated template.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationTemplateResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/analytics/summary:
     get:
       operationId: getAnalyticsSummary
@@ -1633,6 +1842,14 @@ components:
       in: path
       required: true
       description: Notification delivery UUID.
+      schema:
+        type: string
+        format: uuid
+    NotificationTemplateId:
+      name: id
+      in: path
+      required: true
+      description: Notification template UUID.
       schema:
         type: string
         format: uuid
@@ -2105,3 +2322,108 @@ components:
         averageDurationMs:
           type: integer
           format: int64
+
+    NotificationTemplateResponse:
+      type: object
+      required: [id, templateKey, locale, subject, body, version, active]
+      properties:
+        id:
+          type: string
+          format: uuid
+        templateKey:
+          type: string
+          maxLength: 128
+        locale:
+          type: string
+          example: en
+        subject:
+          type: string
+        body:
+          type: string
+        version:
+          type: integer
+          format: int64
+          description: Optimistic locking revision; a stale update returns 409.
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    NotificationTemplateVersionResponse:
+      type: object
+      properties:
+        version:
+          type: integer
+          format: int64
+        subject:
+          type: string
+        body:
+          type: string
+        active:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+
+    NotificationTemplatePreviewResponse:
+      type: object
+      required: [subject, body, placeholders]
+      properties:
+        subject:
+          type: string
+        body:
+          type: string
+          description: Variables are HTML-escaped.
+        placeholders:
+          type: array
+          items:
+            type: string
+
+    CreateNotificationTemplateRequest:
+      type: object
+      required: [templateKey, locale, subject, body]
+      properties:
+        templateKey:
+          type: string
+          maxLength: 128
+        locale:
+          type: string
+          example: tr
+        subject:
+          type: string
+          maxLength: 512
+        body:
+          type: string
+          description: Limited to 1 MiB; placeholders must look like {{name}}.
+
+    UpdateNotificationTemplateRequest:
+      type: object
+      required: [expectedVersion, subject, body]
+      properties:
+        expectedVersion:
+          type: integer
+          format: int64
+        subject:
+          type: string
+          maxLength: 512
+        body:
+          type: string
+
+    PreviewNotificationTemplateRequest:
+      type: object
+      properties:
+        templateKey:
+          type: string
+        locale:
+          type: string
+        subject:
+          type: string
+        body:
+          type: string
+        variablesJson:
+          type: string
+          description: JSON object supplying the placeholder values.
