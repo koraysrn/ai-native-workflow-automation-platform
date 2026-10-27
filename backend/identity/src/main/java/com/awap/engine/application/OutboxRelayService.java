@@ -1,10 +1,9 @@
 package com.awap.engine.application;
 
-import com.awap.engine.domain.OutboxEvent;
-import com.awap.engine.infrastructure.OutboxEventRepository;
-import com.awap.engine.infrastructure.OutboxRelayJdbcRepository;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -13,82 +12,95 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Relays unprocessed outbox events to Kafka exactly once, even under concurrent relay runs. */
+/**
+ * Relays unprocessed outbox events to Kafka.
+ *
+ * <p>The read/release behaviour lives behind {@link OutboxRelaySource}, so the dedicated-pool path
+ * ({@link OutboxRelayMode#JDBC}, {@code SECURITY DEFINER} functions) and the JPA fallback ({@link
+ * OutboxRelayMode#JPA}) run through exactly the same loop, the same failure accounting and the same
+ * metrics (issue #122). Which adapter is injected is decided by {@code
+ * awap.outbox.datasource.enabled}; the fallback is restricted to dev/test by {@link
+ * OutboxRelayConfigurationGuard}.
+ *
+ * <p>Every run records its outcome in {@link OutboxRelayStatus} so the {@code outboxRelay} health
+ * indicator turns {@code DOWN} when claiming or publishing fails instead of the failure being
+ * visible only in the logs.
+ */
 @Service
 public class OutboxRelayService {
 
+  private static final Logger log = LoggerFactory.getLogger(OutboxRelayService.class);
   private static final long SEND_TIMEOUT_SECONDS = 10;
 
-  private final OutboxEventRepository outboxRepository;
+  private final OutboxRelaySource source;
   private final ObjectProvider<KafkaTemplate<String, String>> kafkaTemplateProvider;
-  private final ObjectProvider<OutboxRelayJdbcRepository> jdbcRepositoryProvider;
+  private final OutboxRelayStatus status;
+  private final OutboxRelayMetrics metrics;
   private final int batchSize;
-
-  /** Test/backward-compatible constructor using the shared JPA repository. */
-  OutboxRelayService(
-      OutboxEventRepository outboxRepository,
-      ObjectProvider<KafkaTemplate<String, String>> kafkaTemplateProvider) {
-    this(outboxRepository, kafkaTemplateProvider, null, 100);
-  }
 
   @Autowired
   public OutboxRelayService(
-      OutboxEventRepository outboxRepository,
+      OutboxRelaySource source,
       ObjectProvider<KafkaTemplate<String, String>> kafkaTemplateProvider,
-      ObjectProvider<OutboxRelayJdbcRepository> jdbcRepositoryProvider,
+      OutboxRelayStatus status,
+      OutboxRelayMetrics metrics,
       @Value("${awap.outbox.batch-size:100}") int batchSize) {
-    this.outboxRepository = outboxRepository;
+    this.source = source;
     this.kafkaTemplateProvider = kafkaTemplateProvider;
-    this.jdbcRepositoryProvider = jdbcRepositoryProvider;
+    this.status = status;
+    this.metrics = metrics;
     this.batchSize = Math.max(1, batchSize);
   }
 
-  @Scheduled(fixedDelay = 5000)
+  /**
+   * The delay is configurable so a test can push the schedule out of the way; production keeps the
+   * five second default.
+   */
+  @Scheduled(
+      fixedDelayString = "${awap.outbox.relay-interval-ms:5000}",
+      initialDelayString = "${awap.outbox.relay-initial-delay-ms:5000}")
   @Transactional
   public void relayEvents() {
     KafkaTemplate<String, String> kafkaTemplate = kafkaTemplateProvider.getIfAvailable();
     if (kafkaTemplate == null) {
       return;
     }
-    OutboxRelayJdbcRepository jdbcRepository =
-        jdbcRepositoryProvider == null ? null : jdbcRepositoryProvider.getIfAvailable();
-    if (jdbcRepository != null) {
-      relayWithDedicatedPool(jdbcRepository, kafkaTemplate);
-    } else {
-      relayWithJpa(kafkaTemplate);
+    final List<OutboxRelaySource.PendingEvent> batch;
+    try {
+      batch = source.claimBatch(batchSize);
+    } catch (RuntimeException ex) {
+      metrics.claimFailure();
+      status.recordFailure(OutboxRelayMetrics.REASON_CLAIM_FAILED, 0);
+      log.error(
+          "Failed to claim an outbox batch with the {} relay path; the next run will retry",
+          source.mode().tag(),
+          ex);
+      return;
     }
-  }
-
-  private void relayWithDedicatedPool(
-      OutboxRelayJdbcRepository repository, KafkaTemplate<String, String> kafkaTemplate) {
-    for (OutboxRelayJdbcRepository.RelayEvent event : repository.claimBatch(batchSize)) {
-      if (!send(kafkaTemplate, event.eventType(), event.aggregateId(), event.payloadJson())) {
-        repository.release(event.id());
-      }
-    }
-  }
-
-  private void relayWithJpa(KafkaTemplate<String, String> kafkaTemplate) {
-    List<OutboxEvent> events = outboxRepository.findTop100ByPublishedFalseOrderByCreatedAtAsc();
-    for (OutboxEvent event : events) {
-      if (outboxRepository.claim(event.getId()) == 0) {
+    int published = 0;
+    boolean failed = false;
+    for (OutboxRelaySource.PendingEvent event : batch) {
+      if (send(kafkaTemplate, event)) {
+        published++;
         continue;
       }
-      if (!send(
-          kafkaTemplate, event.getEventType(), event.getAggregateId(), event.getPayloadJson())) {
-        outboxRepository.release(event.getId());
-      }
+      source.release(event.id());
+      metrics.publishFailure();
+      failed = true;
+      log.warn("Kafka send failed for outbox event {}; the claim was released", event.id());
+    }
+    if (failed) {
+      status.recordFailure(OutboxRelayMetrics.REASON_SEND_FAILED, published);
+    } else {
+      status.recordSuccess(published);
     }
   }
 
   private boolean send(
-      KafkaTemplate<String, String> kafkaTemplate,
-      String eventType,
-      java.util.UUID aggregateId,
-      String payloadJson) {
+      KafkaTemplate<String, String> kafkaTemplate, OutboxRelaySource.PendingEvent event) {
     try {
       kafkaTemplate
-          .send(topicFor(eventType), aggregateId.toString(), payloadJson)
+          .send(topicFor(event.eventType()), event.aggregateId().toString(), event.payloadJson())
           .get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
       return true;
     } catch (Exception ex) {

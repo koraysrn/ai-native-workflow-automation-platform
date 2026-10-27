@@ -39,8 +39,20 @@ awap:
     retention-days: ${OUTBOX_RETENTION_DAYS:7}
     archive-path: ${OUTBOX_ARCHIVE_PATH:target/outbox-archive/outbox.jsonl}
     batch-size: ${OUTBOX_BATCH_SIZE:100}
+    # Relay cadence; the initial delay keeps startup (Flyway, Hibernate validation) from competing
+    # with the first poll.
+    relay-interval-ms: ${OUTBOX_RELAY_INTERVAL_MS:5000}
+    relay-initial-delay-ms: ${OUTBOX_RELAY_INITIAL_DELAY_MS:5000}
     datasource:
+      # Issue #122: the dedicated pool is the only RLS-safe relay path, because the SECURITY DEFINER
+      # claim/release functions can see every tenant. Setting this to false selects the JPA fallback,
+      # which runs without a tenant context: PostgreSQL RLS then hides every outbox row and events
+      # stop being published silently. The fallback is dev/test only; prod/staging refuse to start
+      # with it (OutboxRelayConfigurationGuard). See runbook O8.
       enabled: ${OUTBOX_SEPARATE_POOL:true}
+      # Hikari pool name of the dedicated relay pool, also reported by the outboxRelay health
+      # indicator so operators can recognise it in pool metrics/logs.
+      name: ${OUTBOX_POOL_NAME:awap-outbox-relay}
       maximum-pool-size: ${OUTBOX_POOL_SIZE:4}
   notification:
     retention-days: ${NOTIFICATION_RETENTION_DAYS:30}
