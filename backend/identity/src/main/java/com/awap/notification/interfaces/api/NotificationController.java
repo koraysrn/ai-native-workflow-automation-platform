@@ -51,7 +51,9 @@ public class NotificationController {
         delivery.getStatus(),
         delivery.getAttempts(),
         delivery.getLastError(),
-        delivery.getCreatedAt());
+        delivery.getCreatedAt(),
+        delivery.getBusinessKey(),
+        delivery.getDedupeExpiresAt());
   }
 
   /** Public representation of a notification delivery. */
@@ -63,5 +65,7 @@ public class NotificationController {
       String status,
       int attempts,
       String lastError,
-      Instant createdAt) {}
+      Instant createdAt,
+      String businessKey,
+      Instant dedupeExpiresAt) {}
 }

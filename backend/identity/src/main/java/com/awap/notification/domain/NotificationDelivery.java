@@ -7,10 +7,17 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.UUID;
 
-/** Durable per-message delivery record used for de-duplication, audit and in-app notifications. */
+/**
+ * Durable per-message delivery record used for de-duplication, audit and in-app notifications.
+ *
+ * <p>Uniqueness is scoped to the active window: the DB trigger retires terminal rows once {@code
+ * dedupeExpiresAt} passes, and {@link #isDedupeActiveAt(Instant)} implements the same inclusive
+ * boundary in the application so a cached row cannot suppress a legitimate repeat.
+ */
 @Entity
 @Table(
     name = "notification_deliveries",
@@ -29,6 +36,16 @@ public class NotificationDelivery {
 
   @Column(name = "dedupe_key", nullable = false)
   private String dedupeKey;
+
+  /**
+   * Business identity (workflow instance / task / approval / form) when the producer supplied one.
+   */
+  @Column(name = "business_key", columnDefinition = "TEXT")
+  private String businessKey;
+
+  /** End of the active de-duplication window; the key is reusable strictly after this instant. */
+  @Column(name = "dedupe_expires_at", nullable = false)
+  private Instant dedupeExpiresAt;
 
   @Enumerated(EnumType.STRING)
   @Column(nullable = false)
@@ -63,16 +80,52 @@ public class NotificationDelivery {
       NotificationChannel channel,
       String recipient,
       String templateKey) {
+    this(
+        tenantId,
+        dedupeKey,
+        channel,
+        recipient,
+        templateKey,
+        null,
+        Instant.now().plusSeconds(3600),
+        Instant.now());
+  }
+
+  public NotificationDelivery(
+      UUID tenantId,
+      String dedupeKey,
+      NotificationChannel channel,
+      String recipient,
+      String templateKey,
+      String businessKey,
+      Instant dedupeExpiresAt,
+      Instant createdAt) {
     this.id = UUID.randomUUID();
     this.tenantId = tenantId;
     this.dedupeKey = dedupeKey;
     this.channel = channel;
     this.recipient = recipient;
     this.templateKey = templateKey;
+    this.businessKey = businessKey;
+    this.dedupeExpiresAt = dedupeExpiresAt;
     this.status = "PENDING";
     this.attempts = 0;
-    this.createdAt = Instant.now();
-    this.updatedAt = Instant.now();
+    this.createdAt = createdAt;
+    this.updatedAt = createdAt;
+  }
+
+  /** Active-window check; the TTL boundary itself is still inside the window. */
+  public boolean isDedupeActiveAt(Instant at) {
+    return dedupeExpiresAt != null && !at.isAfter(dedupeExpiresAt);
+  }
+
+  /** Remaining window; a rolled-back clock can make it larger but never negative. */
+  public Duration dedupeWindowRemaining(Instant at) {
+    if (dedupeExpiresAt == null) {
+      return Duration.ZERO;
+    }
+    Duration remaining = Duration.between(at, dedupeExpiresAt);
+    return remaining.isNegative() ? Duration.ZERO : remaining;
   }
 
   public void recordAttempt() {
@@ -102,6 +155,14 @@ public class NotificationDelivery {
 
   public String getDedupeKey() {
     return dedupeKey;
+  }
+
+  public String getBusinessKey() {
+    return businessKey;
+  }
+
+  public Instant getDedupeExpiresAt() {
+    return dedupeExpiresAt;
   }
 
   public NotificationChannel getChannel() {

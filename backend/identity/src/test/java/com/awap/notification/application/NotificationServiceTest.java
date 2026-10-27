@@ -66,12 +66,24 @@ class NotificationServiceTest {
   void duplicateDedupeKeyIsSuppressedWhenAlreadySent() {
     NotificationDeliveryRepository repository = mock(NotificationDeliveryRepository.class);
     UUID tenant = UUID.randomUUID();
+    String dedupeKey =
+        new com.awap.notification.domain.NotificationDedupeKeyFactory()
+            .build(
+                tenant,
+                NotificationChannel.EMAIL,
+                "a@example.com",
+                "welcome",
+                com.awap.notification.domain.DedupePolicy.TRANSACTIONAL,
+                null,
+                null,
+                "dedupe-1");
     NotificationDelivery sent =
         new NotificationDelivery(
-            tenant, "dedupe-1", NotificationChannel.EMAIL, "a@example.com", "welcome");
+            tenant, dedupeKey, NotificationChannel.EMAIL, "a@example.com", "welcome");
     sent.markSent();
-    when(repository.findByTenantIdAndDedupeKey(tenant, "dedupe-1"))
+    when(repository.findByTenantIdAndDedupeKey(tenant, dedupeKey))
         .thenReturn(java.util.Optional.of(sent));
+    when(repository.save(any())).thenAnswer(invocation -> invocation.getArgument(0));
     CountingAdapter adapter = new CountingAdapter(0);
     NotificationService service =
         new NotificationService(

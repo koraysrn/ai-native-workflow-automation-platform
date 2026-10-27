@@ -42,6 +42,11 @@ public class NotificationTemplateRenderer {
 
   private final ObjectMapper objectMapper;
 
+  /** Template keys known to this renderer; used to validate per-template configuration. */
+  public java.util.Set<String> knownTemplateKeys() {
+    return TEMPLATES.keySet();
+  }
+
   public NotificationTemplateRenderer(ObjectMapper objectMapper) {
     this.objectMapper = objectMapper;
   }

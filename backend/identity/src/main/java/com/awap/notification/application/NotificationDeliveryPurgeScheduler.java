@@ -25,6 +25,10 @@ public class NotificationDeliveryPurgeScheduler {
   @Scheduled(cron = "0 30 3 * * *")
   @Transactional
   public void purgeExpired() {
-    repository.deleteByCreatedAtBefore(Instant.now().minus(retentionDays, ChronoUnit.DAYS));
+    Instant now = Instant.now();
+    // The dedupe window must be closed as well: deleting a row whose window is still active would
+    // let the next event create a duplicate delivery for the same business fact.
+    repository.deleteByCreatedAtBeforeAndDedupeExpiresAtBefore(
+        now.minus(retentionDays, ChronoUnit.DAYS), now);
   }
 }

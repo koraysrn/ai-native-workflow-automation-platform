@@ -15,4 +15,11 @@ public interface NotificationDeliveryRepository extends JpaRepository<Notificati
   List<NotificationDelivery> findByTenantIdOrderByCreatedAtDesc(UUID tenantId);
 
   void deleteByCreatedAtBefore(Instant cutoff);
+
+  /**
+   * Purges terminal deliveries only after both the audit window and the de-duplication window have
+   * elapsed, so a purge can never make an active dedupe key reusable.
+   */
+  void deleteByCreatedAtBeforeAndDedupeExpiresAtBefore(
+      Instant createdAtCutoff, Instant dedupeCutoff);
 }
