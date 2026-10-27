@@ -45,6 +45,13 @@ awap:
   notification:
     retention-days: ${NOTIFICATION_RETENTION_DAYS:30}
     retry-delays-ms: ${NOTIFICATION_RETRY_DELAYS_MS:1000,5000,25000}
+  usage:
+    # fail-open=false: quota-enforcing calls (workflow start, AI call) are rejected with
+    # 503 AWAP-IDN-0008 when metering is unavailable. Observational metering is always fail-open.
+    fail-open: ${USAGE_METERING_FAIL_OPEN:false}
+    retention-days: ${USAGE_RETENTION_DAYS:400}
+    reconciliation-cron: "${USAGE_RECONCILIATION_CRON:0 20 2 * * *}"
+    retention-cron: "${USAGE_RETENTION_CRON:0 40 3 * * *}"
   analytics:
     opensearch:
       enabled: ${OPENSEARCH_ENABLED:false}
