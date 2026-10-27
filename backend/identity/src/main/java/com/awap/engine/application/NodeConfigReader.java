@@ -106,6 +106,25 @@ final class NodeConfigReader {
     }
   }
 
+  Optional<String> readScript(NodeDefinition node) {
+    return readText(node, "script");
+  }
+
+  Optional<String> readAiPrompt(NodeDefinition node) {
+    return readText(node, "prompt");
+  }
+
+  String readAiAction(NodeDefinition node) {
+    return readText(node, "action")
+        .map(value -> value.toUpperCase(java.util.Locale.ROOT))
+        .orElse("SUMMARIZE");
+  }
+
+  String readContextJson(NodeDefinition node) {
+    JsonNode context = readConfig(node).get("context");
+    return context == null || context.isNull() ? "{}" : context.toString();
+  }
+
   private Optional<String> readText(NodeDefinition node, String field) {
     JsonNode config = readConfig(node);
     JsonNode value = config.get(field);

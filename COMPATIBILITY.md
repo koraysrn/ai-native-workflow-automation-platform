@@ -49,3 +49,16 @@ on every version change (see `CLAUDE.md` — Version Compatibility Rules).
   `pnpm build && pnpm typecheck && pnpm lint`, `ruff check`, and
   `uv sync --locked` must pass.
 - A PR containing an incompatible version is automatically rejected in CI.
+
+## Jackson BOM security override
+
+`backend/pom.xml` pins `jackson-2-bom.version` to 2.21.7 and `jackson-bom.version` to 3.1.7 to
+close CVE-2026-89407, CVE-2026-89425, CVE-2026-68497, CVE-2026-91776 and CVE-2026-91777 (Spring
+Boot 4.1.1 manages lower versions).
+
+- Removal condition: Spring Boot's own BOM manages at least 2.21.7 (Jackson 2) and 3.1.7
+  (Jackson 3).
+- Enforcement: `backend/scripts/check-jackson-versions.sh` runs in CI and fails below the floor.
+- Compatibility: `JacksonCompatibilityTest` covers UUID/Instant round-trips, unknown fields,
+  strict mode and the Avro payload shape.
+- Decision record and removal checklist: `docs/adr/0005-jackson-bom-override.md`.

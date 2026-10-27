@@ -147,9 +147,11 @@ public class NotificationService {
       return;
     }
 
-    String body = renderer.render(templateKey, locale, variablesJson);
+    NotificationTemplateRenderer.RenderedNotificationTemplate rendered =
+        renderer.render(tenantId, templateKey, locale, variablesJson);
     NotificationMessage message =
-        new NotificationMessage(tenantId, recipient, channel, "Notification", body, recipient);
+        new NotificationMessage(
+            tenantId, recipient, channel, rendered.subject(), rendered.body(), recipient);
 
     RuntimeException lastFailure = null;
     long startedNanos = System.nanoTime();

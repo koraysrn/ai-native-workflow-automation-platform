@@ -22,7 +22,8 @@ public enum NodeType {
   CONDITION,
   WEBHOOK,
   SUB_PROCESS,
-  AI;
+  AI,
+  SCRIPT;
 
   public boolean isParallelGateway() {
     return this == PARALLEL || this == PARALLEL_GATEWAY;
