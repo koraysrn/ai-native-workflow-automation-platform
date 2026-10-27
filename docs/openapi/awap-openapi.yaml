@@ -1957,6 +1957,11 @@ components:
         lastError:
           type: string
           nullable: true
+        nextAttemptAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the retry scheduler will make the next attempt (null for SENT/FAILED).
         createdAt:
           type: string
           format: date-time

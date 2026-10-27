@@ -104,6 +104,7 @@ public class OutboxRelayService {
       case "SUB_PROCESS_COMPLETED" -> "workflow.subprocess.events";
       case "ANALYTICS_EVENT" -> "analytics.events";
       case "NOTIFICATION_REQUESTED" -> "notification.send";
+      case "NOTIFICATION_DLQ" -> "notification.send.dlq";
       case "DOCUMENT_REGISTERED",
           "DOCUMENT_VERSION_CREATED",
           "DOCUMENT_ARCHIVED",

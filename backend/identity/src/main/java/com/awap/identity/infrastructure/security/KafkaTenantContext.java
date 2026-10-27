@@ -1,6 +1,7 @@
 package com.awap.identity.infrastructure.security;
 
 import java.util.UUID;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Component;
 
 /**
@@ -22,6 +23,16 @@ public class KafkaTenantContext {
     TenantContext.set(tenantId, null, "SYSTEM");
     try {
       transactionRunner.run(action);
+    } finally {
+      TenantContext.clear();
+    }
+  }
+
+  /** Runs a value-returning transaction with the tenant context in place (RLS reads). */
+  public <T> T call(UUID tenantId, Supplier<T> action) {
+    TenantContext.set(tenantId, null, "SYSTEM");
+    try {
+      return transactionRunner.call(action);
     } finally {
       TenantContext.clear();
     }

@@ -39,10 +39,12 @@ public class NotificationController {
                         HttpStatus.UNAUTHORIZED,
                         "Authentication is required."));
     return ResponseEntity.ok(
-        notificationService.deliveries(tenantId).stream().map(this::toResponse).toList());
+        notificationService.deliveries(tenantId).stream()
+            .map(NotificationController::toResponse)
+            .toList());
   }
 
-  private NotificationDeliveryResponse toResponse(NotificationDelivery delivery) {
+  static NotificationDeliveryResponse toResponse(NotificationDelivery delivery) {
     return new NotificationDeliveryResponse(
         delivery.getId(),
         delivery.getChannel().name(),
@@ -51,6 +53,7 @@ public class NotificationController {
         delivery.getStatus(),
         delivery.getAttempts(),
         delivery.getLastError(),
+        delivery.getNextAttemptAt(),
         delivery.getCreatedAt());
   }
 
@@ -63,5 +66,6 @@ public class NotificationController {
       String status,
       int attempts,
       String lastError,
+      Instant nextAttemptAt,
       Instant createdAt) {}
 }

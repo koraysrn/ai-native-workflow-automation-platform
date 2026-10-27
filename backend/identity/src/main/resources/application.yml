@@ -31,6 +31,12 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      # Offset commits happen only after the listener returns, i.e. after the delivery row is
+      # durable; a DB outage must not commit the offset.
+      enable-auto-commit: false
+    listener:
+      ack-mode: record
 
 awap:
   kafka:
@@ -43,8 +49,18 @@ awap:
       enabled: ${OUTBOX_SEPARATE_POOL:true}
       maximum-pool-size: ${OUTBOX_POOL_SIZE:4}
   notification:
+    # Delivered/permanently failed rows keep a 30-day audit window; retry rows are purged after 7.
     retention-days: ${NOTIFICATION_RETENTION_DAYS:30}
-    retry-delays-ms: ${NOTIFICATION_RETRY_DELAYS_MS:1000,5000,25000}
+    retry-retention-days: ${NOTIFICATION_RETRY_RETENTION_DAYS:7}
+    retry-delays-ms: ${NOTIFICATION_RETRY_DELAYS_MS:1000,5000,25000,120000,600000}
+    max-attempts: ${NOTIFICATION_MAX_ATTEMPTS:5}
+    retry-interval-ms: ${NOTIFICATION_RETRY_INTERVAL_MS:5000}
+    retry-lease-seconds: ${NOTIFICATION_RETRY_LEASE_SECONDS:120}
+    retry-batch-size: ${NOTIFICATION_RETRY_BATCH_SIZE:50}
+    retry-per-tenant-limit: ${NOTIFICATION_RETRY_PER_TENANT_LIMIT:5}
+    max-body-bytes: ${NOTIFICATION_MAX_BODY_BYTES:262144}
+    first-attempt-grace-ms: ${NOTIFICATION_FIRST_ATTEMPT_GRACE_MS:60000}
+    retry-scheduler-enabled: ${NOTIFICATION_RETRY_SCHEDULER_ENABLED:true}
   analytics:
     opensearch:
       enabled: ${OPENSEARCH_ENABLED:false}

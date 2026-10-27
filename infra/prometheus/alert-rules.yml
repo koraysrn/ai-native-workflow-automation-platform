@@ -21,6 +21,37 @@ groups:
           summary: "Dead-letter backlog is growing fast"
           description: "{{ $value }} dead-letter messages in 5 minutes; investigate the consumer pipeline immediately."
 
+  - name: awap-notification-retry
+    rules:
+      - alert: AwapNotificationRetryLagHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum(rate(awap_notification_retry_lag_seconds_bucket[5m])) by (le)) > 60
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Notification retry lag above 60s"
+          description: "p95 retry lag is {{ $value }}s; the scheduler is falling behind the backoff schedule."
+
+      - alert: AwapNotificationRetryDeadLettered
+        expr: increase(awap_notification_retry_dlq_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Notification deliveries were dead-lettered"
+          description: "{{ $value }} delivery(ies) exhausted retries or failed permanently in the last 5 minutes; inspect notification.send.dlq."
+
+      - alert: AwapNotificationLeaseConflicts
+        expr: increase(awap_notification_retry_lease_conflicts_total[10m]) > 10
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "High notification retry lease contention"
+          description: "{{ $value }} lease conflicts in 10 minutes; check replica count and lease duration settings."
+
   - name: awap-slo
     rules:
       - alert: AwapHighErrorRate

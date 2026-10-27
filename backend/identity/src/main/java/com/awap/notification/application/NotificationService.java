@@ -5,15 +5,17 @@ import com.awap.common.api.ErrorCode;
 import com.awap.engine.application.OutboxEventPublisher;
 import com.awap.notification.domain.NotificationChannel;
 import com.awap.notification.domain.NotificationDelivery;
+import com.awap.notification.domain.NotificationRetryPolicy;
 import com.awap.notification.infrastructure.NotificationDeliveryRepository;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.EnumMap;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,24 +27,28 @@ import org.springframework.stereotype.Service;
 
 /**
  * Notification dispatch orchestration. A durable delivery row de-duplicates repeated Kafka
- * deliveries, the template is rendered per locale, transient failures are retried with the
- * configured exponential backoff and the outcome is reported through the outbox.
+ * deliveries, the template is rendered per locale, and only the <b>first</b> attempt happens here.
+ *
+ * <p>A failure stores {@code RETRYING} plus {@code nextAttemptAt} and returns immediately; no
+ * thread ever sleeps inside the consumer transaction. {@link NotificationRetryScheduler} performs
+ * the remaining attempts outside Kafka.
  */
 @Service
 public class NotificationService {
 
   private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
-  static final int MAX_ATTEMPTS = 3;
 
   private final Map<NotificationChannel, NotificationChannelAdapter> adapters =
       new EnumMap<>(NotificationChannel.class);
   private final NotificationTemplateRenderer renderer;
   private final OutboxEventPublisher outboxEventPublisher;
   private final NotificationDeliveryRepository deliveryRepository;
-  private final long[] retryDelaysMs;
-  private final Sleeper sleeper;
+  private final NotificationRetryPolicy retryPolicy;
+  private final int maxBodyBytes;
+  private final long firstAttemptGraceMs;
+  private final Clock clock;
 
-  /** Backward-compatible test constructor: no persistence, no real sleeping. */
+  /** Test convenience: no persistence, default policy. */
   NotificationService(
       List<NotificationChannelAdapter> channelAdapters,
       NotificationTemplateRenderer renderer,
@@ -52,8 +58,10 @@ public class NotificationService {
         renderer,
         outboxEventPublisher,
         null,
-        new long[] {1_000L, 5_000L, 25_000L},
-        millis -> {});
+        NotificationRetryPolicy.defaults(),
+        262_144,
+        60_000L,
+        Clock.systemUTC());
   }
 
   @Autowired
@@ -62,14 +70,20 @@ public class NotificationService {
       NotificationTemplateRenderer renderer,
       OutboxEventPublisher outboxEventPublisher,
       NotificationDeliveryRepository deliveryRepository,
-      @Value("${awap.notification.retry-delays-ms:1000,5000,25000}") String retryDelays) {
+      @Value("${awap.notification.retry-delays-ms:1000,5000,25000,120000,600000}")
+          String retryDelays,
+      @Value("${awap.notification.max-attempts:5}") int maxAttempts,
+      @Value("${awap.notification.max-body-bytes:262144}") int maxBodyBytes,
+      @Value("${awap.notification.first-attempt-grace-ms:60000}") long firstAttemptGraceMs) {
     this(
         channelAdapters,
         renderer,
         outboxEventPublisher,
         deliveryRepository,
-        parseDelays(retryDelays),
-        Sleeper.system());
+        NotificationRetryPolicy.fromCommaSeparated(retryDelays, maxAttempts),
+        maxBodyBytes,
+        firstAttemptGraceMs,
+        Clock.systemUTC());
   }
 
   NotificationService(
@@ -77,13 +91,17 @@ public class NotificationService {
       NotificationTemplateRenderer renderer,
       OutboxEventPublisher outboxEventPublisher,
       NotificationDeliveryRepository deliveryRepository,
-      long[] retryDelaysMs,
-      Sleeper sleeper) {
+      NotificationRetryPolicy retryPolicy,
+      int maxBodyBytes,
+      long firstAttemptGraceMs,
+      Clock clock) {
     this.renderer = renderer;
     this.outboxEventPublisher = outboxEventPublisher;
     this.deliveryRepository = deliveryRepository;
-    this.retryDelaysMs = retryDelaysMs;
-    this.sleeper = sleeper;
+    this.retryPolicy = retryPolicy;
+    this.maxBodyBytes = maxBodyBytes;
+    this.firstAttemptGraceMs = firstAttemptGraceMs;
+    this.clock = clock;
     for (NotificationChannelAdapter adapter : channelAdapters) {
       adapters.put(adapter.channel(), adapter);
     }
@@ -98,6 +116,11 @@ public class NotificationService {
     send(tenantId, recipient, channel, templateKey, "en", variablesJson, null);
   }
 
+  /**
+   * Performs the first (and only) in-consumer attempt and returns fast. Retries are persisted, not
+   * slept on; the Kafka offset is committed only after this method returns, i.e. after the delivery
+   * row (and any failure schedule) is durable.
+   */
   public void send(
       UUID tenantId,
       String recipient,
@@ -115,61 +138,88 @@ public class NotificationService {
     }
     String effectiveKey =
         dedupeKey(dedupeKey, tenantId, channel, recipient, templateKey, variablesJson);
-    NotificationDelivery delivery =
-        prepareDelivery(tenantId, channel, recipient, templateKey, effectiveKey);
-    if (delivery == null) {
+    if (deliveryRepository != null
+        && deliveryRepository.findByTenantIdAndDedupeKey(tenantId, effectiveKey).isPresent()) {
+      // Any existing row is the system of record: SENT is a duplicate, PENDING/RETRYING is owned by
+      // the scheduler and FAILED is terminal. A re-delivered Kafka record must not send again.
       log.info("Duplicate notification {} for tenant {} suppressed.", effectiveKey, tenantId);
       return;
     }
 
-    String body = renderer.render(templateKey, locale, variablesJson);
-    NotificationMessage message =
-        new NotificationMessage(tenantId, recipient, channel, "Notification", body, recipient);
-
-    RuntimeException lastFailure = null;
-    for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      try {
-        adapter.dispatch(message);
-        delivery.recordAttempt();
-        delivery.markSent();
-        saveDelivery(delivery);
-        outboxEventPublisher.publish(
-            tenantId,
-            "NOTIFICATION",
-            delivery.getId(),
-            "NOTIFICATION_SENT",
-            Map.of(
-                "recipient", recipient,
-                "channel", channel.name(),
-                "dedupeKey", effectiveKey));
-        return;
-      } catch (RuntimeException ex) {
-        lastFailure = ex;
-        delivery.recordAttempt();
-        delivery.markFailed(ex.getMessage());
-        saveDelivery(delivery);
-        log.warn(
-            "Notification attempt {}/{} failed for channel {}: {}",
-            attempt,
-            MAX_ATTEMPTS,
-            channel,
-            ex.getMessage());
-        if (attempt < MAX_ATTEMPTS) {
-          sleeper.sleep(retryDelaysMs[Math.min(attempt - 1, retryDelaysMs.length - 1)]);
-        }
-      }
+    Instant now = clock.instant();
+    NotificationDelivery delivery =
+        new NotificationDelivery(
+            tenantId, effectiveKey, channel, recipient, templateKey, locale, variablesJson);
+    // Durable before any provider call: a crash cannot lose the delivery.
+    delivery.scheduleFirstAttempt(now.plusMillis(firstAttemptGraceMs));
+    if (!persistNewDelivery(delivery)) {
+      return;
     }
 
+    String body;
+    try {
+      body = renderer.render(templateKey, locale, variablesJson);
+    } catch (RuntimeException ex) {
+      failPermanently(
+          delivery,
+          recipient,
+          channel,
+          effectiveKey,
+          "TEMPLATE_RENDER_FAILED",
+          rootMessage(ex),
+          now);
+      return;
+    }
+    if (body.getBytes(StandardCharsets.UTF_8).length > maxBodyBytes) {
+      failPermanently(
+          delivery,
+          recipient,
+          channel,
+          effectiveKey,
+          "PAYLOAD_TOO_LARGE",
+          "Notification body exceeds " + maxBodyBytes + " bytes.",
+          now);
+      return;
+    }
+
+    NotificationMessage message =
+        new NotificationMessage(tenantId, recipient, channel, "Notification", body, recipient);
+    try {
+      adapter.dispatch(message);
+    } catch (RuntimeException ex) {
+      Instant attemptAt = clock.instant();
+      delivery.recordAttempt(attemptAt);
+      delivery.markRetrying(
+          rootMessage(ex),
+          retryPolicy.nextAttemptAt(attemptAt, attemptAt, delivery.getAttempts()),
+          attemptAt);
+      persistExistingDelivery(delivery);
+      log.warn(
+          "Notification first attempt failed for channel {}; scheduled retry at {}: {}",
+          channel,
+          delivery.getNextAttemptAt(),
+          rootMessage(ex));
+      return;
+    }
+
+    Instant sentAt = clock.instant();
+    delivery.recordAttempt(sentAt);
+    delivery.markSent(sentAt);
+    persistExistingDelivery(delivery);
     outboxEventPublisher.publish(
         tenantId,
         "NOTIFICATION",
         delivery.getId(),
-        "NOTIFICATION_FAILED",
+        "NOTIFICATION_SENT",
         Map.of(
-            "recipient", recipient,
-            "channel", channel.name(),
-            "dedupeKey", effectiveKey));
-    throw lastFailure;
+            "recipient",
+            recipient,
+            "channel",
+            channel.name(),
+            "dedupeKey",
+            effectiveKey,
+            "attempts",
+            delivery.getAttempts()));
   }
 
   /** Lists in-app/web notifications and delivery history for the tenant dashboard. */
@@ -179,33 +229,48 @@ public class NotificationService {
         : deliveryRepository.findByTenantIdOrderByCreatedAtDesc(tenantId);
   }
 
-  private NotificationDelivery prepareDelivery(
-      UUID tenantId,
-      NotificationChannel channel,
+  private void failPermanently(
+      NotificationDelivery delivery,
       String recipient,
-      String templateKey,
-      String dedupeKey) {
+      NotificationChannel channel,
+      String dedupeKey,
+      String reason,
+      String detail,
+      Instant now) {
+    delivery.recordAttempt(now);
+    delivery.markFailedPermanently(detail, now);
+    persistExistingDelivery(delivery);
+    Map<String, Object> payload =
+        Map.of(
+            "recipient", recipient,
+            "channel", channel.name(),
+            "dedupeKey", dedupeKey,
+            "attempts", delivery.getAttempts(),
+            "reason", reason,
+            "lastError", detail);
+    outboxEventPublisher.publish(
+        delivery.getTenantId(), "NOTIFICATION", delivery.getId(), "NOTIFICATION_FAILED", payload);
+    outboxEventPublisher.publish(
+        delivery.getTenantId(), "NOTIFICATION", delivery.getId(), "NOTIFICATION_DLQ", payload);
+    log.warn("Notification {} failed permanently ({}): {}", delivery.getId(), reason, detail);
+  }
+
+  private boolean persistNewDelivery(NotificationDelivery delivery) {
     if (deliveryRepository == null) {
-      return new NotificationDelivery(tenantId, dedupeKey, channel, recipient, templateKey);
+      return true;
     }
-    Optional<NotificationDelivery> existing =
-        deliveryRepository.findByTenantIdAndDedupeKey(tenantId, dedupeKey);
-    if (existing.isPresent()) {
-      return "SENT".equals(existing.get().getStatus()) ? null : existing.get();
-    }
-    NotificationDelivery created =
-        new NotificationDelivery(tenantId, dedupeKey, channel, recipient, templateKey);
     try {
-      return deliveryRepository.save(created);
+      deliveryRepository.save(delivery);
+      return true;
     } catch (DataIntegrityViolationException ex) {
-      return deliveryRepository
-          .findByTenantIdAndDedupeKey(tenantId, dedupeKey)
-          .filter(delivery -> !"SENT".equals(delivery.getStatus()))
-          .orElse(null);
+      // A concurrent consumer inserted the same (tenant, dedupe_key); the unique constraint wins
+      // and this delivery must not send a duplicate.
+      log.info("Concurrent duplicate notification {} suppressed.", delivery.getDedupeKey());
+      return false;
     }
   }
 
-  private void saveDelivery(NotificationDelivery delivery) {
+  private void persistExistingDelivery(NotificationDelivery delivery) {
     if (deliveryRepository != null) {
       deliveryRepository.save(delivery);
     }
@@ -239,28 +304,8 @@ public class NotificationService {
     }
   }
 
-  private static long[] parseDelays(String spec) {
-    return java.util.Arrays.stream(spec.split(","))
-        .map(String::trim)
-        .filter(value -> !value.isEmpty())
-        .mapToLong(Long::parseLong)
-        .toArray();
-  }
-
-  /** Test seam so retry tests do not sleep for real. */
-  @FunctionalInterface
-  interface Sleeper {
-    void sleep(long millis);
-
-    static Sleeper system() {
-      return millis -> {
-        try {
-          Thread.sleep(millis);
-        } catch (InterruptedException ex) {
-          Thread.currentThread().interrupt();
-          throw new IllegalStateException("Notification retry sleep interrupted.", ex);
-        }
-      };
-    }
+  private static String rootMessage(RuntimeException ex) {
+    String message = ex.getMessage();
+    return message == null || message.isBlank() ? ex.getClass().getSimpleName() : message;
   }
 }
