@@ -12,6 +12,7 @@ import com.awap.engine.application.OutboxEventPublisher;
 import com.awap.notification.domain.NotificationChannel;
 import com.awap.notification.domain.NotificationDelivery;
 import com.awap.notification.infrastructure.NotificationDeliveryRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -116,6 +117,30 @@ class NotificationServiceTest {
         null);
 
     verify(renderer).render("welcome", "tr", "{\"name\":\"Ada\"}");
+  }
+
+  @Test
+  void recordsDeliveryLatencyAndRetryLagMetrics() {
+    when(renderer.render(any(), any(), any())).thenReturn("Hello world");
+    SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    NotificationService service =
+        new NotificationService(
+            List.of(new CountingAdapter(1)),
+            renderer,
+            outbox,
+            null,
+            new long[] {1L},
+            millis -> {},
+            registry);
+
+    service.send(UUID.randomUUID(), "a@example.com", NotificationChannel.EMAIL, "welcome", null);
+
+    assertThat(registry.get("awap.notification.deliveries").tag("result", "sent").counter().count())
+        .isEqualTo(1.0);
+    assertThat(registry.get("awap.notification.attempts").tag("result", "failed").counter().count())
+        .isEqualTo(1.0);
+    assertThat(registry.get("awap.notification.retry.lag").timer().count()).isEqualTo(1);
+    assertThat(registry.get("awap.notification.dispatch.latency").timer().count()).isEqualTo(1);
   }
 
   @Test

@@ -6,6 +6,8 @@ import com.awap.engine.application.OutboxEventPublisher;
 import com.awap.notification.domain.NotificationChannel;
 import com.awap.notification.domain.NotificationDelivery;
 import com.awap.notification.infrastructure.NotificationDeliveryRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Metrics;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -41,6 +43,7 @@ public class NotificationService {
   private final NotificationDeliveryRepository deliveryRepository;
   private final long[] retryDelaysMs;
   private final Sleeper sleeper;
+  private final MeterRegistry meterRegistry;
 
   /** Backward-compatible test constructor: no persistence, no real sleeping. */
   NotificationService(
@@ -53,7 +56,8 @@ public class NotificationService {
         outboxEventPublisher,
         null,
         new long[] {1_000L, 5_000L, 25_000L},
-        millis -> {});
+        millis -> {},
+        Metrics.globalRegistry);
   }
 
   @Autowired
@@ -62,14 +66,16 @@ public class NotificationService {
       NotificationTemplateRenderer renderer,
       OutboxEventPublisher outboxEventPublisher,
       NotificationDeliveryRepository deliveryRepository,
-      @Value("${awap.notification.retry-delays-ms:1000,5000,25000}") String retryDelays) {
+      @Value("${awap.notification.retry-delays-ms:1000,5000,25000}") String retryDelays,
+      MeterRegistry meterRegistry) {
     this(
         channelAdapters,
         renderer,
         outboxEventPublisher,
         deliveryRepository,
         parseDelays(retryDelays),
-        Sleeper.system());
+        Sleeper.system(),
+        meterRegistry);
   }
 
   NotificationService(
@@ -79,11 +85,30 @@ public class NotificationService {
       NotificationDeliveryRepository deliveryRepository,
       long[] retryDelaysMs,
       Sleeper sleeper) {
+    this(
+        channelAdapters,
+        renderer,
+        outboxEventPublisher,
+        deliveryRepository,
+        retryDelaysMs,
+        sleeper,
+        Metrics.globalRegistry);
+  }
+
+  NotificationService(
+      List<NotificationChannelAdapter> channelAdapters,
+      NotificationTemplateRenderer renderer,
+      OutboxEventPublisher outboxEventPublisher,
+      NotificationDeliveryRepository deliveryRepository,
+      long[] retryDelaysMs,
+      Sleeper sleeper,
+      MeterRegistry meterRegistry) {
     this.renderer = renderer;
     this.outboxEventPublisher = outboxEventPublisher;
     this.deliveryRepository = deliveryRepository;
     this.retryDelaysMs = retryDelaysMs;
     this.sleeper = sleeper;
+    this.meterRegistry = meterRegistry;
     for (NotificationChannelAdapter adapter : channelAdapters) {
       adapters.put(adapter.channel(), adapter);
     }
@@ -127,6 +152,7 @@ public class NotificationService {
         new NotificationMessage(tenantId, recipient, channel, "Notification", body, recipient);
 
     RuntimeException lastFailure = null;
+    long startedNanos = System.nanoTime();
     for (int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
         adapter.dispatch(message);
@@ -142,12 +168,16 @@ public class NotificationService {
                 "recipient", recipient,
                 "channel", channel.name(),
                 "dedupeKey", effectiveKey));
+        recordDispatchMetrics(channel, "sent", startedNanos, attempt);
         return;
       } catch (RuntimeException ex) {
         lastFailure = ex;
         delivery.recordAttempt();
         delivery.markFailed(ex.getMessage());
         saveDelivery(delivery);
+        meterRegistry
+            .counter("awap.notification.attempts", "channel", channel.name(), "result", "failed")
+            .increment();
         log.warn(
             "Notification attempt {}/{} failed for channel {}: {}",
             attempt,
@@ -169,7 +199,26 @@ public class NotificationService {
             "recipient", recipient,
             "channel", channel.name(),
             "dedupeKey", effectiveKey));
+    recordDispatchMetrics(channel, "failed", startedNanos, MAX_ATTEMPTS);
     throw lastFailure;
+  }
+
+  /**
+   * Records delivery latency and the retry lag (time from the first attempt to the successful
+   * delivery), which the notification panels and retry-lag alert use (issue #130).
+   */
+  private void recordDispatchMetrics(
+      NotificationChannel channel, String result, long startedNanos, int attempts) {
+    java.time.Duration elapsed = java.time.Duration.ofNanos(System.nanoTime() - startedNanos);
+    meterRegistry
+        .counter("awap.notification.deliveries", "channel", channel.name(), "result", result)
+        .increment();
+    meterRegistry
+        .timer("awap.notification.dispatch.latency", "channel", channel.name())
+        .record(elapsed);
+    if (attempts > 1) {
+      meterRegistry.timer("awap.notification.retry.lag", "channel", channel.name()).record(elapsed);
+    }
   }
 
   /** Lists in-app/web notifications and delivery history for the tenant dashboard. */
