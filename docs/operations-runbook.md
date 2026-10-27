@@ -34,7 +34,37 @@ Verification (one request = one traceId across all spans):
 ## O3 — SLO alerts
 
 Defined in [`infra/prometheus/alert-rules.yml`](../infra/prometheus/alert-rules.yml):
-error rate > 5%, p95 latency > 2s, DLQ backlog (warning/critical) and instance-down.
+error rate > 5%, p95 latency > 2s, DLQ backlog (warning/critical), instance-down, node timeouts
+(warning), terminal node timeout failures (critical), abandoned timeout workers (critical) and
+timeout executor rejections (warning).
+
+## O3.1 — Node timeouts
+
+Which node types have a hard cancellation guarantee and which are only measured is documented in
+[`node-timeouts.md`](../docs/node-timeouts.md); the rationale is
+[ADR 0004](../docs/adr/0004-node-timeout-enforcement.md).
+
+Operating procedure for `AwapNodeTimeouts` / `AwapNodeTimeoutFailures`:
+
+1. Identify the node type: `topk(5, sum by (type) (increase(awap_node_timeout_total[10m])))`.
+2. Compare with the budget and the real latency:
+   `histogram_quantile(0.99, sum by (le, type) (rate(awap_node_duration_seconds_bucket[10m])))`.
+3. Inspect affected instances: `execution_logs` rows with `action = 'NODE_TIMED_OUT'` carry
+   `enforcement`, `timeoutSeconds`, `elapsedMs`, `attempt`, `maxAttempts` and `retryScheduled`.
+   Only `enforcement = 'ENFORCED'` means the work was actually cancelled; `BEST_EFFORT` means the
+   work completed and was then classified as a timeout.
+4. If `awap_node_timeout_rejected_total` grows, raise
+   `NODE_TIMEOUT_WORKER_THREADS` / `NODE_TIMEOUT_QUEUE_CAPACITY` (bounded — the pool is a
+   safety valve, not a throughput tool).
+5. If `awap_node_timeout_abandoned` stays above zero, a node is swallowing interrupts. Find the
+   node type from the warnings ("Node timeout worker did not stop immediately after cancel"),
+   fix the code to honour `InterruptedException`, and restart the instance if the thread never
+   exits.
+6. Re-drive failures with the workflow retry/recover endpoints once the cause is fixed; both
+   `FAILED` and `TIMED_OUT` executions are re-drivable.
+
+Daemon workers idle out after 30s and the executor is drained on shutdown, so a normal restart
+does not leave `awap-node-timeout-*` threads behind.
 
 ## O4 — Backup & disaster recovery
 
