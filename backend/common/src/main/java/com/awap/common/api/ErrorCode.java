@@ -24,7 +24,11 @@ public enum ErrorCode {
   FILE_NOT_FOUND("AWAP-FILE-0001", "The file was not found."),
   FILE_SCAN_REJECTED("AWAP-FILE-0002", "The file was rejected by antivirus scanning."),
   FILE_TOO_LARGE("AWAP-FILE-0003", "The file exceeds the maximum allowed size."),
-  FILE_FORMAT_UNSUPPORTED("AWAP-FILE-0004", "The file format is not supported.");
+  FILE_FORMAT_UNSUPPORTED("AWAP-FILE-0004", "The file format is not supported."),
+  FILE_EMPTY("AWAP-FILE-0005", "The file must not be empty."),
+  FILE_SCAN_PENDING("AWAP-FILE-0006", "The file is still being scanned and cannot be downloaded."),
+  FILE_SCAN_FAILED("AWAP-FILE-0007", "The antivirus scan failed; the file is not available."),
+  FILE_STATE_CONFLICT("AWAP-FILE-0008", "The file is not in a state that allows this operation.");
 
   private final String code;
   private final String defaultTitle;

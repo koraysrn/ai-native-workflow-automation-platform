@@ -21,6 +21,35 @@ groups:
           summary: "Dead-letter backlog is growing fast"
           description: "{{ $value }} dead-letter messages in 5 minutes; investigate the consumer pipeline immediately."
 
+  - name: awap-file-pipeline
+    rules:
+      - alert: AwapFileInfected
+        expr: increase(awap_file_infected_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Malware found in a quarantined upload"
+          description: "ClamAV marked {{ $value }} upload(s) as INFECTED in the last 5 minutes; the object was never promoted."
+
+      - alert: AwapFilePromoteFailures
+        expr: increase(awap_file_promote_fail_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Quarantine promotion is failing"
+          description: "{{ $value }} promotion failure(s) in 5 minutes; the source object is retained for a safe retry."
+
+      - alert: AwapFileScanFailures
+        expr: increase(awap_file_scan_duration_seconds_count{result="failed"}[10m]) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Antivirus scan failures are accumulating"
+          description: "More than 3 scans failed in 10 minutes; files remain SCAN_FAILED and are retried."
+
   - name: awap-slo
     rules:
       - alert: AwapHighErrorRate

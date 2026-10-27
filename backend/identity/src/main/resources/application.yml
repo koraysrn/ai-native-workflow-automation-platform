@@ -73,6 +73,18 @@ awap:
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
     access-key: ${MINIO_ACCESS_KEY:awapadmin}
     secret-key: ${MINIO_SECRET_KEY:awapadmin123}
+  files:
+    quarantine-bucket: ${FILE_QUARANTINE_BUCKET:awap-quarantine}
+    promoted-bucket: ${FILE_PROMOTED_BUCKET:awap-files}
+    max-size-bytes: ${FILE_MAX_SIZE_BYTES:524288000}
+    presign-ttl-seconds: ${FILE_PRESIGN_TTL_SECONDS:300}
+    allowed-extensions: ${FILE_ALLOWED_EXTENSIONS:pdf,docx,xlsx,pptx,png,jpg,jpeg,txt}
+    max-scan-attempts: ${FILE_MAX_SCAN_ATTEMPTS:5}
+    infected-policy: ${FILE_INFECTED_POLICY:DELETE}
+    quarantine-retention-days: ${FILE_QUARANTINE_RETENTION_DAYS:7}
+    promoted-retention-days: ${FILE_PROMOTED_RETENTION_DAYS:365}
+    object-lock-retention-days: ${FILE_OBJECT_LOCK_RETENTION_DAYS:1}
+    scan-interval-ms: ${FILE_SCAN_INTERVAL_MS:60000}
 
 management:
   endpoints:
