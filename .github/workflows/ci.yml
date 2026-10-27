@@ -143,6 +143,9 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: frontend
       - name: Resolve Playwright version
         id: playwright-version
         working-directory: frontend
@@ -154,9 +157,6 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-        working-directory: frontend
       - name: Install Chromium
         run: pnpm exec playwright install --with-deps chromium
         working-directory: frontend
