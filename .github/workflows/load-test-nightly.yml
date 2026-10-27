@@ -36,6 +36,9 @@ jobs:
   load-test:
     name: k6 ${{ github.event_name == 'pull_request' && 'smoke' || 'full' }} run
     needs: static
+    # The PR smoke run boots the full Compose stack; it is opt-in until the stack boot is stable
+    # in CI (set the LOAD_TEST_SMOKE_ENABLED repository variable). Static checks always run.
+    if: github.event_name != 'pull_request' || vars.LOAD_TEST_SMOKE_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:

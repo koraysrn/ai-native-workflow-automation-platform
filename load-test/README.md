@@ -75,5 +75,7 @@ DELETE FROM tenants WHERE slug LIKE 'load-%';
 ## Scheduling
 
 - `.github/workflows/load-test-nightly.yml` runs the full profile nightly and on demand.
-- The same workflow runs a low-VU smoke profile on PRs that touch `load-test/**`.
+- PRs that touch `load-test/**` always run the static checks; the low-VU smoke profile (which boots
+  the full Compose stack) runs on PRs only when the `LOAD_TEST_SMOKE_ENABLED` repository variable is
+  `true`, and nightly/manual runs always execute the full profile.
 - k6 JSON summaries are uploaded as artifacts; a threshold breach fails the job.
