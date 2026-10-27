@@ -23,14 +23,36 @@ public class KafkaConsumerConfig {
   @Bean
   public ConsumerFactory<String, String> consumerFactory(
       @Value("${spring.kafka.bootstrap-servers:localhost:9092}") String bootstrapServers,
-      @Value("${awap.kafka.schema-registry-url:http://localhost:8081}") String schemaRegistryUrl) {
+      @Value("${awap.kafka.schema-registry-url:http://localhost:8081}") String schemaRegistryUrl,
+      @Value("${awap.kafka.max-poll-records:50}") int maxPollRecords) {
     Map<String, Object> props = new HashMap<>();
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
     props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
     props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
     // Schema Registry endpoint for the Avro (de)serializers; see docs/event-schema-evolution.md.
     props.put("schema.registry.url", schemaRegistryUrl);
+    configureDeadLetterConsumption(props, maxPollRecords);
     return new DefaultKafkaConsumerFactory<>(props);
+  }
+
+  /**
+   * Consumer-side resilience shared by every listener (issue #123).
+   *
+   * <p>{@code earliest} makes a restarted consumer pick up the existing DLQ backlog instead of
+   * silently skipping it. Reconnect/retry backoff keeps the listeners alive while Kafka is
+   * unavailable at startup: the container starts, retries in the background and recovers once the
+   * broker is reachable. The bounded poll/fetch sizes keep a large backlog from monopolising the
+   * consumer thread.
+   */
+  static void configureDeadLetterConsumption(Map<String, Object> props, int maxPollRecords) {
+    props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+    props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+    props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, Math.max(1, maxPollRecords));
+    props.put(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, 5 * 1024 * 1024);
+    props.put(ConsumerConfig.RECONNECT_BACKOFF_MS_CONFIG, 1_000);
+    props.put(ConsumerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG, 30_000);
+    props.put(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, 1_000);
+    props.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, 5_000);
   }
 
   @Bean
