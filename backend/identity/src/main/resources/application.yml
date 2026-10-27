@@ -48,6 +48,12 @@ awap:
   ai:
     # Fail-closed: the AI workflow node refuses to run until an operator enables it.
     node-enabled: ${AI_NODE_ENABLED:false}
+    # local (deterministic heuristic) or openai (OpenAI-compatible endpoint).
+    provider: ${AI_PROVIDER:local}
+    openai:
+      base-url: ${AI_OPENAI_BASE_URL:https://api.openai.com/v1}
+      api-key: ${AI_OPENAI_API_KEY:}
+      model: ${AI_OPENAI_MODEL:gpt-4o-mini}
     confidence-threshold: ${AI_CONFIDENCE_THRESHOLD:0.7}
     monthly-token-budget: ${AI_MONTHLY_TOKEN_BUDGET:200000}
     cost-micros-per-token: ${AI_COST_MICROS_PER_TOKEN:2}
