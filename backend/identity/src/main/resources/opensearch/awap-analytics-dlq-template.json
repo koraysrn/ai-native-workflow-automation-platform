@@ -1,0 +1,19 @@
+{
+  "index_patterns": ["{{dlq_pattern}}"],
+  "priority": {{priority}},
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 1
+    },
+    "mappings": {
+      "dynamic": true,
+      "properties": {
+        "failedAt": {"type": "date"},
+        "reason": {"type": "keyword"},
+        "error": {"type": "text"},
+        "document": {"type": "object", "enabled": false}
+      }
+    }
+  }
+}

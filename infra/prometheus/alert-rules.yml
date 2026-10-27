@@ -53,3 +53,41 @@ groups:
         annotations:
           summary: "AWAP identity instance is down"
           description: "The awap-identity scrape target has been unreachable for 1 minute."
+
+  - name: awap-analytics-sink
+    rules:
+      - alert: AwapAnalyticsSinkDroppingEvents
+        expr: increase(awap_analytics_sink_dropped_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Analytics events are being dropped"
+          description: "{{ $value }} analytics events were dropped by the OpenSearch sink (queue overflow or open circuit) in 5 minutes."
+
+      - alert: AwapAnalyticsSinkDeadLetters
+        expr: increase(awap_analytics_sink_dead_letter_total[10m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Analytics dead-letter events detected"
+          description: "{{ $value }} analytics events were routed to the dead-letter index; inspect mapping conflicts and malformed payloads."
+
+      - alert: AwapAnalyticsSinkQueueDepthHigh
+        expr: awap_analytics_sink_queue_depth > 500
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Analytics sink queue is filling up"
+          description: "The analytics sink queue depth is {{ $value }}; OpenSearch may be unable to keep up."
+
+      - alert: AwapAnalyticsSinkCircuitOpen
+        expr: awap_analytics_sink_circuit_open == 1
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Analytics sink circuit breaker is open"
+          description: "The OpenSearch analytics sink has been failing; raw events are being shed while PostgreSQL aggregates remain authoritative."
