@@ -78,7 +78,7 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: grafana/k6-action@v0.3.1
         with:
-          path: load-test/k6/awap-load-test.js
+          filename: load-test/k6/awap-load-test.js
           cloud: false
           flags: --summary-export=load-test/results/smoke-summary.json
         env:
@@ -93,7 +93,7 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: grafana/k6-action@v0.3.1
         with:
-          path: load-test/k6/awap-load-test.js
+          filename: load-test/k6/awap-load-test.js
           cloud: false
           flags: --summary-export=load-test/results/full-summary.json
         env:
