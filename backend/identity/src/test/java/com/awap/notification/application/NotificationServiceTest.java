@@ -24,7 +24,7 @@ class NotificationServiceTest {
 
   @Test
   void dispatchesOnceWhenAdapterSucceedsAndReportsSent() {
-    when(renderer.render(any(), any())).thenReturn("Hello world");
+    when(renderer.render(any(), any(), any(), any())).thenReturn(rendered("Hello world"));
     CountingAdapter adapter = new CountingAdapter(0);
     NotificationService service = new NotificationService(List.of(adapter), renderer, outbox);
 
@@ -36,7 +36,7 @@ class NotificationServiceTest {
 
   @Test
   void retriesTransientFailuresThenReportsFailureAndRethrows() {
-    when(renderer.render(any(), any())).thenReturn("Hello world");
+    when(renderer.render(any(), any(), any(), any())).thenReturn(rendered("Hello world"));
     CountingAdapter adapter = new CountingAdapter(3);
     NotificationService service = new NotificationService(List.of(adapter), renderer, outbox);
 
@@ -52,7 +52,7 @@ class NotificationServiceTest {
 
   @Test
   void retriesUntilSuccessWithinMaxAttempts() {
-    when(renderer.render(any(), any())).thenReturn("Hello world");
+    when(renderer.render(any(), any(), any(), any())).thenReturn(rendered("Hello world"));
     CountingAdapter adapter = new CountingAdapter(1);
     NotificationService service = new NotificationService(List.of(adapter), renderer, outbox);
 
@@ -85,6 +85,7 @@ class NotificationServiceTest {
 
   @Test
   void retriesUseConfiguredExponentialBackoff() {
+    when(renderer.render(any(), any(), any(), any())).thenReturn(rendered("Hello world"));
     java.util.List<Long> delays = new java.util.ArrayList<>();
     CountingAdapter adapter = new CountingAdapter(2);
     NotificationService service =
@@ -102,12 +103,14 @@ class NotificationServiceTest {
   }
 
   @Test
-  void rendersTheRequestedLocale() {
+  void rendersTheRequestedLocaleForTheTenant() {
+    when(renderer.render(any(), any(), any(), any())).thenReturn(rendered("Hello world"));
     NotificationService service =
         new NotificationService(List.of(new CountingAdapter(0)), renderer, outbox);
+    UUID tenantId = UUID.randomUUID();
 
     service.send(
-        UUID.randomUUID(),
+        tenantId,
         "a@example.com",
         NotificationChannel.EMAIL,
         "welcome",
@@ -115,7 +118,11 @@ class NotificationServiceTest {
         "{\"name\":\"Ada\"}",
         null);
 
-    verify(renderer).render("welcome", "tr", "{\"name\":\"Ada\"}");
+    verify(renderer).render(tenantId, "welcome", "tr", "{\"name\":\"Ada\"}");
+  }
+
+  private static NotificationTemplateRenderer.RenderedNotificationTemplate rendered(String body) {
+    return new NotificationTemplateRenderer.RenderedNotificationTemplate("Notification", body);
   }
 
   @Test

@@ -43,7 +43,11 @@ awap:
       enabled: ${OUTBOX_SEPARATE_POOL:true}
       maximum-pool-size: ${OUTBOX_POOL_SIZE:4}
   notification:
+    # Deprecated single-window value kept for compatibility; the purge scheduler now uses the two
+    # explicit windows below so read acknowledgements can age out without deleting unread rows.
     retention-days: ${NOTIFICATION_RETENTION_DAYS:30}
+    read-retention-days: ${NOTIFICATION_READ_RETENTION_DAYS:30}
+    unread-retention-days: ${NOTIFICATION_UNREAD_RETENTION_DAYS:180}
     retry-delays-ms: ${NOTIFICATION_RETRY_DELAYS_MS:1000,5000,25000}
   ai:
     # Fail-closed: the AI workflow node refuses to run until an operator enables it.
