@@ -5,9 +5,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.awap.common.api.AwapException;
+import com.awap.common.api.ErrorCode;
 import com.awap.engine.domain.NodeExecution;
 import com.awap.engine.domain.NodeExecutionStatus;
 import com.awap.engine.domain.WorkflowInstance;
@@ -32,6 +36,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 
 @ExtendWith(MockitoExtension.class)
 class NodeExecutorTest {
@@ -302,6 +307,50 @@ class NodeExecutorTest {
     assertThat(instance.getState()).isEqualTo(WorkflowState.WAITING);
     assertThat(capturedExecution().getStatus()).isEqualTo(NodeExecutionStatus.WAITING);
     verify(port).startSubProcess(eq(instance), any(), any());
+  }
+
+  @Test
+  void subProcessInvalidConfiguredVersionFailsNodeWithoutStartingChild() {
+    WorkflowInstance instance = instance(WorkflowState.RUNNING);
+    stubFreshExecution();
+
+    executor.executeNode(
+        instance,
+        node(
+            "sub",
+            NodeType.SUB_PROCESS,
+            "{\"workflowDefinitionId\":\"00000000-0000-0000-0000-000000000001\","
+                + "\"version\":0}"));
+
+    assertThat(capturedExecution().getStatus()).isEqualTo(NodeExecutionStatus.FAILED);
+    assertThat(capturedExecution().getError()).contains("positive integer");
+    verify(port, never()).startSubProcess(any(), any(), any());
+    verify(port).transition(instance, WorkflowState.FAILED, "NODE_FAILED");
+  }
+
+  @Test
+  void deletedChildDefinitionFailsParentSubProcessNode() {
+    WorkflowInstance instance = instance(WorkflowState.RUNNING);
+    stubFreshExecution();
+    doThrow(
+            new AwapException(
+                ErrorCode.WORKFLOW_VERSION_NOT_FOUND,
+                HttpStatus.NOT_FOUND,
+                "Workflow version 1 was not found."))
+        .when(port)
+        .startSubProcess(any(), any(), any());
+
+    executor.executeNode(
+        instance,
+        node(
+            "sub",
+            NodeType.SUB_PROCESS,
+            "{\"workflowDefinitionId\":\"00000000-0000-0000-0000-000000000001\","
+                + "\"version\":1}"));
+
+    assertThat(capturedExecution().getStatus()).isEqualTo(NodeExecutionStatus.FAILED);
+    verify(port).transition(instance, WorkflowState.FAILED, "NODE_FAILED");
+    verify(port, never()).advanceFrom(any(), anyString());
   }
 
   @Test

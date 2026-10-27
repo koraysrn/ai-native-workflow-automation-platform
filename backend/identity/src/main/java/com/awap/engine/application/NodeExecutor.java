@@ -216,6 +216,8 @@ final class NodeExecutor {
                 HttpStatus.BAD_REQUEST,
                 "SUB_PROCESS node '" + node.getNodeId() + "' requires workflowDefinitionId.");
           }
+          // Validate the optional pinned version before parking the parent in WAITING.
+          configReader.readSubProcessVersion(node);
           waitForExternal(instance, node, execution, "NODE_WAITING");
           port.startSubProcess(instance, node, execution);
         }
@@ -281,7 +283,11 @@ final class NodeExecutor {
       ErrorCode code = awap.errorCode();
       return code != ErrorCode.WORKFLOW_INVALID_DEFINITION
           && code != ErrorCode.VALIDATION_FAILED
-          && code != ErrorCode.FORBIDDEN;
+          && code != ErrorCode.FORBIDDEN
+          && code != ErrorCode.WORKFLOW_VERSION_INVALID
+          && code != ErrorCode.WORKFLOW_VERSION_NOT_FOUND
+          && code != ErrorCode.WORKFLOW_VERSION_NOT_PUBLISHED
+          && code != ErrorCode.WORKFLOW_VERSION_ARCHIVED;
     }
     return true;
   }
