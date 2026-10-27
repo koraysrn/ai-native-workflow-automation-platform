@@ -33,8 +33,27 @@ Verification (one request = one traceId across all spans):
 
 ## O3 — SLO alerts
 
-Defined in [`infra/prometheus/alert-rules.yml`](../infra/prometheus/alert-rules.yml):
-error rate > 5%, p95 latency > 2s, DLQ backlog (warning/critical) and instance-down.
+Defined in [`infra/prometheus/alert-rules.yml`](../infra/prometheus/alert-rules.yml). Every alert
+carries `severity`, `summary`, `description` and a `runbook_url` pointing back to this document.
+
+| Alert | Condition | Severity | First action |
+|---|---|---|---|
+| `AwapDlqMessages` / `AwapDlqMessagesCritical` | DLQ growth > 5 / > 50 in 5m | warning / critical | Inspect the consumer pipeline, replay or park the poison messages |
+| `AwapHighErrorRate` | 5xx ratio > 5% for 2m | warning | Check recent deploys and the failing endpoint in the dashboard |
+| `AwapHighLatency` | HTTP p95 > 2s for 5m | warning | Compare with the process-duration panel and DB pool saturation |
+| `AwapInstanceDown` | scrape target unreachable for 1m | critical | Check pod events, then the readiness probe |
+| `AwapWorkflowFailureRateHigh` | workflow failure ratio > 20% for 10m | warning | Open the workflow failure panel and the failed instance logs |
+| `AwapNotificationRetryLagHigh` | notification retry-lag p95 > 10s for 10m | warning | Check provider status and the delivery attempts in the inbox |
+| `AwapWebhookDeadGrowth` | > 10 DLQ messages in 15m | critical | Verify the webhook target allowlist/credentials; inspect dead letters |
+| `AwapOutboxBacklogStuck` | `awap_outbox_pending` > 1000 for 15m | critical | Check Kafka reachability and the relay logs; outbox writes are not draining |
+
+Dashboard: `AWAP platform overview` (`infra/grafana/provisioning/dashboards/awap.json`) with
+`tenant` and `channel` template variables. Panel/metric mapping:
+[`docs/observability-metrics.md`](../docs/observability-metrics.md).
+
+Dashboard and alert definitions are validated in CI: the JSON is parsed and every referenced metric
+must exist in [`infra/grafana/metric-catalog.json`](../infra/grafana/metric-catalog.json), and
+`promtool check rules` validates the alert file.
 
 ## O4 — Backup & disaster recovery
 
