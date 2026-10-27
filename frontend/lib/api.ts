@@ -233,6 +233,37 @@ async function authFetch<T>(path: string, retried = false): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function authPut<T>(path: string, body: unknown, retried = false): Promise<T> {
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  const token = csrfToken();
+  if (token) {
+    headers["X-XSRF-TOKEN"] = token;
+  }
+  const tenant = activeTenantId();
+  if (tenant) {
+    headers["X-Tenant-Id"] = tenant;
+  }
+  const started = performance.now();
+  const response = await fetch(`${apiBase()}${path}`, {
+    method: "PUT",
+    headers,
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  logApi("PUT", path, response.status, started);
+
+  if (response.status === 401 && !retried && (await refreshAccessToken())) {
+    return authPut<T>(path, body, true);
+  }
+  if (response.status === 401) {
+    redirectToLogin();
+  }
+  if (!response.ok) {
+    throw new Error(await readErrorDetail(response, "Request failed"));
+  }
+  return (await response.json()) as T;
+}
+
 async function authPost<T>(path: string, body: unknown, retried = false): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
   const token = csrfToken();
@@ -424,6 +455,78 @@ export function getDocumentDownloadUrl(fileId: string): Promise<{ downloadUrl: s
 
 export function archiveDocumentVersion(versionId: string): Promise<DocumentVersionDto> {
   return authPost<DocumentVersionDto>(`/api/v1/documents/versions/${versionId}/archive`, {});
+}
+
+export interface NotificationTemplateDto {
+  id: string;
+  templateKey: string;
+  locale: string;
+  subject: string;
+  body: string;
+  version: number;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateNotificationTemplatePayload {
+  templateKey: string;
+  locale: string;
+  subject: string;
+  body: string;
+}
+
+export interface UpdateNotificationTemplatePayload {
+  expectedVersion: number;
+  subject: string;
+  body: string;
+}
+
+export interface NotificationTemplatePreviewDto {
+  subject: string;
+  body: string;
+  placeholders: string[];
+}
+
+export function listNotificationTemplates(templateKey?: string): Promise<NotificationTemplateDto[]> {
+  const query = templateKey ? `?templateKey=${encodeURIComponent(templateKey)}` : "";
+  return authFetch<NotificationTemplateDto[]>(`/api/v1/notification-templates${query}`);
+}
+
+export function createNotificationTemplate(
+  payload: CreateNotificationTemplatePayload,
+): Promise<NotificationTemplateDto> {
+  return authPost<NotificationTemplateDto>("/api/v1/notification-templates", payload);
+}
+
+export function updateNotificationTemplate(
+  id: string,
+  payload: UpdateNotificationTemplatePayload,
+): Promise<NotificationTemplateDto> {
+  return authPut<NotificationTemplateDto>(
+    `/api/v1/notification-templates/${encodeURIComponent(id)}`,
+    payload,
+  );
+}
+
+export function archiveNotificationTemplate(id: string): Promise<NotificationTemplateDto> {
+  return authPost<NotificationTemplateDto>(
+    `/api/v1/notification-templates/${encodeURIComponent(id)}/archive`,
+    {},
+  );
+}
+
+export function previewNotificationTemplate(payload: {
+  templateKey?: string;
+  locale?: string;
+  subject?: string;
+  body?: string;
+  variablesJson?: string;
+}): Promise<NotificationTemplatePreviewDto> {
+  return authPost<NotificationTemplatePreviewDto>(
+    "/api/v1/notification-templates/preview",
+    payload,
+  );
 }
 
 export interface NotificationDeliveryDto {
