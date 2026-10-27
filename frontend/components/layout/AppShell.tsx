@@ -16,6 +16,7 @@ const navItems = [
   { href: "/forms/fill", label: "Fill Form" },
   { href: "/documents", label: "Documents" },
   { href: "/analytics", label: "Analytics" },
+  { href: "/notifications", label: "Notifications" },
 ];
 
 export default function AppShell({ children }: { children: ReactNode }) {
