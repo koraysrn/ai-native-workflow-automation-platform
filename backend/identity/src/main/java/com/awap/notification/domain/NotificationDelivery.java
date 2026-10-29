@@ -7,7 +7,9 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
+import jakarta.persistence.Version;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.UUID;
 
 /** Durable per-message delivery record used for de-duplication, audit and in-app notifications. */
@@ -49,11 +51,18 @@ public class NotificationDelivery {
   @Column(name = "last_error", columnDefinition = "TEXT")
   private String lastError;
 
+  @Column(name = "read_at")
+  private Instant readAt;
+
   @Column(name = "created_at", nullable = false)
   private Instant createdAt;
 
   @Column(name = "updated_at", nullable = false)
   private Instant updatedAt;
+
+  @Version
+  @Column(nullable = false)
+  private long version;
 
   protected NotificationDelivery() {}
 
@@ -84,6 +93,39 @@ public class NotificationDelivery {
     this.status = "SENT";
     this.lastError = null;
     this.updatedAt = Instant.now();
+  }
+
+  /**
+   * Acknowledges the in-app notification. Idempotent: an already-read delivery keeps the original
+   * {@code read_at} so repeated calls cannot shift the retention clock.
+   *
+   * @return {@code true} when the state actually changed
+   */
+  public boolean markRead(Instant at) {
+    if (readAt != null) {
+      return false;
+    }
+    this.readAt = at;
+    this.updatedAt = at;
+    return true;
+  }
+
+  /**
+   * Restores the unread state. Idempotent: an already-unread delivery is left untouched.
+   *
+   * @return {@code true} when the state actually changed
+   */
+  public boolean markUnread(Instant at) {
+    if (readAt == null) {
+      return false;
+    }
+    this.readAt = null;
+    this.updatedAt = at;
+    return true;
+  }
+
+  public boolean isRead() {
+    return readAt != null;
   }
 
   public void markFailed(String error) {
@@ -128,11 +170,20 @@ public class NotificationDelivery {
     return lastError;
   }
 
+  /** Read timestamp, empty while the notification is unread. */
+  public Optional<Instant> readAt() {
+    return Optional.ofNullable(readAt);
+  }
+
   public Instant getCreatedAt() {
     return createdAt;
   }
 
   public Instant getUpdatedAt() {
     return updatedAt;
+  }
+
+  public long getVersion() {
+    return version;
   }
 }

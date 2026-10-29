@@ -1,4 +1,56 @@
 groups:
+  - name: awap-workflow
+    rules:
+      # Failure ratio = failures / (successes + failures); the clamp keeps an idle
+      # tenant from producing a division by zero. 20% over 10m ignores a single spike.
+      - alert: AwapWorkflowFailureRateHigh
+        expr: |
+          sum(rate(awap_workflow_failure_total[10m]))
+            / clamp_min(
+                sum(rate(awap_workflow_success_total[10m]))
+                  + sum(rate(awap_workflow_failure_total[10m])),
+                0.001
+              ) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Workflow failure ratio above 20%"
+          description: "{{ $value | humanizePercentage }} of workflow executions failed over 10 minutes."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o3--slo-alerts"
+
+      - alert: AwapNotificationRetryLagHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(awap_notification_retry_lag_seconds_bucket[10m]))) > 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Notification retry lag p95 above 10s"
+          description: "Deliveries that needed a retry are taking {{ $value }}s at p95."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#notification-templates-cache-and-rendering-metrics"
+
+      - alert: AwapWebhookDeadGrowth
+        expr: increase(awap_dlq_messages_total[15m]) > 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Webhook/DLQ dead messages are growing"
+          description: "{{ $value }} messages landed in the DLQ within 15 minutes; webhook retries are exhausting."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o3--slo-alerts"
+
+      - alert: AwapOutboxBacklogStuck
+        expr: awap_outbox_pending > 1000
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Outbox backlog is stuck"
+          description: "{{ $value }} outbox rows are unpublished after 15 minutes; the relay is not draining."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o3--slo-alerts"
+
   - name: awap
     rules:
       # A small trickle of DLQ messages is tolerable (transient poison messages are
@@ -11,6 +63,7 @@ groups:
         annotations:
           summary: "Dead-letter messages detected"
           description: "{{ $value }} dead-letter messages were consumed in the last 5 minutes."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o3--slo-alerts"
 
       - alert: AwapDlqMessagesCritical
         expr: increase(awap_dlq_messages_total[5m]) > 50
@@ -20,6 +73,7 @@ groups:
         annotations:
           summary: "Dead-letter backlog is growing fast"
           description: "{{ $value }} dead-letter messages in 5 minutes; investigate the consumer pipeline immediately."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o3--slo-alerts"
 
       # Node timeouts: a sustained rate means either a too-tight budget or a slow dependency.
       # See docs/node-timeouts.md before tuning awap.engine.node-timeout.*.
@@ -73,6 +127,7 @@ groups:
         annotations:
           summary: "Error rate above 5%"
           description: "{{ $value | humanizePercentage }} of requests are failing (5xx)."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o3--slo-alerts"
 
       - alert: AwapHighLatency
         expr: |
@@ -84,6 +139,7 @@ groups:
         annotations:
           summary: "p95 latency above 2s"
           description: "p95 request latency is {{ $value }}s over the last 5 minutes."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o3--slo-alerts"
 
       - alert: AwapInstanceDown
         expr: up{job="awap-identity"} == 0
@@ -93,3 +149,4 @@ groups:
         annotations:
           summary: "AWAP identity instance is down"
           description: "The awap-identity scrape target has been unreachable for 1 minute."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o3--slo-alerts"

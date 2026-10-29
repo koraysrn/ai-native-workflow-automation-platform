@@ -25,6 +25,7 @@ import com.awap.engine.infrastructure.NodeExecutionRepository;
 import com.awap.identity.infrastructure.UserRepository;
 import com.awap.task.application.TaskService;
 import com.awap.task.interfaces.dto.TaskRequest;
+import com.awap.webhook.application.WebhookAttemptResult;
 import com.awap.workflow.application.WorkflowDefinitionService;
 import com.awap.workflow.domain.NodeDefinition;
 import com.awap.workflow.domain.NodeType;
@@ -142,7 +143,7 @@ class NodeExecutorTimeoutTest {
         .thenAnswer(
             invocation -> {
               release.await(5, TimeUnit.SECONDS);
-              return "{}";
+              return WebhookAttemptResult.success(200, "{}");
             });
 
     long start = System.nanoTime();
@@ -178,7 +179,8 @@ class NodeExecutorTimeoutTest {
   void fastWebhookCompletesAndRecordsTheDuration() {
     WorkflowInstance instance = instance(WorkflowState.RUNNING);
     stubFreshExecution();
-    when(webhookInvoker.invoke(any(), any(), any())).thenReturn("{\"ok\":true}");
+    when(webhookInvoker.invoke(any(), any(), any()))
+        .thenReturn(WebhookAttemptResult.success(200, "{\"ok\":true}"));
 
     executor.executeNode(
         instance,
@@ -206,7 +208,7 @@ class NodeExecutorTimeoutTest {
         .thenAnswer(
             invocation -> {
               release.await(5, TimeUnit.SECONDS);
-              return "{}";
+              return WebhookAttemptResult.success(200, "{}");
             });
 
     executor.executeNode(
@@ -252,7 +254,7 @@ class NodeExecutorTimeoutTest {
               sideEffectKeys.add(
                   target.getId() + ":" + definition.getNodeId() + ":" + execution.getId());
               release.await(2, TimeUnit.SECONDS);
-              return "{}";
+              return WebhookAttemptResult.success(200, "{}");
             });
     NodeDefinition hook =
         node(
