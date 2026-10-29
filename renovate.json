@@ -1,25 +1,55 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended"],
+  "extends": [
+    "config:recommended"
+  ],
   "timezone": "Europe/Istanbul",
   "dependencyDashboard": true,
   "prConcurrentLimit": 5,
-  "ignoreDeps": ["typescript"],
+  "ignoreDeps": [
+    "typescript"
+  ],
   "packageRules": [
     {
-      "matchManagers": ["maven"],
+      "matchManagers": [
+        "maven"
+      ],
       "groupName": "backend-maven",
-      "labels": ["dependencies", "area/backend"]
+      "labels": [
+        "dependencies",
+        "area/backend"
+      ]
     },
     {
-      "matchManagers": ["npm"],
+      "matchManagers": [
+        "npm"
+      ],
       "groupName": "frontend-npm",
-      "labels": ["dependencies", "area/frontend"]
+      "labels": [
+        "dependencies",
+        "area/frontend"
+      ]
     },
     {
-      "matchManagers": ["pep621"],
+      "matchManagers": [
+        "pep621"
+      ],
       "groupName": "ai-layer-python",
-      "labels": ["dependencies", "area/ai"]
+      "labels": [
+        "dependencies",
+        "area/ai"
+      ]
+    },
+    {
+      "matchManagers": [
+        "maven"
+      ],
+      "matchPackageNames": [
+        "com.fasterxml.jackson.core:jackson-databind",
+        "tools.jackson.core:jackson-databind"
+      ],
+      "groupName": "jackson-bom-override",
+      "description": "Review together with the backend/pom.xml Jackson BOM override (docs/adr/0005-jackson-bom-override.md)."
     }
   ]
 }

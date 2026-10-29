@@ -3,6 +3,9 @@ global:
 
 rule_files:
   - alert-rules.yml
+  # CDC rules are loaded only when the Debezium connector is deployed (issue #131); the file is
+  # valid even without the slot, the series simply stay absent.
+  - cdc-alert-rules.yml
 
 scrape_configs:
   - job_name: awap-backend

@@ -1,0 +1,49 @@
+# Debezium Kafka Connect for the outbox CDC cutover (issue #131).
+#
+# Run alongside the main stack:
+#   docker compose -f infra/docker-compose.yml up -d
+#   docker compose -f infra/docker-compose.cdc.yml up -d
+#   ./infra/debezium/register-connector.sh
+#
+# The connector is idle until an operator registers it, so starting this file does not
+# change production behaviour; the polling relay keeps running during the dual-run window.
+services:
+  connect:
+    image: quay.io/debezium/connect:${DEBEZIUM_VERSION:-3.0}
+    container_name: awap-connect
+    depends_on:
+      - kafka
+    ports:
+      - "8083:8083"
+    environment:
+      BOOTSTRAP_SERVERS: kafka:9092
+      CONNECT_BOOTSTRAP_SERVERS: kafka:9092
+      CONNECT_REST_ADVERTISED_HOST: connect
+      CONNECT_GROUP_ID: awap-connect
+      CONNECT_CONFIG_STORAGE_TOPIC: awap.connect.configs
+      CONNECT_OFFSET_STORAGE_TOPIC: awap.connect.offsets
+      CONNECT_STATUS_STORAGE_TOPIC: awap.connect.status
+      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_PLUGIN_PATH: /usr/share/java
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${DB_USER:-awap}
+      DB_PASSWORD: ${DB_PASSWORD:-awap}
+      DB_NAME: ${DB_NAME:-awap}
+    volumes:
+      - ./debezium/connect.properties:/kafka/config/connect.properties:ro
+      - ./debezium/outbox-connector.json:/kafka/connectors/outbox-connector.json:ro
+    networks:
+      - awap
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8083/connectors || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+
+networks:
+  awap:
+    external: true
+    name: ${AWAP_NETWORK:-infra_default}

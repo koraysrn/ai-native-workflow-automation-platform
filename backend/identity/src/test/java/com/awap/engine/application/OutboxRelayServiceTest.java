@@ -10,6 +10,7 @@ import static org.mockito.Mockito.when;
 
 import com.awap.engine.domain.OutboxEvent;
 import com.awap.engine.infrastructure.OutboxEventRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -54,6 +55,28 @@ class OutboxRelayServiceTest {
     verify(outboxRepository, never()).release(any());
     verify(kafkaTemplate)
         .send("workflow.task.events", event.getAggregateId().toString(), "{\"ok\":true}");
+  }
+
+  @Test
+  void relayPublishesBacklogGaugeAndRelayCounters() {
+    SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    OutboxRelayService metricService =
+        new OutboxRelayService(outboxRepository, kafkaTemplateProvider, null, 100, registry);
+    OutboxEvent event =
+        new OutboxEvent(
+            UUID.randomUUID(), "TASK", UUID.randomUUID(), "TASK_COMPLETED", "{\"ok\":true}");
+    when(outboxRepository.findTop100ByPublishedFalseOrderByCreatedAtAsc())
+        .thenReturn(List.of(event));
+    when(outboxRepository.claim(event.getId())).thenReturn(1);
+    when(outboxRepository.countByPublishedFalse()).thenReturn(4L);
+    when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+        .thenReturn(CompletableFuture.completedFuture(new SendResult<>(null, null)));
+
+    metricService.relayEvents();
+
+    assertThat(registry.get("awap.outbox.pending").gauge().value()).isEqualTo(4.0);
+    assertThat(registry.get("awap.outbox.events").tag("result", "relayed").counter().count())
+        .isEqualTo(1.0);
   }
 
   @Test

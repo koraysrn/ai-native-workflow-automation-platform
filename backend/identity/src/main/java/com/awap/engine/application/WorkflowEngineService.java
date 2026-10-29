@@ -18,6 +18,7 @@ import com.awap.engine.interfaces.dto.StartWorkflowRequest;
 import com.awap.engine.interfaces.dto.WorkflowInstanceResponse;
 import com.awap.identity.infrastructure.UserRepository;
 import com.awap.task.application.TaskService;
+import com.awap.webhook.application.WebhookDeliveryService;
 import com.awap.workflow.application.SpelExpressionService;
 import com.awap.workflow.application.WorkflowDefinitionService;
 import com.awap.workflow.domain.NodeDefinition;
@@ -57,8 +58,10 @@ public class WorkflowEngineService implements WorkflowEnginePort {
   private final NodeConfigReader configReader;
   private final TransitionResolver transitionResolver;
   private final NodeExecutor nodeExecutor;
+  private final NodeTimeoutGuard timeoutGuard;
+  private final WebhookDeliveryService webhookDeliveryService;
 
-  /** Test/backward-compatible constructor without the webhook invoker (WEBHOOK fails closed). */
+  /** Test/backward-compatible constructor without external adapters (nodes fail closed). */
   WorkflowEngineService(
       WorkflowInstanceRepository instanceRepository,
       ExecutionLogRepository executionLogRepository,
@@ -83,6 +86,12 @@ public class WorkflowEngineService implements WorkflowEnginePort {
         userRepository,
         outboxEventPublisher,
         engineMapper,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
         null);
   }
 
@@ -99,7 +108,13 @@ public class WorkflowEngineService implements WorkflowEnginePort {
       UserRepository userRepository,
       OutboxEventPublisher outboxEventPublisher,
       EngineMapper engineMapper,
-      WebhookInvoker webhookInvoker) {
+      WebhookInvoker webhookInvoker,
+      WebhookDeliveryService webhookDeliveryService,
+      com.awap.ai.application.AiNodeService aiNodeService,
+      com.awap.script.application.ScriptNodeService scriptNodeService,
+      NodeTimeoutSettings nodeTimeoutSettings,
+      NodeExecutionWatchdog nodeExecutionWatchdog,
+      NodeTimeoutMetrics nodeTimeoutMetrics) {
     this.instanceRepository = instanceRepository;
     this.executionLogRepository = executionLogRepository;
     this.workflowDefinitionService = workflowDefinitionService;
@@ -118,6 +133,18 @@ public class WorkflowEngineService implements WorkflowEnginePort {
             spelExpressionService,
             objectMapper,
             this);
+    this.timeoutGuard =
+        nodeExecutionWatchdog == null
+            ? null
+            : new NodeTimeoutGuard(
+                nodeTimeoutSettings == null ? NodeTimeoutSettings.defaults() : nodeTimeoutSettings,
+                nodeExecutionWatchdog,
+                nodeTimeoutMetrics,
+                nodeExecutionRepository,
+                configReader,
+                this,
+                objectMapper);
+    this.webhookDeliveryService = webhookDeliveryService;
     this.nodeExecutor =
         new NodeExecutor(
             nodeExecutionRepository,
@@ -126,7 +153,11 @@ public class WorkflowEngineService implements WorkflowEnginePort {
             taskService,
             userRepository,
             this,
-            webhookInvoker);
+            webhookInvoker,
+            timeoutGuard,
+            webhookDeliveryService,
+            aiNodeService,
+            scriptNodeService);
   }
 
   @Transactional
@@ -220,7 +251,7 @@ public class WorkflowEngineService implements WorkflowEnginePort {
             .orElse(null);
     if (execution == null
         || execution.getStatus() == NodeExecutionStatus.COMPLETED
-        || execution.getStatus() == NodeExecutionStatus.FAILED) {
+        || execution.getStatus().isFailed()) {
       return;
     }
     if (event.success()) {
@@ -345,7 +376,32 @@ public class WorkflowEngineService implements WorkflowEnginePort {
   public WorkflowInstanceResponse cancel(UUID tenantId, UUID id) {
     WorkflowInstance instance = find(tenantId, id);
     transition(instance, WorkflowState.CANCELLED, "WORKFLOW_CANCELLED");
+    if (webhookDeliveryService != null) {
+      webhookDeliveryService.cancelForInstance(tenantId, id, Instant.now());
+    }
     return engineMapper.toResponse(instance);
+  }
+
+  /**
+   * Dead-letter path: the durable webhook queue exhausted its attempt budget. Fails the waiting
+   * node and the instance so the failure is visible instead of silently vanishing.
+   */
+  @Transactional
+  public void failNodeFromWebhookDelivery(
+      UUID tenantId, UUID instanceId, UUID nodeExecutionId, String reason) {
+    WorkflowInstance instance = find(tenantId, instanceId);
+    NodeExecution execution = nodeExecutionRepository.findById(nodeExecutionId).orElse(null);
+    if (execution == null
+        || execution.getStatus() == NodeExecutionStatus.COMPLETED
+        || execution.getStatus() == NodeExecutionStatus.FAILED) {
+      return;
+    }
+    execution.fail(reason);
+    nodeExecutionRepository.save(execution);
+    log(instance, execution.getNodeId(), execution.getNodeType(), "NODE_FAILED", reason);
+    if (instance.getState() != WorkflowState.FAILED) {
+      transition(instance, WorkflowState.FAILED, "WEBHOOK_DELIVERY_DEAD");
+    }
   }
 
   @Transactional
@@ -391,7 +447,7 @@ public class WorkflowEngineService implements WorkflowEnginePort {
       transitionResolver.advanceFrom(instance, nodeId);
       return engineMapper.toResponse(instance);
     }
-    if (execution.getStatus() == NodeExecutionStatus.FAILED) {
+    if (execution.getStatus().isFailed()) {
       execution.resetForRetry();
       nodeExecutionRepository.save(execution);
       if (instance.getState() == WorkflowState.FAILED) {

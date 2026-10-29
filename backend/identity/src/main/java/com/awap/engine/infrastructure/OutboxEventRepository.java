@@ -14,6 +14,9 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
 
   List<OutboxEvent> findTop100ByPublishedFalseOrderByCreatedAtAsc();
 
+  /** Backlog gauge source for the outbox health dashboard (issue #130). */
+  long countByPublishedFalse();
+
   /**
    * Atomically claims an unpublished event. Returns 1 when this caller won the claim, 0 when the
    * event was already claimed by a concurrent relay run.
