@@ -146,6 +146,23 @@ awap:
       enabled: ${OPENSEARCH_ENABLED:false}
       endpoint: ${OPENSEARCH_ENDPOINT:http://localhost:9200}
       index: ${OPENSEARCH_ANALYTICS_INDEX:awap-analytics}
+      dlq-index: ${OPENSEARCH_ANALYTICS_DLQ_INDEX:awap-analytics-dlq}
+      queue-capacity: ${OPENSEARCH_ANALYTICS_QUEUE_CAPACITY:1000}
+      batch-size: ${OPENSEARCH_ANALYTICS_BATCH_SIZE:100}
+      flush-interval-ms: ${OPENSEARCH_ANALYTICS_FLUSH_INTERVAL_MS:1000}
+      retry-delays-ms: ${OPENSEARCH_ANALYTICS_RETRY_DELAYS_MS:1000,5000,25000}
+      max-attempts: ${OPENSEARCH_ANALYTICS_MAX_ATTEMPTS:4}
+      breaker-failure-threshold: ${OPENSEARCH_ANALYTICS_BREAKER_THRESHOLD:5}
+      breaker-open-ms: ${OPENSEARCH_ANALYTICS_BREAKER_OPEN_MS:30000}
+      connect-timeout-ms: ${OPENSEARCH_ANALYTICS_CONNECT_TIMEOUT_MS:2000}
+      request-timeout-ms: ${OPENSEARCH_ANALYTICS_REQUEST_TIMEOUT_MS:3000}
+      ism-policy-id: ${OPENSEARCH_ANALYTICS_ISM_POLICY_ID:awap-analytics-ism}
+      index-template-name: ${OPENSEARCH_ANALYTICS_INDEX_TEMPLATE:awap-analytics-template}
+      dlq-index-template-name: ${OPENSEARCH_ANALYTICS_DLQ_INDEX_TEMPLATE:awap-analytics-dlq-template}
+      ilm:
+        hot-days: ${OPENSEARCH_ANALYTICS_ILM_HOT_DAYS:7}
+        warm-days: ${OPENSEARCH_ANALYTICS_ILM_WARM_DAYS:30}
+        delete-days: ${OPENSEARCH_ANALYTICS_ILM_DELETE_DAYS:180}
   rate-limit:
     enabled: ${RATE_LIMIT_ENABLED:false}
   security:

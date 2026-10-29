@@ -154,6 +154,22 @@
       "source": "DlqConsumer (awap.dlq.quarantined counter)"
     },
     {
+      "name": "awap_analytics_sink_dropped_total",
+      "source": "OpenSearchAnalyticsSink (awap.analytics.sink.dropped counter)"
+    },
+    {
+      "name": "awap_analytics_sink_dead_letter_total",
+      "source": "OpenSearchAnalyticsSink (awap.analytics.sink.dead.letter counter)"
+    },
+    {
+      "name": "awap_analytics_sink_queue_depth",
+      "source": "OpenSearchAnalyticsSink (awap.analytics.sink.queue.depth gauge)"
+    },
+    {
+      "name": "awap_analytics_sink_circuit_open",
+      "source": "OpenSearchAnalyticsSink (awap.analytics.sink.circuit.open gauge)"
+    },
+    {
       "name": "http_server_requests_seconds_count",
       "source": "Spring Boot HTTP server observations"
     },
