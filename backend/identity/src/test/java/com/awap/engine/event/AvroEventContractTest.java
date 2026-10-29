@@ -29,7 +29,10 @@ class AvroEventContractTest {
             Map.entry("recipient", "string"),
             Map.entry("channel", "string"),
             Map.entry("templateKey", "string"),
-            Map.entry("variablesJson", "null|string"));
+            Map.entry("variablesJson", "null|string"),
+            Map.entry("dedupeKey", "null|string"),
+            Map.entry("businessKey", "null|string"),
+            Map.entry("eventType", "null|string"));
   }
 
   @Test

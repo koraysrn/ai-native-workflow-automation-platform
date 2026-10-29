@@ -7,6 +7,7 @@ public enum ErrorCode {
   RESOURCE_NOT_FOUND("AWAP-COMMON-0003", "The requested resource was not found."),
   UNAUTHORIZED("AWAP-COMMON-0004", "Authentication is required."),
   FORBIDDEN("AWAP-COMMON-0005", "Access to the requested resource is forbidden."),
+  RESOURCE_CONFLICT("AWAP-COMMON-0006", "The resource was changed by another request."),
   INVALID_CREDENTIALS("AWAP-IDN-0001", "Invalid credentials."),
   TENANT_ALREADY_EXISTS("AWAP-IDN-0002", "A tenant with this slug already exists."),
   REFRESH_TOKEN_INVALID("AWAP-IDN-0003", "The refresh token is invalid or expired."),
@@ -18,6 +19,16 @@ public enum ErrorCode {
   WORKFLOW_INVALID_DEFINITION("AWAP-ENG-0001", "The workflow definition is invalid."),
   WORKFLOW_NOT_PUBLISHED("AWAP-ENG-0002", "The workflow definition is not published."),
   WORKFLOW_STATE_CONFLICT("AWAP-ENG-0003", "The workflow state transition is not allowed."),
+  REPLAY_DIVERGENCE(
+      "AWAP-ENG-0004", "The replayed execution log diverges from the persisted state."),
+  REPLAY_CONFLICT("AWAP-ENG-0005", "A replay is already running for this workflow instance."),
+  REPLAY_LOG_TOO_LARGE("AWAP-ENG-0006", "The execution log exceeds the replay row limit."),
+  REPLAY_TIMEOUT("AWAP-ENG-0007", "The execution log replay exceeded its time budget."),
+  REPLAY_LOG_UNAVAILABLE("AWAP-ENG-0008", "The execution log could not be read for replay."),
+  WORKFLOW_VERSION_INVALID("AWAP-ENG-0009", "The workflow version is invalid."),
+  WORKFLOW_VERSION_NOT_FOUND("AWAP-ENG-0010", "The workflow version was not found."),
+  WORKFLOW_VERSION_NOT_PUBLISHED("AWAP-ENG-0011", "The workflow version is not published."),
+  WORKFLOW_VERSION_ARCHIVED("AWAP-ENG-0012", "The workflow version is archived."),
   TASK_NOT_FOUND("AWAP-TASK-0001", "The task was not found."),
   TASK_ACCESS_DENIED("AWAP-TASK-0002", "The task is assigned to another user."),
   TASK_STATE_CONFLICT("AWAP-TASK-0003", "The task state transition is not allowed."),
@@ -26,7 +37,11 @@ public enum ErrorCode {
   FILE_NOT_FOUND("AWAP-FILE-0001", "The file was not found."),
   FILE_SCAN_REJECTED("AWAP-FILE-0002", "The file was rejected by antivirus scanning."),
   FILE_TOO_LARGE("AWAP-FILE-0003", "The file exceeds the maximum allowed size."),
-  FILE_FORMAT_UNSUPPORTED("AWAP-FILE-0004", "The file format is not supported.");
+  FILE_FORMAT_UNSUPPORTED("AWAP-FILE-0004", "The file format is not supported."),
+  FILE_EMPTY("AWAP-FILE-0005", "The file must not be empty."),
+  FILE_SCAN_PENDING("AWAP-FILE-0006", "The file is still being scanned and cannot be downloaded."),
+  FILE_SCAN_FAILED("AWAP-FILE-0007", "The antivirus scan failed; the file is not available."),
+  FILE_STATE_CONFLICT("AWAP-FILE-0008", "The file is not in a state that allows this operation.");
 
   private final String code;
   private final String defaultTitle;

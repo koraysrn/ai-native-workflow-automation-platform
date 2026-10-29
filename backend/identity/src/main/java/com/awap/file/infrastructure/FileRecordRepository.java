@@ -2,6 +2,7 @@ package com.awap.file.infrastructure;
 
 import com.awap.file.domain.FileRecord;
 import com.awap.file.domain.FileScanStatus;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -12,5 +13,5 @@ public interface FileRecordRepository extends JpaRepository<FileRecord, UUID> {
 
   Optional<FileRecord> findByIdAndTenantId(UUID id, UUID tenantId);
 
-  List<FileRecord> findByStatus(FileScanStatus status);
+  List<FileRecord> findByStatusIn(Collection<FileScanStatus> statuses);
 }
