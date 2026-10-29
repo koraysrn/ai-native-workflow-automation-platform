@@ -6,11 +6,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
+import com.awap.engine.domain.ExecutionContext;
 import com.awap.engine.domain.NodeExecution;
 import com.awap.engine.domain.NodeExecutionStatus;
 import com.awap.engine.domain.WorkflowInstance;
@@ -29,6 +31,8 @@ import com.awap.workflow.application.WorkflowDefinitionService;
 import com.awap.workflow.domain.NodeDefinition;
 import com.awap.workflow.domain.NodeType;
 import com.awap.workflow.domain.WorkflowDefinition;
+import com.awap.workflow.domain.WorkflowStatus;
+import com.awap.workflow.domain.WorkflowVersion;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.util.List;
@@ -37,6 +41,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
@@ -298,6 +303,108 @@ class WorkflowEngineServiceTest {
 
     assertThat(execution.getStatus()).isEqualTo(NodeExecutionStatus.FAILED);
     assertThat(parent.getState()).isEqualTo(WorkflowState.FAILED);
+  }
+
+  @Test
+  void subProcessExplicitVersionPinsChildAndRecordsParentContext() {
+    UUID childDefinitionId = UUID.randomUUID();
+    WorkflowVersion pinned =
+        new WorkflowVersion(tenantId, childDefinitionId, 1, "{}", WorkflowStatus.PUBLISHED);
+    when(workflowDefinitionService.getPublishedVersion(tenantId, childDefinitionId, 1))
+        .thenReturn(pinned);
+    WorkflowInstance parent = instance(WorkflowState.WAITING);
+    NodeExecution execution = new NodeExecution(tenantId, parent.getId(), "sub", "SUB_PROCESS");
+    execution.waitForExternal();
+    NodeDefinition subNode = subProcessNode(childDefinitionId, "1");
+    stubChildStart(childDefinitionId, 1);
+
+    service.startSubProcess(parent, subNode, execution);
+
+    ArgumentCaptor<WorkflowInstance> captor = ArgumentCaptor.forClass(WorkflowInstance.class);
+    verify(instanceRepository).save(captor.capture());
+    WorkflowInstance child = captor.getValue();
+    assertThat(child.getWorkflowDefinitionId()).isEqualTo(childDefinitionId);
+    assertThat(child.getWorkflowVersion()).isEqualTo(1);
+    assertThat(child.getParentInstanceId()).isEqualTo(parent.getId());
+    assertThat(child.getParentNodeId()).isEqualTo("sub");
+    assertThat(parent.getContextJson()).contains("\"childDefinitionVersion\":1");
+    assertThat(child.getContextJson()).isEqualTo(parent.getContextJson());
+    verify(workflowDefinitionService, never()).getCurrentPublishedVersion(any(), any());
+  }
+
+  @Test
+  void subProcessWithoutVersionPinsCurrentPublishedVersion() {
+    UUID childDefinitionId = UUID.randomUUID();
+    WorkflowVersion current =
+        new WorkflowVersion(tenantId, childDefinitionId, 2, "{}", WorkflowStatus.PUBLISHED);
+    when(workflowDefinitionService.getCurrentPublishedVersion(tenantId, childDefinitionId))
+        .thenReturn(current);
+    WorkflowInstance parent = instance(WorkflowState.WAITING);
+    NodeExecution execution = new NodeExecution(tenantId, parent.getId(), "sub", "SUB_PROCESS");
+    execution.waitForExternal();
+    NodeDefinition subNode = subProcessNode(childDefinitionId, null);
+    stubChildStart(childDefinitionId, 2);
+
+    service.startSubProcess(parent, subNode, execution);
+
+    ArgumentCaptor<WorkflowInstance> captor = ArgumentCaptor.forClass(WorkflowInstance.class);
+    verify(instanceRepository).save(captor.capture());
+    assertThat(captor.getValue().getWorkflowVersion()).isEqualTo(2);
+    assertThat(parent.getContextJson()).contains("\"childDefinitionVersion\":2");
+    verify(workflowDefinitionService, never()).getPublishedVersion(any(), any(), anyInt());
+  }
+
+  @Test
+  void subProcessDeletedChildDefinitionFailsBeforeCreatingChild() {
+    UUID childDefinitionId = UUID.randomUUID();
+    when(workflowDefinitionService.getPublishedVersion(tenantId, childDefinitionId, 1))
+        .thenThrow(
+            new AwapException(
+                ErrorCode.WORKFLOW_VERSION_NOT_FOUND,
+                HttpStatus.NOT_FOUND,
+                "Workflow version 1 was not found."));
+    WorkflowInstance parent = instance(WorkflowState.WAITING);
+    NodeExecution execution = new NodeExecution(tenantId, parent.getId(), "sub", "SUB_PROCESS");
+    execution.waitForExternal();
+    NodeDefinition subNode = subProcessNode(childDefinitionId, "1");
+
+    assertThatThrownBy(() -> service.startSubProcess(parent, subNode, execution))
+        .isInstanceOfSatisfying(
+            AwapException.class,
+            ex -> {
+              assertThat(ex.errorCode()).isEqualTo(ErrorCode.WORKFLOW_VERSION_NOT_FOUND);
+              assertThat(ex.status()).isEqualTo(HttpStatus.NOT_FOUND);
+            });
+    verify(instanceRepository, never()).save(any(WorkflowInstance.class));
+  }
+
+  private NodeDefinition subProcessNode(UUID childDefinitionId, String version) {
+    String config =
+        version == null
+            ? "{\"workflowDefinitionId\":\"" + childDefinitionId + "\"}"
+            : "{\"workflowDefinitionId\":\""
+                + childDefinitionId
+                + "\",\"version\":"
+                + version
+                + "}";
+    return new NodeDefinition(
+        tenantId, UUID.randomUUID(), "sub", NodeType.SUB_PROCESS, "sub", config, 0);
+  }
+
+  private void stubChildStart(UUID childDefinitionId, int version) {
+    when(workflowDefinitionService.nodesOf(childDefinitionId, version))
+        .thenReturn(
+            List.of(
+                new NodeDefinition(
+                    tenantId, UUID.randomUUID(), "start", NodeType.START, "start", null, 0)));
+    when(workflowDefinitionService.transitionsOf(childDefinitionId, version)).thenReturn(List.of());
+    when(executionContextRepository.findByWorkflowInstanceId(any())).thenReturn(Optional.empty());
+    when(executionContextRepository.save(any(ExecutionContext.class)))
+        .thenAnswer(inv -> inv.getArgument(0));
+    when(nodeExecutionRepository.findByWorkflowInstanceIdAndNodeId(any(), anyString()))
+        .thenReturn(Optional.empty());
+    when(nodeExecutionRepository.save(any(NodeExecution.class)))
+        .thenAnswer(inv -> inv.getArgument(0));
   }
 
   @Test

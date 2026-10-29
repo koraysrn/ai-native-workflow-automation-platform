@@ -1,5 +1,6 @@
 package com.awap.identity.infrastructure.security;
 
+import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,5 +15,10 @@ public class TenantTransactionRunner {
   @Transactional
   public void run(Runnable action) {
     action.run();
+  }
+
+  @Transactional
+  public <T> T call(Supplier<T> action) {
+    return action.get();
   }
 }

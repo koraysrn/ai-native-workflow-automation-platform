@@ -1,10 +1,13 @@
 package com.awap.engine.application;
 
+import com.awap.engine.infrastructure.OutboxEventRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Metrics;
 import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -24,6 +27,9 @@ import org.springframework.stereotype.Service;
  *
  * <p>The Kafka producer is idempotent ({@code enable.idempotence=true}, {@code acks=all}) and the
  * record key is the aggregate id, so a republish after a crash is deduplicated per aggregate.
+ *
+ * <p>The legacy {@code awap.outbox.pending} gauge and {@code awap.outbox.events} counters are kept
+ * because the outbox panels and the {@code AwapOutboxBacklogStuck} alert use them.
  */
 @Service
 public class OutboxRelayService {
@@ -33,6 +39,9 @@ public class OutboxRelayService {
   /** Upper bound for a single broker send; the configured lease must be longer than this. */
   static final Duration SEND_TIMEOUT = Duration.ofSeconds(10);
 
+  static final String PENDING_GAUGE = "awap.outbox.pending";
+  static final String EVENTS_COUNTER = "awap.outbox.events";
+
   private final ObjectProvider<KafkaTemplate<String, String>> kafkaTemplateProvider;
   private final OutboxClaimStore claimStore;
   private final ObjectMapper objectMapper;
@@ -40,6 +49,9 @@ public class OutboxRelayService {
   private final int batchSize;
   private final Duration claimLease;
   private final int maxPublishAttempts;
+  private final MeterRegistry meterRegistry;
+  private final ObjectProvider<OutboxEventRepository> outboxRepositoryProvider;
+  private final AtomicLong pendingOutbox = new AtomicLong();
 
   @Autowired
   public OutboxRelayService(
@@ -47,6 +59,7 @@ public class OutboxRelayService {
       OutboxClaimStore claimStore,
       ObjectMapper objectMapper,
       MeterRegistry meterRegistry,
+      ObjectProvider<OutboxEventRepository> outboxRepositoryProvider,
       @Value("${awap.outbox.batch-size:100}") int batchSize,
       @Value("${awap.outbox.claim-lease:60s}") Duration claimLease,
       @Value("${awap.outbox.max-publish-attempts:5}") int maxPublishAttempts) {
@@ -57,7 +70,9 @@ public class OutboxRelayService {
         new OutboxMetrics(meterRegistry),
         batchSize,
         claimLease,
-        maxPublishAttempts);
+        maxPublishAttempts,
+        meterRegistry,
+        outboxRepositoryProvider);
   }
 
   /** Test-friendly constructor that reuses an already-built metrics facade. */
@@ -69,6 +84,28 @@ public class OutboxRelayService {
       int batchSize,
       Duration claimLease,
       int maxPublishAttempts) {
+    this(
+        kafkaTemplateProvider,
+        claimStore,
+        objectMapper,
+        metrics,
+        batchSize,
+        claimLease,
+        maxPublishAttempts,
+        Metrics.globalRegistry,
+        null);
+  }
+
+  OutboxRelayService(
+      ObjectProvider<KafkaTemplate<String, String>> kafkaTemplateProvider,
+      OutboxClaimStore claimStore,
+      ObjectMapper objectMapper,
+      OutboxMetrics metrics,
+      int batchSize,
+      Duration claimLease,
+      int maxPublishAttempts,
+      MeterRegistry meterRegistry,
+      ObjectProvider<OutboxEventRepository> outboxRepositoryProvider) {
     if (claimLease.compareTo(SEND_TIMEOUT) <= 0) {
       throw new IllegalStateException(
           "awap.outbox.claim-lease ("
@@ -84,6 +121,9 @@ public class OutboxRelayService {
     this.batchSize = Math.max(1, batchSize);
     this.claimLease = claimLease;
     this.maxPublishAttempts = Math.max(1, maxPublishAttempts);
+    this.meterRegistry = meterRegistry;
+    this.outboxRepositoryProvider = outboxRepositoryProvider;
+    meterRegistry.gauge(PENDING_GAUGE, pendingOutbox);
   }
 
   /**
@@ -109,6 +149,7 @@ public class OutboxRelayService {
     for (OutboxClaimStore.ClaimedOutboxEvent event : claimed) {
       relayOne(kafkaTemplate, event);
     }
+    updatePendingGauge();
   }
 
   private void relayOne(
@@ -117,6 +158,7 @@ public class OutboxRelayService {
       // A poison payload would fail forever; releasing counts the attempt and the claim function
       // stops leasing the row once maxPublishAttempts is reached.
       metrics.publishFailure(OutboxMetrics.REASON_CORRUPTED_PAYLOAD);
+      countEvent("failed");
       claimStore.release(event.id(), event.claimToken());
       log.error(
           "Outbox event {} has a corrupted payload and was released without publishing",
@@ -129,12 +171,32 @@ public class OutboxRelayService {
         metrics.publishFailure(OutboxMetrics.REASON_CLAIM_LOST);
         log.warn(
             "Lost the outbox claim for event {} before it could be marked published", event.id());
+        return;
       }
+      countEvent("relayed");
       return;
     }
     metrics.publishFailure(OutboxMetrics.REASON_SEND_FAILED);
+    countEvent("failed");
     claimStore.release(event.id(), event.claimToken());
     log.warn("Kafka send failed for outbox event {}; the claim was released", event.id());
+  }
+
+  private void countEvent(String result) {
+    meterRegistry.counter(EVENTS_COUNTER, "result", result).increment();
+  }
+
+  private void updatePendingGauge() {
+    OutboxEventRepository repository =
+        outboxRepositoryProvider == null ? null : outboxRepositoryProvider.getIfAvailable();
+    if (repository == null) {
+      return;
+    }
+    try {
+      pendingOutbox.set(repository.countByPublishedFalse());
+    } catch (RuntimeException ex) {
+      // Metrics must never break the relay loop.
+    }
   }
 
   private boolean hasValidPayload(String payloadJson) {
@@ -168,22 +230,11 @@ public class OutboxRelayService {
     return switch (eventType) {
       case "TASK_COMPLETED", "TASK_ESCALATION_DUE" -> "workflow.task.events";
       case "FORM_SUBMITTED" -> "workflow.instance.events";
-      case "SUB_PROCESS_COMPLETED" -> "workflow.subprocess.events";
-      case "ANALYTICS_EVENT" -> "analytics.events";
+      case "WORKFLOW_INSTANCE_STATE" -> "workflow.instance.events";
       case "NOTIFICATION_REQUESTED" -> "notification.send";
-      case "DOCUMENT_REGISTERED",
-          "DOCUMENT_VERSION_CREATED",
-          "DOCUMENT_ARCHIVED",
-          "DOCUMENT_DELETED" ->
-          "document.events";
-      case "organization.company.created",
-          "organization.department.created",
-          "organization.team.created",
-          "organization.position.created",
-          "organization.user.created",
-          "organization.team.user_assigned" ->
-          "organization.events";
-      default -> "workflow.instance.events";
+      case "DOCUMENT_CHANGED" -> "document.events";
+      case "ANALYTICS_EVENT" -> "analytics.events";
+      default -> "workflow.events";
     };
   }
 }

@@ -23,6 +23,9 @@ public interface OutboxEventRepository extends JpaRepository<OutboxEvent, UUID> 
           + " order by e.createdAt asc")
   List<OutboxEvent> findClaimable(@Param("maxAttempts") int maxAttempts, Pageable pageable);
 
+  /** Backlog gauge source for the outbox health dashboard (issue #130). */
+  long countByPublishedFalse();
+
   /**
    * Takes a lease on one row. The predicate is the lease contract: unpublished, attempts left, and
    * the previous claim either absent or older than the lease. Returns 0 when another relay already

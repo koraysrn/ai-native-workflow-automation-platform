@@ -12,6 +12,7 @@ import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
 import org.springframework.kafka.listener.DefaultErrorHandler;
 
@@ -40,6 +41,12 @@ public class KafkaConsumerConfig {
     ConcurrentKafkaListenerContainerFactory<String, String> factory =
         new ConcurrentKafkaListenerContainerFactory<>();
     factory.setConsumerFactory(consumerFactory);
+
+    // Commit the offset only after the listener returns, i.e. after the notification delivery row
+    // (or its retry schedule) is durable. A DB outage throws out of the listener and the record is
+    // re-delivered instead of being silently lost.
+    factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.RECORD);
+    factory.getContainerProperties().setAsyncAcks(false);
 
     // Per-topic DLQ: every consumed topic gets its own "<topic>.dlq" so a poison record in
     // analytics cannot hide behind workflow failures and vice versa.

@@ -57,6 +57,18 @@ class WorkflowInstanceTest {
   }
 
   @Test
+  void updateContextJsonKeepsLatestSnapshot() {
+    WorkflowInstance instance =
+        new WorkflowInstance(
+            UUID.randomUUID(), UUID.randomUUID(), 1, WorkflowState.WAITING, null, "{}");
+
+    instance.updateContextJson("{\"childDefinitionVersion\":2}");
+
+    assertThat(instance.getContextJson()).contains("\"childDefinitionVersion\":2");
+    assertThat(instance.getState()).isEqualTo(WorkflowState.WAITING);
+  }
+
+  @Test
   void resumeRequiresPausedState() {
     WorkflowInstance paused =
         new WorkflowInstance(

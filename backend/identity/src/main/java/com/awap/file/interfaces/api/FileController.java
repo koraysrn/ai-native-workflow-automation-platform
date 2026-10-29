@@ -6,7 +6,7 @@ import com.awap.file.application.FileService;
 import com.awap.identity.infrastructure.security.TenantContext;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.PositiveOrZero;
+import jakarta.validation.constraints.Positive;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -59,6 +59,5 @@ public class FileController {
   }
 
   /** Request to create a presigned upload slot. */
-  public record CreateFileRequest(
-      @NotBlank String name, String contentType, @PositiveOrZero long size) {}
+  public record CreateFileRequest(@NotBlank String name, String contentType, @Positive long size) {}
 }

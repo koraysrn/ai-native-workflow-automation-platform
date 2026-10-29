@@ -152,6 +152,16 @@ public class NodeExecution {
     this.completedAt = Instant.now();
   }
 
+  /**
+   * Marks the execution as timed out. Kept separate from {@link #fail(String)} so the reason and
+   * the retry/recovery behaviour stay observable without parsing the error text.
+   */
+  public void markTimedOut(String reason) {
+    this.status = NodeExecutionStatus.TIMED_OUT;
+    this.error = reason;
+    this.completedAt = Instant.now();
+  }
+
   public UUID getId() {
     return id;
   }
