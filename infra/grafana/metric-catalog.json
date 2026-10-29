@@ -46,6 +46,30 @@
       "source": "NotificationService (awap.notification.retry.lag timer)"
     },
     {
+      "name": "awap_outbox_stuck_total",
+      "source": "OutboxMetrics (awap.outbox.stuck counter)"
+    },
+    {
+      "name": "awap_outbox_publish_failures_total",
+      "source": "OutboxMetrics (awap.outbox.publish_failures counter)"
+    },
+    {
+      "name": "awap_outbox_claim_age_seconds",
+      "source": "OutboxMetrics (awap.outbox.claim_age_seconds summary)"
+    },
+    {
+      "name": "awap_outbox_claim_age_seconds_max",
+      "source": "OutboxMetrics (awap.outbox.claim_age_seconds summary max)"
+    },
+    {
+      "name": "awap_outbox_exhausted",
+      "source": "OutboxMetrics (awap.outbox.exhausted gauge)"
+    },
+    {
+      "name": "awap_outbox_reconciliation_failures",
+      "source": "OutboxMetrics (awap.outbox.reconciliation_failures gauge)"
+    },
+    {
       "name": "awap_outbox_pending",
       "source": "OutboxRelayService (awap.outbox.pending gauge)"
     },

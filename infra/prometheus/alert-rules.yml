@@ -199,6 +199,62 @@ groups:
           description: "{{ $value }} lease conflicts in 10 minutes; check replica count and lease duration settings."
           runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o11--notification-retries-issue-119"
 
+  - name: awap-outbox
+    rules:
+      # A stale claim means a relay died between claiming and publishing (#121). Reconciliation
+      # re-queues the row, so a single occurrence is a warning; sustained growth is an outage signal.
+      - alert: AwapOutboxStaleClaims
+        expr: increase(awap_outbox_stuck_total{reason="stale_claim"}[15m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Outbox claims are being left behind"
+          description: "{{ $value }} outbox claims were released by reconciliation in 15 minutes; a relay is crashing inside the claim/publish window."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o13--outbox-claim-reconciliation-121"
+
+      # Rows stranded by the pre-V44 relay: they are never republished automatically, an operator
+      # must verify the Kafka record first (runbook O13).
+      - alert: AwapOutboxLegacyRows
+        expr: increase(awap_outbox_stuck_total{reason="legacy_published_without_timestamp"}[15m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Outbox rows marked published without published_at"
+          description: "{{ $value }} legacy outbox rows need manual verification; follow runbook O13."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o13--outbox-claim-reconciliation-121"
+
+      - alert: AwapOutboxPublishFailures
+        expr: increase(awap_outbox_publish_failures_total[10m]) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Outbox publishes are failing"
+          description: "{{ $value }} outbox publish failures in 10 minutes ({{ $labels.reason }})."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o13--outbox-claim-reconciliation-121"
+
+      - alert: AwapOutboxClaimAgeHigh
+        expr: awap_outbox_claim_age_seconds_max > 300
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Outbox claims are staying stale for too long"
+          description: "The oldest released outbox claim was {{ $value }}s old; reconciliation is not keeping up with crashed relays."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o13--outbox-claim-reconciliation-121"
+
+      - alert: AwapOutboxQuarantinedRows
+        expr: awap_outbox_exhausted > 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Outbox rows are quarantined"
+          description: "{{ $value }} outbox rows exhausted their publish attempts and need operator action."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o13--outbox-claim-reconciliation-121"
+
   - name: awap-slo
     rules:
       - alert: AwapHighErrorRate

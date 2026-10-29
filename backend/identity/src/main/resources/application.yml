@@ -29,8 +29,17 @@ spring:
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
+      # Idempotent producer (issue #121): a republish after a relay crash must not duplicate the
+      # event on the broker. `acks=all` + retries also make a send only "successful" once every
+      # in-sync replica has the record, which is what the relay's published_at now asserts.
+      acks: ${KAFKA_PRODUCER_ACKS:all}
+      retries: ${KAFKA_PRODUCER_RETRIES:2147483647}
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        enable.idempotence: ${KAFKA_PRODUCER_IDEMPOTENCE:true}
+        max.in.flight.requests.per.connection: ${KAFKA_PRODUCER_MAX_IN_FLIGHT:5}
+        delivery.timeout.ms: ${KAFKA_PRODUCER_DELIVERY_TIMEOUT_MS:30000}
     consumer:
       # Offset commits happen only after the listener returns, i.e. after the delivery row is
       # durable; a DB outage must not commit the offset.
@@ -45,6 +54,16 @@ awap:
     retention-days: ${OUTBOX_RETENTION_DAYS:7}
     archive-path: ${OUTBOX_ARCHIVE_PATH:target/outbox-archive/outbox.jsonl}
     batch-size: ${OUTBOX_BATCH_SIZE:100}
+    # Claim lease (issue #121): must stay longer than the relay's 10s Kafka send timeout so a row
+    # that is still being sent can never be claimed by a second relay.
+    claim-lease: ${OUTBOX_CLAIM_LEASE:60s}
+    # Rows that fail this many publishes are quarantined and reported instead of retried forever.
+    max-publish-attempts: ${OUTBOX_MAX_PUBLISH_ATTEMPTS:5}
+    relay-interval-ms: ${OUTBOX_RELAY_INTERVAL_MS:5000}
+    relay-initial-delay-ms: ${OUTBOX_RELAY_INITIAL_DELAY_MS:5000}
+    reconciliation:
+      interval-ms: ${OUTBOX_RECONCILIATION_INTERVAL_MS:60000}
+      batch-size: ${OUTBOX_RECONCILIATION_BATCH_SIZE:1000}
     datasource:
       enabled: ${OUTBOX_SEPARATE_POOL:true}
       maximum-pool-size: ${OUTBOX_POOL_SIZE:4}

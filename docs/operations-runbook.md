@@ -482,3 +482,92 @@ Operations:
   `CREATE OR REPLACE` purge function). Rolling the application back keeps the columns; dedupe falls
   back to the old 30-day behaviour only if the trigger is dropped, so do not drop it during a
   rolling deploy.
+
+## O13 — Outbox claim reconciliation (#121)
+
+Since V44 a claim is a **lease**, not a publication: the relay sets `claimed_at` + `claim_token` and
+leaves `published = false`, sends to Kafka, and only then sets `published = true` with `published_at`
+and clears the claim. A crash between the claim and the send therefore leaves a recoverable row
+instead of a silently lost event.
+
+**Configuration** ([`application.yml`](../backend/identity/src/main/resources/application.yml)):
+
+| Property | Default | Meaning |
+|---|---|---|
+| `awap.outbox.claim-lease` | `60s` | Lease length. Must stay longer than the relay's 10s send timeout; the application refuses to start otherwise. |
+| `awap.outbox.max-publish-attempts` | `5` | After this many failures the row is quarantined (no longer leased, reported loudly). |
+| `awap.outbox.reconciliation.interval-ms` | `60000` | Reconciliation cadence. |
+| `awap.outbox.reconciliation.batch-size` | `1000` | Rows handled per reconciliation run. |
+
+**Metrics / alerts** ([`alert-rules.yml`](../infra/prometheus/alert-rules.yml)):
+
+- `awap_outbox_stuck_total{reason="stale_claim"}` — increment once per claim released by reconciliation.
+- `awap_outbox_stuck_total{reason="legacy_published_without_timestamp"}` — legacy rows seen in a run.
+- `awap_outbox_claim_age_seconds{_sum,_count,_max}` — age of the released claim.
+- `awap_outbox_publish_failures_total{reason}` — `send_failed`, `corrupted_payload`, `claim_lost`.
+- `awap_outbox_exhausted` — quarantined rows needing operator action.
+- `awap_outbox_reconciliation_failures` — consecutive failed reconciliation runs (the schedule keeps running).
+
+### A stale claim appeared (`reason="stale_claim"`)
+
+1. Confirm the relay pods are healthy; a restart or OOM kill inside the send window is the usual cause.
+   Reconciliation re-queues the row automatically, and the idempotent producer plus the `aggregate_id`
+   record key keep the republish safe.
+2. If the counter keeps rising, check `awap_outbox_publish_failures_total{reason="send_failed"}` and
+   the broker health before tuning the lease.
+
+### Legacy rows: `published = true` without `published_at`
+
+These are rows stranded by the pre-V44 relay. The scheduler reports them and **never** republishes
+them, because a blind replay can duplicate a business transaction that did reach Kafka.
+
+```sql
+SELECT id, tenant_id, event_type, created_at, publish_attempts
+FROM outbox_events
+WHERE published = true AND published_at IS NULL
+ORDER BY created_at;
+```
+
+1. Check the Kafka topic for the `aggregate_id` key (the key equals `outbox_events.aggregate_id`) and
+   the event payload before acting.
+2. If the record **is** in Kafka: close the row without republishing, and record the audit note in the
+   incident ticket.
+   ```sql
+   UPDATE outbox_events
+   SET published_at = now()
+   WHERE id = '<id>' AND published = true AND published_at IS NULL;
+   ```
+3. If the record is **missing**: re-queue it for the relay (the send is idempotent, so a duplicate is
+   harmless for the broker) and keep the audit trail in the ticket.
+   ```sql
+   UPDATE outbox_events
+   SET published = false, published_at = NULL, claimed_at = NULL, claim_token = NULL
+   WHERE id = '<id>' AND published = true AND published_at IS NULL;
+   ```
+4. Do this **before** the retention purge (default `OUTBOX_RETENTION_DAYS=7`) removes the row.
+
+### Quarantined rows (`awap_outbox_exhausted > 0`)
+
+```sql
+SELECT id, tenant_id, event_type, publish_attempts, created_at
+FROM outbox_events
+WHERE published = false AND publish_attempts >= 5
+ORDER BY created_at;
+```
+
+Inspect `payload_json`; a corrupted payload is the usual cause (the relay flags it and stops retrying
+after `awap.outbox.max-publish-attempts`). Fix or archive the row, then reset the counter:
+
+```sql
+UPDATE outbox_events SET publish_attempts = 0 WHERE id = '<id>' AND published = false;
+```
+
+### Rollback
+
+The V44 columns are additive and nullable (except `publish_attempts DEFAULT 0`), so a rollback is a
+redeploy of the previous image — **do not drop the columns** in production: the previous release
+ignores them. Releasing every lease before shutting down avoids waiting for the lease to expire:
+
+```sql
+UPDATE outbox_events SET claimed_at = NULL, claim_token = NULL WHERE published = false;
+```
