@@ -37,7 +37,7 @@ public class NotificationController {
     UUID tenantId = requireTenantId();
     return ResponseEntity.ok(
         notificationReadService.list(tenantId, parseUnreadOnly(unreadOnly)).stream()
-            .map(this::toResponse)
+            .map(NotificationController::toResponse)
             .toList());
   }
 
@@ -101,7 +101,7 @@ public class NotificationController {
     };
   }
 
-  private NotificationDeliveryResponse toResponse(NotificationDelivery delivery) {
+  static NotificationDeliveryResponse toResponse(NotificationDelivery delivery) {
     return new NotificationDeliveryResponse(
         delivery.getId(),
         delivery.getChannel().name(),
@@ -110,7 +110,10 @@ public class NotificationController {
         delivery.getStatus(),
         delivery.getAttempts(),
         delivery.getLastError(),
+        delivery.getNextAttemptAt(),
         delivery.getCreatedAt(),
+        delivery.getBusinessKey(),
+        delivery.getDedupeExpiresAt(),
         delivery.isRead(),
         delivery.readAt().orElse(null));
   }
@@ -124,7 +127,10 @@ public class NotificationController {
       String status,
       int attempts,
       String lastError,
+      Instant nextAttemptAt,
       Instant createdAt,
+      String businessKey,
+      Instant dedupeExpiresAt,
       boolean read,
       Instant readAt) {}
 

@@ -15,7 +15,9 @@
 -- otherwise hide every row.
 
 ALTER TABLE notification_deliveries ADD COLUMN read_at TIMESTAMPTZ;
-ALTER TABLE notification_deliveries ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+-- V42 (notification retry scheduler) also introduces the optimistic-locking column; keep this
+-- idempotent so both migrations can run in either order on an existing database.
+ALTER TABLE notification_deliveries ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0;
 
 CREATE INDEX idx_notification_deliveries_tenant_read
     ON notification_deliveries (tenant_id, read_at);
@@ -36,7 +38,9 @@ DECLARE
 BEGIN
   DELETE FROM notification_deliveries
    WHERE read_at IS NOT NULL
-     AND read_at < p_cutoff;
+     AND read_at < p_cutoff
+     -- Never reopen a still-active de-duplication window: deleting the row would allow a resend.
+     AND (dedupe_expires_at IS NULL OR dedupe_expires_at < p_cutoff);
   GET DIAGNOSTICS removed = ROW_COUNT;
   RETURN removed;
 END;
@@ -53,7 +57,8 @@ DECLARE
 BEGIN
   DELETE FROM notification_deliveries
    WHERE read_at IS NULL
-     AND created_at < p_cutoff;
+     AND created_at < p_cutoff
+     AND (dedupe_expires_at IS NULL OR dedupe_expires_at < p_cutoff);
   GET DIAGNOSTICS removed = ROW_COUNT;
   RETURN removed;
 END;

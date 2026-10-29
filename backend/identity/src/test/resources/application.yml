@@ -20,11 +20,17 @@ management:
       enabled: false
 
 awap:
+  notification:
+    # The scheduler needs the PostgreSQL helper function; tests invoke it explicitly instead.
+    retry-scheduler-enabled: false
   outbox:
     datasource:
       enabled: false
   analytics:
     opensearch:
+      enabled: false
+  webhook:
+    retry:
       enabled: false
   kafka:
     enabled: false

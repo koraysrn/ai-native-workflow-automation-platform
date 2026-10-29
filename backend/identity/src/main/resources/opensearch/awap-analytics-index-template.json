@@ -1,0 +1,25 @@
+{
+  "index_patterns": ["{{index_pattern}}"],
+  "priority": {{priority}},
+  "template": {
+    "settings": {
+      "number_of_shards": 1,
+      "number_of_replicas": 1,
+      "index.plugins.index_state_management.policy_id": "{{ism_policy_id}}"
+    },
+    "mappings": {
+      "dynamic": "strict",
+      "properties": {
+        "tenantId": {"type": "keyword"},
+        "eventType": {"type": "keyword"},
+        "workflowInstanceId": {"type": "keyword"},
+        "taskId": {"type": "keyword"},
+        "durationMs": {"type": "long"},
+        "timestamp": {
+          "type": "date",
+          "format": "strict_date_optional_time||epoch_millis"
+        }
+      }
+    }
+  }
+}

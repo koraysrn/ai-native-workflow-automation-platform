@@ -29,26 +29,100 @@ spring:
   kafka:
     bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     producer:
+      # Idempotent producer (issue #121): a republish after a relay crash must not duplicate the
+      # event on the broker. `acks=all` + retries also make a send only "successful" once every
+      # in-sync replica has the record, which is what the relay's published_at now asserts.
+      acks: ${KAFKA_PRODUCER_ACKS:all}
+      retries: ${KAFKA_PRODUCER_RETRIES:2147483647}
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        enable.idempotence: ${KAFKA_PRODUCER_IDEMPOTENCE:true}
+        max.in.flight.requests.per.connection: ${KAFKA_PRODUCER_MAX_IN_FLIGHT:5}
+        delivery.timeout.ms: ${KAFKA_PRODUCER_DELIVERY_TIMEOUT_MS:30000}
+    consumer:
+      # Offset commits happen only after the listener returns, i.e. after the delivery row is
+      # durable; a DB outage must not commit the offset.
+      enable-auto-commit: false
+    listener:
+      ack-mode: record
 
 awap:
   kafka:
     enabled: ${KAFKA_ENABLED:false}
+    # Issue #123: dual-consume the legacy awap.dlq topic for one release. Older deployments may
+    # still publish there; set KAFKA_LEGACY_DLQ_ENABLED=false only after the deprecation window
+    # (see docs/operations-runbook.md O7).
+    legacy-dlq-enabled: ${KAFKA_LEGACY_DLQ_ENABLED:true}
+    legacy-dlq-topic: ${KAFKA_LEGACY_DLQ_TOPIC:awap.dlq}
+    # Anchored pattern: per-topic *.dlq only. The legacy topic is appended by the flag above, so
+    # disabling the flag really stops consuming awap.dlq. Unrelated topics such as
+    # not-a-dlq-topic never match.
+    dlq-topic-pattern: '${KAFKA_DLQ_TOPIC_PATTERN:^(?!awap\.dlq$)[A-Za-z0-9._-]+\.dlq$}'
+    dlq-group-id: ${KAFKA_DLQ_GROUP_ID:awap-dlq}
+    # Bounded metric tag values. Topics not listed here are folded into "other" so a malicious
+    # producer cannot create unbounded Prometheus series.
+    dlq-known-topics: ${KAFKA_DLQ_KNOWN_TOPICS:workflow.task.events,workflow.instance.events,workflow.subprocess.events,analytics.events,document.events,notification.send,notification.requested.events}
+    dlq-quarantine-path: ${DLQ_QUARANTINE_PATH:target/dlq-quarantine/legacy-dlq-quarantine.jsonl}
+    # Bounded poll: a large DLQ backlog is drained in chunks instead of blocking the listener.
+    max-poll-records: ${KAFKA_MAX_POLL_RECORDS:50}
   outbox:
     retention-days: ${OUTBOX_RETENTION_DAYS:7}
     archive-path: ${OUTBOX_ARCHIVE_PATH:target/outbox-archive/outbox.jsonl}
     batch-size: ${OUTBOX_BATCH_SIZE:100}
+    # Claim lease (issue #121): must stay longer than the relay's 10s Kafka send timeout so a row
+    # that is still being sent can never be claimed by a second relay.
+    claim-lease: ${OUTBOX_CLAIM_LEASE:60s}
+    # Rows that fail this many publishes are quarantined and reported instead of retried forever.
+    max-publish-attempts: ${OUTBOX_MAX_PUBLISH_ATTEMPTS:5}
+    relay-interval-ms: ${OUTBOX_RELAY_INTERVAL_MS:5000}
+    relay-initial-delay-ms: ${OUTBOX_RELAY_INITIAL_DELAY_MS:5000}
+    reconciliation:
+      interval-ms: ${OUTBOX_RECONCILIATION_INTERVAL_MS:60000}
+      batch-size: ${OUTBOX_RECONCILIATION_BATCH_SIZE:1000}
     datasource:
+      # Issue #122: the dedicated pool is the only RLS-safe relay path, because the SECURITY DEFINER
+      # claim/release functions can see every tenant. Setting this to false selects the JPA fallback,
+      # which runs without a tenant context: PostgreSQL RLS then hides every outbox row and events
+      # stop being published silently. The fallback is dev/test only; prod/staging refuse to start
+      # with it (OutboxRelayConfigurationGuard). See runbook O14.
       enabled: ${OUTBOX_SEPARATE_POOL:true}
+      # Hikari pool name of the dedicated relay pool, also reported by the outboxRelay health
+      # indicator so operators can recognise it in pool metrics/logs.
+      name: ${OUTBOX_POOL_NAME:awap-outbox-relay}
       maximum-pool-size: ${OUTBOX_POOL_SIZE:4}
+  engine:
+    node-timeout:
+      # Budget applied to nodes that do not configure timeoutSeconds (minimum 1s).
+      default-seconds: ${NODE_TIMEOUT_DEFAULT_SECONDS:30}
+      # Upper bound accepted for a node timeoutSeconds value; longer budgets belong to the async
+      # job model described in docs/adr/0004-node-timeout-enforcement.md.
+      max-seconds: ${NODE_TIMEOUT_MAX_SECONDS:3600}
+      # Bounded executor used only for interrupt-safe (external) node work.
+      worker-threads: ${NODE_TIMEOUT_WORKER_THREADS:8}
+      queue-capacity: ${NODE_TIMEOUT_QUEUE_CAPACITY:64}
   notification:
     # Deprecated single-window value kept for compatibility; the purge scheduler now uses the two
     # explicit windows below so read acknowledgements can age out without deleting unread rows.
     retention-days: ${NOTIFICATION_RETENTION_DAYS:30}
     read-retention-days: ${NOTIFICATION_READ_RETENTION_DAYS:30}
     unread-retention-days: ${NOTIFICATION_UNREAD_RETENTION_DAYS:180}
-    retry-delays-ms: ${NOTIFICATION_RETRY_DELAYS_MS:1000,5000,25000}
+    # Retry rows are scheduled, never slept on: the leased scheduler drives the remaining attempts.
+    retry-delays-ms: ${NOTIFICATION_RETRY_DELAYS_MS:1000,5000,25000,120000,600000}
+    max-attempts: ${NOTIFICATION_MAX_ATTEMPTS:5}
+    retry-interval-ms: ${NOTIFICATION_RETRY_INTERVAL_MS:5000}
+    retry-lease-seconds: ${NOTIFICATION_RETRY_LEASE_SECONDS:120}
+    retry-batch-size: ${NOTIFICATION_RETRY_BATCH_SIZE:50}
+    retry-per-tenant-limit: ${NOTIFICATION_RETRY_PER_TENANT_LIMIT:5}
+    max-body-bytes: ${NOTIFICATION_MAX_BODY_BYTES:262144}
+    first-attempt-grace-ms: ${NOTIFICATION_FIRST_ATTEMPT_GRACE_MS:60000}
+    retry-scheduler-enabled: ${NOTIFICATION_RETRY_SCHEDULER_ENABLED:true}
+    # Active de-duplication window in seconds; a repeat inside it is suppressed.
+    dedupe-window-seconds: ${NOTIFICATION_DEDUPE_WINDOW_SECONDS:3600}
+    # Optional per-template overrides, e.g.:
+    # dedupe-template-windows:
+    #   task-assigned: 300
+    # Unknown template keys fail startup.
   ai:
     # Fail-closed: the AI workflow node refuses to run until an operator enables it.
     node-enabled: ${AI_NODE_ENABLED:false}
@@ -67,11 +141,36 @@ awap:
     timeout-ms: ${SCRIPT_TIMEOUT_MS:10000}
     max-output-chars: ${SCRIPT_MAX_OUTPUT_CHARS:8192}
     max-context-chars: ${SCRIPT_MAX_CONTEXT_CHARS:32768}
+    retry-delays-ms: ${NOTIFICATION_RETRY_DELAYS_MS:1000,5000,25000}
+  usage:
+    # fail-open=false: quota-enforcing calls (workflow start, AI call) are rejected with
+    # 503 AWAP-IDN-0008 when metering is unavailable. Observational metering is always fail-open.
+    fail-open: ${USAGE_METERING_FAIL_OPEN:false}
+    retention-days: ${USAGE_RETENTION_DAYS:400}
+    reconciliation-cron: "${USAGE_RECONCILIATION_CRON:0 20 2 * * *}"
+    retention-cron: "${USAGE_RETENTION_CRON:0 40 3 * * *}"
   analytics:
     opensearch:
       enabled: ${OPENSEARCH_ENABLED:false}
       endpoint: ${OPENSEARCH_ENDPOINT:http://localhost:9200}
       index: ${OPENSEARCH_ANALYTICS_INDEX:awap-analytics}
+      dlq-index: ${OPENSEARCH_ANALYTICS_DLQ_INDEX:awap-analytics-dlq}
+      queue-capacity: ${OPENSEARCH_ANALYTICS_QUEUE_CAPACITY:1000}
+      batch-size: ${OPENSEARCH_ANALYTICS_BATCH_SIZE:100}
+      flush-interval-ms: ${OPENSEARCH_ANALYTICS_FLUSH_INTERVAL_MS:1000}
+      retry-delays-ms: ${OPENSEARCH_ANALYTICS_RETRY_DELAYS_MS:1000,5000,25000}
+      max-attempts: ${OPENSEARCH_ANALYTICS_MAX_ATTEMPTS:4}
+      breaker-failure-threshold: ${OPENSEARCH_ANALYTICS_BREAKER_THRESHOLD:5}
+      breaker-open-ms: ${OPENSEARCH_ANALYTICS_BREAKER_OPEN_MS:30000}
+      connect-timeout-ms: ${OPENSEARCH_ANALYTICS_CONNECT_TIMEOUT_MS:2000}
+      request-timeout-ms: ${OPENSEARCH_ANALYTICS_REQUEST_TIMEOUT_MS:3000}
+      ism-policy-id: ${OPENSEARCH_ANALYTICS_ISM_POLICY_ID:awap-analytics-ism}
+      index-template-name: ${OPENSEARCH_ANALYTICS_INDEX_TEMPLATE:awap-analytics-template}
+      dlq-index-template-name: ${OPENSEARCH_ANALYTICS_DLQ_INDEX_TEMPLATE:awap-analytics-dlq-template}
+      ilm:
+        hot-days: ${OPENSEARCH_ANALYTICS_ILM_HOT_DAYS:7}
+        warm-days: ${OPENSEARCH_ANALYTICS_ILM_WARM_DAYS:30}
+        delete-days: ${OPENSEARCH_ANALYTICS_ILM_DELETE_DAYS:180}
   rate-limit:
     enabled: ${RATE_LIMIT_ENABLED:false}
   security:
@@ -86,6 +185,18 @@ awap:
     secret: ${WEBHOOK_SECRET:}
     allowed-hosts: ${WEBHOOK_ALLOWED_HOSTS:}
     max-timestamp-skew-ms: ${WEBHOOK_MAX_TIMESTAMP_SKEW_MS:300000}
+    retry:
+      enabled: ${WEBHOOK_RETRY_ENABLED:true}
+      # Attempt budget per delivery (includes the synchronous first attempt, capped at 10).
+      max-attempts: ${WEBHOOK_RETRY_MAX_ATTEMPTS:10}
+      # 1s, 5s, 25s, 2m, 10m; longer budgets reuse the last delay.
+      delays-ms: ${WEBHOOK_RETRY_DELAYS_MS:1000,5000,25000,120000,600000}
+      jitter-ratio: ${WEBHOOK_RETRY_JITTER_RATIO:0.2}
+      lease-seconds: ${WEBHOOK_RETRY_LEASE_SECONDS:30}
+      batch-size: ${WEBHOOK_RETRY_BATCH_SIZE:25}
+      retention-days: ${WEBHOOK_RETRY_RETENTION_DAYS:7}
+      timeout-seconds: ${WEBHOOK_RETRY_TIMEOUT_SECONDS:10}
+      scheduler-delay-ms: ${WEBHOOK_RETRY_SCHEDULER_DELAY_MS:5000}
   clamav:
     enabled: ${CLAMAV_ENABLED:false}
     host: ${CLAMAV_HOST:localhost}
@@ -95,6 +206,22 @@ awap:
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
     access-key: ${MINIO_ACCESS_KEY:awapadmin}
     secret-key: ${MINIO_SECRET_KEY:awapadmin123}
+  files:
+    quarantine-bucket: ${FILE_QUARANTINE_BUCKET:awap-quarantine}
+    promoted-bucket: ${FILE_PROMOTED_BUCKET:awap-files}
+    max-size-bytes: ${FILE_MAX_SIZE_BYTES:524288000}
+    presign-ttl-seconds: ${FILE_PRESIGN_TTL_SECONDS:300}
+    allowed-extensions: ${FILE_ALLOWED_EXTENSIONS:pdf,docx,xlsx,pptx,png,jpg,jpeg,txt}
+    max-scan-attempts: ${FILE_MAX_SCAN_ATTEMPTS:5}
+    infected-policy: ${FILE_INFECTED_POLICY:DELETE}
+    quarantine-retention-days: ${FILE_QUARANTINE_RETENTION_DAYS:7}
+    promoted-retention-days: ${FILE_PROMOTED_RETENTION_DAYS:365}
+    object-lock-retention-days: ${FILE_OBJECT_LOCK_RETENTION_DAYS:1}
+    scan-interval-ms: ${FILE_SCAN_INTERVAL_MS:60000}
+  replay:
+    max-rows: ${REPLAY_MAX_ROWS:100000}
+    page-size: ${REPLAY_PAGE_SIZE:500}
+    timeout: ${REPLAY_TIMEOUT:30s}
 
 management:
   endpoints:

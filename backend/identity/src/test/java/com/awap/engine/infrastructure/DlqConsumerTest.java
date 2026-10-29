@@ -2,24 +2,24 @@ package com.awap.engine.infrastructure;
 
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
-import io.micrometer.core.instrument.Counter;
-import io.micrometer.core.instrument.MeterRegistry;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.junit.jupiter.api.Test;
 
-/** Verifies the DLQ consumer records a metric for each dead-letter message. */
+/** Verifies the listener delegates every record to the idempotent handler. */
 class DlqConsumerTest {
 
   @Test
-  void incrementsDlqCounterForEachMessage() {
-    MeterRegistry registry = mock(MeterRegistry.class);
-    Counter counter = mock(Counter.class);
-    when(registry.counter("awap.dlq.messages")).thenReturn(counter);
+  void delegatesRecordToHandler() {
+    DlqMessageHandler handler = mock(DlqMessageHandler.class);
+    DlqConsumer consumer = new DlqConsumer(handler);
+    ConsumerRecord<String, String> record =
+        new ConsumerRecord<>("awap.dlq", 0, 11L, "key", "{\"broken\":true}");
 
-    DlqConsumer consumer = new DlqConsumer(registry);
-    consumer.handle("{\"broken\":true}");
+    consumer.onMessage(record);
 
-    verify(counter).increment();
+    verify(handler).handle(record);
+    verifyNoMoreInteractions(handler);
   }
 }

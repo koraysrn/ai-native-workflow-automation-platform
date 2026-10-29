@@ -1,5 +1,7 @@
 package com.awap.engine.application;
 
+import com.awap.common.api.AwapException;
+import com.awap.common.api.ErrorCode;
 import com.awap.workflow.domain.NodeDefinition;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -7,6 +9,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
+import org.springframework.http.HttpStatus;
 
 /**
  * Pure parser for a workflow node's {@code config_json}. Malformed or missing configuration falls
@@ -65,6 +69,21 @@ final class NodeConfigReader {
     return readLong(node, "timeoutSeconds", 10);
   }
 
+  /**
+   * Raw {@code timeoutSeconds} value exactly as configured, without clamping.
+   *
+   * <p>Used by the timeout resolver, which must reject zero, negative and absurd values instead of
+   * silently correcting them.
+   */
+  OptionalLong readConfiguredTimeoutSeconds(NodeDefinition node) {
+    JsonNode config = readConfig(node);
+    JsonNode value = config.get("timeoutSeconds");
+    if (value == null || !value.isNumber()) {
+      return OptionalLong.empty();
+    }
+    return OptionalLong.of(value.asLong());
+  }
+
   int readMaxAttempts(NodeDefinition node) {
     long configured = readLong(node, "maxAttempts", 3);
     return (int) Math.max(1, Math.min(configured, 10));
@@ -78,8 +97,43 @@ final class NodeConfigReader {
     return readText(node, "workflowDefinitionId").orElse(null);
   }
 
+  /**
+   * Returns the configured SUB_PROCESS version, or empty when absent. A configured version must be
+   * a positive integer; malformed values fail the node instead of silently falling back to the
+   * current published version.
+   */
   Optional<Integer> readSubProcessVersion(NodeDefinition node) {
-    return readText(node, "version").map(Integer::parseInt);
+    JsonNode value = readConfig(node).get("version");
+    if (value == null || value.isNull()) {
+      return Optional.empty();
+    }
+    if (value.isIntegralNumber()) {
+      int version = value.intValue();
+      if (version > 0) {
+        return Optional.of(version);
+      }
+      throw invalidSubProcessVersion(value.asText());
+    }
+    if (value.isTextual()) {
+      String raw = value.asText().trim();
+      try {
+        int version = Integer.parseInt(raw);
+        if (version > 0) {
+          return Optional.of(version);
+        }
+      } catch (NumberFormatException ex) {
+        // fall through to the explicit validation error below
+      }
+      throw invalidSubProcessVersion(raw);
+    }
+    throw invalidSubProcessVersion(value.toString());
+  }
+
+  private AwapException invalidSubProcessVersion(String raw) {
+    return new AwapException(
+        ErrorCode.WORKFLOW_VERSION_INVALID,
+        HttpStatus.BAD_REQUEST,
+        "SUB_PROCESS version must be a positive integer, but was '" + raw + "'.");
   }
 
   /** Returns the {@code approvers} string array, or an empty list when absent or malformed. */

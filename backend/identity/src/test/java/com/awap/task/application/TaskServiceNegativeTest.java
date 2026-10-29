@@ -10,6 +10,7 @@ import com.awap.task.domain.Task;
 import com.awap.task.infrastructure.TaskRepository;
 import com.awap.task.interfaces.dto.TaskAssignRequest;
 import com.awap.task.interfaces.dto.TaskMapperImpl;
+import com.awap.usage.application.UsageMeteringService;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.Optional;
 import java.util.UUID;
@@ -27,13 +28,19 @@ class TaskServiceNegativeTest {
   @Mock private TaskRepository taskRepository;
   @Mock private OutboxEventPublisher outboxEventPublisher;
   @Mock private MeterRegistry meterRegistry;
+  @Mock private UsageMeteringService usageMeteringService;
 
   private TaskService service;
 
   @BeforeEach
   void setUp() {
     service =
-        new TaskService(taskRepository, outboxEventPublisher, meterRegistry, new TaskMapperImpl());
+        new TaskService(
+            taskRepository,
+            outboxEventPublisher,
+            meterRegistry,
+            new TaskMapperImpl(),
+            usageMeteringService);
   }
 
   private Task completedTask(UUID tenantId, UUID assigneeId) {
