@@ -12,6 +12,7 @@ import com.awap.engine.application.OutboxEventPublisher;
 import com.awap.notification.domain.NotificationChannel;
 import com.awap.notification.domain.NotificationDelivery;
 import com.awap.notification.infrastructure.NotificationDeliveryRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -24,7 +25,7 @@ class NotificationServiceTest {
 
   @Test
   void dispatchesOnceWhenAdapterSucceedsAndReportsSent() {
-    when(renderer.render(any(), any())).thenReturn("Hello world");
+    when(renderer.render(any(), any(), any(), any())).thenReturn(rendered("Hello world"));
     CountingAdapter adapter = new CountingAdapter(0);
     NotificationService service = new NotificationService(List.of(adapter), renderer, outbox);
 
@@ -36,7 +37,7 @@ class NotificationServiceTest {
 
   @Test
   void retriesTransientFailuresThenReportsFailureAndRethrows() {
-    when(renderer.render(any(), any())).thenReturn("Hello world");
+    when(renderer.render(any(), any(), any(), any())).thenReturn(rendered("Hello world"));
     CountingAdapter adapter = new CountingAdapter(3);
     NotificationService service = new NotificationService(List.of(adapter), renderer, outbox);
 
@@ -52,7 +53,7 @@ class NotificationServiceTest {
 
   @Test
   void retriesUntilSuccessWithinMaxAttempts() {
-    when(renderer.render(any(), any())).thenReturn("Hello world");
+    when(renderer.render(any(), any(), any(), any())).thenReturn(rendered("Hello world"));
     CountingAdapter adapter = new CountingAdapter(1);
     NotificationService service = new NotificationService(List.of(adapter), renderer, outbox);
 
@@ -85,6 +86,7 @@ class NotificationServiceTest {
 
   @Test
   void retriesUseConfiguredExponentialBackoff() {
+    when(renderer.render(any(), any(), any(), any())).thenReturn(rendered("Hello world"));
     java.util.List<Long> delays = new java.util.ArrayList<>();
     CountingAdapter adapter = new CountingAdapter(2);
     NotificationService service =
@@ -102,12 +104,14 @@ class NotificationServiceTest {
   }
 
   @Test
-  void rendersTheRequestedLocale() {
+  void rendersTheRequestedLocaleForTheTenant() {
+    when(renderer.render(any(), any(), any(), any())).thenReturn(rendered("Hello world"));
     NotificationService service =
         new NotificationService(List.of(new CountingAdapter(0)), renderer, outbox);
+    UUID tenantId = UUID.randomUUID();
 
     service.send(
-        UUID.randomUUID(),
+        tenantId,
         "a@example.com",
         NotificationChannel.EMAIL,
         "welcome",
@@ -115,7 +119,35 @@ class NotificationServiceTest {
         "{\"name\":\"Ada\"}",
         null);
 
-    verify(renderer).render("welcome", "tr", "{\"name\":\"Ada\"}");
+    verify(renderer).render(tenantId, "welcome", "tr", "{\"name\":\"Ada\"}");
+  }
+
+  private static NotificationTemplateRenderer.RenderedNotificationTemplate rendered(String body) {
+    return new NotificationTemplateRenderer.RenderedNotificationTemplate("Notification", body);
+  }
+
+  @Test
+  void recordsDeliveryLatencyAndRetryLagMetrics() {
+    when(renderer.render(any(), any(), any(), any())).thenReturn(rendered("Hello world"));
+    SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    NotificationService service =
+        new NotificationService(
+            List.of(new CountingAdapter(1)),
+            renderer,
+            outbox,
+            null,
+            new long[] {1L},
+            millis -> {},
+            registry);
+
+    service.send(UUID.randomUUID(), "a@example.com", NotificationChannel.EMAIL, "welcome", null);
+
+    assertThat(registry.get("awap.notification.deliveries").tag("result", "sent").counter().count())
+        .isEqualTo(1.0);
+    assertThat(registry.get("awap.notification.attempts").tag("result", "failed").counter().count())
+        .isEqualTo(1.0);
+    assertThat(registry.get("awap.notification.retry.lag").timer().count()).isEqualTo(1);
+    assertThat(registry.get("awap.notification.dispatch.latency").timer().count()).isEqualTo(1);
   }
 
   @Test

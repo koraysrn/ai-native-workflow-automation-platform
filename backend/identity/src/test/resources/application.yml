@@ -26,6 +26,9 @@ awap:
   analytics:
     opensearch:
       enabled: false
+  webhook:
+    retry:
+      enabled: false
   kafka:
     enabled: false
   security:
