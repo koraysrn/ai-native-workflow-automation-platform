@@ -151,15 +151,16 @@ class OutboxFallbackRlsPostgresIT {
     List<UUID> claimed = new ArrayList<>();
     try (Connection app = appConnection();
         Statement stmt = app.createStatement();
-        ResultSet rs = stmt.executeQuery("SELECT id FROM awap_claim_outbox_batch(1000)")) {
+        ResultSet rs = stmt.executeQuery("SELECT id FROM awap_claim_outbox_batch(1000, 60, 5)")) {
       while (rs.next()) {
         claimed.add(rs.getObject("id", UUID.class));
       }
     }
 
     assertThat(claimed).contains(mine, other);
-    assertThat(isPublished(mine)).isTrue();
-    assertThat(isPublished(other)).isTrue();
+    // Claiming only takes the lease; the row stays unpublished until the broker acknowledged it.
+    assertThat(isPublished(mine)).isFalse();
+    assertThat(isPublished(other)).isFalse();
   }
 
   @Test
