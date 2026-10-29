@@ -46,12 +46,148 @@
       "source": "NotificationService (awap.notification.retry.lag timer)"
     },
     {
+      "name": "awap_outbox_stuck_total",
+      "source": "OutboxMetrics (awap.outbox.stuck counter)"
+    },
+    {
+      "name": "awap_outbox_publish_failures_total",
+      "source": "OutboxMetrics (awap.outbox.publish_failures counter)"
+    },
+    {
+      "name": "awap_outbox_claim_age_seconds",
+      "source": "OutboxMetrics (awap.outbox.claim_age_seconds summary)"
+    },
+    {
+      "name": "awap_outbox_claim_age_seconds_max",
+      "source": "OutboxMetrics (awap.outbox.claim_age_seconds summary max)"
+    },
+    {
+      "name": "awap_outbox_exhausted",
+      "source": "OutboxMetrics (awap.outbox.exhausted gauge)"
+    },
+    {
+      "name": "awap_outbox_reconciliation_failures",
+      "source": "OutboxMetrics (awap.outbox.reconciliation_failures gauge)"
+    },
+    {
       "name": "awap_outbox_pending",
       "source": "OutboxRelayService (awap.outbox.pending gauge)"
     },
     {
       "name": "awap_outbox_events_total",
       "source": "OutboxRelayService (awap.outbox.events counter)"
+    },
+    {
+      "name": "awap_node_timeout_total",
+      "source": "NodeTimeoutMetrics (awap.node.timeout counter)"
+    },
+    {
+      "name": "awap_node_duration_seconds",
+      "source": "NodeTimeoutMetrics (awap.node.duration timer)"
+    },
+    {
+      "name": "awap_node_timeout_failures_total",
+      "source": "NodeTimeoutHandler (awap.node.timeout.failures counter)"
+    },
+    {
+      "name": "awap_node_timeout_rejected_total",
+      "source": "NodeTimeoutExecutor (awap.node.timeout.rejected counter)"
+    },
+    {
+      "name": "awap_node_timeout_abandoned",
+      "source": "NodeExecutionWatchdog (awap.node.timeout.abandoned gauge)"
+    },
+    {
+      "name": "awap_replay_divergences_total",
+      "source": "ReplayMetrics (awap.replay.divergences counter)"
+    },
+    {
+      "name": "awap_replay_limits_total",
+      "source": "ReplayMetrics (awap.replay.limits counter)"
+    },
+    {
+      "name": "awap_replay_runs_total",
+      "source": "ReplayMetrics (awap.replay.runs counter)"
+    },
+    {
+      "name": "awap_replay_duration_seconds",
+      "source": "ReplayMetrics (awap.replay.duration timer)"
+    },
+    {
+      "name": "awap_file_infected_total",
+      "source": "FileScanMetrics (awap.file.infected counter)"
+    },
+    {
+      "name": "awap_file_promote_fail_total",
+      "source": "FileScanMetrics (awap.file.promote.fail counter)"
+    },
+    {
+      "name": "awap_file_scan_duration_seconds",
+      "source": "FileScanMetrics (awap.file.scan.duration timer)"
+    },
+    {
+      "name": "awap_notification_retry_claims_total",
+      "source": "NotificationRetryScheduler (awap.notification.retry.claims counter)"
+    },
+    {
+      "name": "awap_notification_retry_dlq_total",
+      "source": "NotificationRetryWorker (awap.notification.retry.dlq counter)"
+    },
+    {
+      "name": "awap_notification_retry_lease_conflicts_total",
+      "source": "JdbcNotificationRetryClaimRepository (awap.notification.retry.lease.conflicts counter)"
+    },
+    {
+      "name": "awap_notification_retention_purged_total",
+      "source": "NotificationDeliveryPurgeScheduler (awap.notification.retention.purged counter)"
+    },
+    {
+      "name": "awap_notification_dedupe_suppressed_total",
+      "source": "NotificationService (awap.notification.dedupe.suppressed counter)"
+    },
+    {
+      "name": "awap_dlq_legacy_messages_total",
+      "source": "DlqConsumer (awap.dlq.legacy.messages counter)"
+    },
+    {
+      "name": "awap_dlq_quarantined_total",
+      "source": "DlqConsumer (awap.dlq.quarantined counter)"
+    },
+    {
+      "name": "awap_analytics_sink_dropped_total",
+      "source": "OpenSearchAnalyticsSink (awap.analytics.sink.dropped counter)"
+    },
+    {
+      "name": "awap_analytics_sink_dead_letter_total",
+      "source": "OpenSearchAnalyticsSink (awap.analytics.sink.dead.letter counter)"
+    },
+    {
+      "name": "awap_analytics_sink_queue_depth",
+      "source": "OpenSearchAnalyticsSink (awap.analytics.sink.queue.depth gauge)"
+    },
+    {
+      "name": "awap_analytics_sink_circuit_open",
+      "source": "OpenSearchAnalyticsSink (awap.analytics.sink.circuit.open gauge)"
+    },
+    {
+      "name": "awap_usage_quota_exceeded_total",
+      "source": "UsageMeteringService (awap.usage.quota.exceeded counter)"
+    },
+    {
+      "name": "awap_usage_quota_near_limit_total",
+      "source": "UsageMeteringService (awap.usage.quota.near.limit counter)"
+    },
+    {
+      "name": "awap_usage_metering_failures_total",
+      "source": "UsageMeteringService (awap.usage.metering.failures counter)"
+    },
+    {
+      "name": "awap_usage_reconciliation_drift_total",
+      "source": "UsageReconciliationScheduler (awap.usage.reconciliation.drift counter)"
+    },
+    {
+      "name": "awap_usage_reconciliation_runs_total",
+      "source": "UsageReconciliationScheduler (awap.usage.reconciliation.runs counter)"
     },
     {
       "name": "http_server_requests_seconds_count",

@@ -6,6 +6,9 @@ import com.awap.document.domain.DocumentStatus;
 import com.awap.document.domain.DocumentVersion;
 import com.awap.document.infrastructure.DocumentVersionRepository;
 import com.awap.engine.application.OutboxEventPublisher;
+import com.awap.usage.application.UsageMeteringService;
+import com.awap.usage.domain.UsageEventKeys;
+import com.awap.usage.domain.UsageMetric;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -25,11 +28,15 @@ public class DocumentService {
 
   private final DocumentVersionRepository repository;
   private final OutboxEventPublisher outboxEventPublisher;
+  private final UsageMeteringService usageMeteringService;
 
   public DocumentService(
-      DocumentVersionRepository repository, OutboxEventPublisher outboxEventPublisher) {
+      DocumentVersionRepository repository,
+      OutboxEventPublisher outboxEventPublisher,
+      UsageMeteringService usageMeteringService) {
     this.repository = repository;
     this.outboxEventPublisher = outboxEventPublisher;
+    this.usageMeteringService = usageMeteringService;
   }
 
   /** Registers a freshly uploaded file whose antivirus scan has not completed yet. */
@@ -73,6 +80,11 @@ public class DocumentService {
         new DocumentVersion(tenantId, fileId, next, BUCKET, objectKey, size, format);
     version.markAvailable();
     repository.save(version);
+    usageMeteringService.record(
+        tenantId,
+        UsageMetric.DOCUMENT_BYTES,
+        Math.max(0L, size),
+        UsageEventKeys.documentVersion(version.getId()));
     publish(tenantId, fileId, "DOCUMENT_VERSION_CREATED", version);
     return version;
   }

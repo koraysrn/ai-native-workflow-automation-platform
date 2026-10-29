@@ -10,6 +10,13 @@ import com.awap.document.domain.DocumentStatus;
 import com.awap.document.domain.DocumentVersion;
 import com.awap.document.infrastructure.DocumentVersionRepository;
 import com.awap.engine.application.OutboxEventPublisher;
+import com.awap.usage.application.InMemoryUsageCounterStore;
+import com.awap.usage.application.UsageMeteringService;
+import com.awap.usage.domain.UsageMetric;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,7 +26,9 @@ class DocumentServiceTest {
 
   private final DocumentVersionRepository repository = mock(DocumentVersionRepository.class);
   private final OutboxEventPublisher outbox = mock(OutboxEventPublisher.class);
-  private final DocumentService service = new DocumentService(repository, outbox);
+  private final UsageMeteringService usageMeteringService = mock(UsageMeteringService.class);
+  private final DocumentService service =
+      new DocumentService(repository, outbox, usageMeteringService);
 
   @Test
   void createVersionStartsAtOneWhenNoPreviousVersion() {
@@ -81,5 +90,22 @@ class DocumentServiceTest {
     assertThat(version.getVersion()).isEqualTo(1);
     assertThat(version.getStatus()).isEqualTo(DocumentStatus.PENDING);
     verify(repository).save(version);
+  }
+
+  @Test
+  void createVersionAddsTheExactByteCountToTheDocumentBytesCounter() {
+    UUID tenant = UUID.randomUUID();
+    UUID file = UUID.randomUUID();
+    when(repository.findTopByFileIdOrderByVersionDesc(file)).thenReturn(Optional.empty());
+
+    InMemoryUsageCounterStore store = new InMemoryUsageCounterStore();
+    UsageMeteringService metering =
+        new UsageMeteringService(store, new SimpleMeterRegistry(), false, Clock.systemUTC());
+    DocumentService meteredService = new DocumentService(repository, outbox, metering);
+
+    meteredService.createVersion(tenant, file, 2048L, "pdf", "k");
+
+    assertThat(store.value(tenant, LocalDate.now(ZoneOffset.UTC), UsageMetric.DOCUMENT_BYTES))
+        .isEqualTo(2048L);
   }
 }

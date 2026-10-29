@@ -323,7 +323,7 @@ Workflow JSON Format
       "id": "n3",
       "type": "APPROVAL",
       "approvers": ["role:manager"],
-      "timeoutSeconds": 86400
+      "timeoutSeconds": 300
     },
     {
       "id": "n4",
@@ -338,6 +338,12 @@ Workflow JSON Format
   "variables": []
 }
 ```
+
+Node timeouts: `timeoutSeconds` must be between 1 and `awap.engine.node-timeout.max-seconds`
+(default 3600); zero, negative and longer values are rejected by node config validation. Which node
+types are hard-enforced and which are only measured is documented in
+[`node-timeouts.md`](node-timeouts.md), with the rationale in
+[`adr/0004-node-timeout-enforcement.md`](adr/0004-node-timeout-enforcement.md).
 
 Expression Language: SpEL (Spring Expression Language) is used in condition and decision nodes; expressions are restricted to whitelisted functions. The whitelisted functions (`hasRole`, `hasAnyRole`, `matches`, `length`, `isEmpty`, `size`) are exposed through the `#fn` namespace, e.g. `#fn.hasRole(role, 'MANAGER')`, inside a read-only, time-boxed sandbox with a denylist for `T(...)`, `new`, `System`, `Runtime`, `reflect` and `exec`.
 

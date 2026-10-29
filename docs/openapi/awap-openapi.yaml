@@ -41,6 +41,8 @@ tags:
     description: Tenant notification inbox and delivery history.
   - name: Analytics
     description: Process, task and approval analytics aggregates.
+  - name: Webhooks
+    description: Durable webhook delivery queue and dead-letter inspection.
 
 paths:
   /actuator/health:
@@ -258,6 +260,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TenantResponse"
+
+  /api/v1/tenants/{id}/usage:
+    get:
+      operationId: getTenantUsage
+      summary: Tenant usage and remaining quota
+      description: >-
+        Returns per UTC day counters for the requested window. Unknown metric keys are
+        rejected with 400, a soft-deleted or unknown tenant with 404, and cross-tenant
+        reads without SYSTEM_ADMIN with 403. Metrics without usage report zero values.
+      tags: [Tenants]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/UsageFrom"
+        - $ref: "#/components/parameters/UsageTo"
+        - $ref: "#/components/parameters/UsageMetric"
+      responses:
+        "200":
+          description: Usage report.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   /api/v1/tenants/{id}/invitations:
     post:
@@ -663,7 +693,9 @@ paths:
     get:
       operationId: listWorkflowVersions
       summary: List workflow versions
-      description: Lists version snapshots of a workflow definition.
+      description: >-
+        Lists version snapshots of a workflow definition, including the publish status, whether the
+        version is archived and whether it is the version the definition currently resolves to.
       tags: [Workflow Definitions]
       parameters:
         - $ref: "#/components/parameters/WorkflowDefinitionId"
@@ -676,6 +708,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/WorkflowVersionResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /api/v1/workflow-definitions/{id}/versions/{version}/archive:
     post:
@@ -839,18 +873,51 @@ paths:
   /api/v1/workflow-instances/{id}/replay:
     post:
       operationId: replayWorkflowInstance
-      summary: Replay an instance
-      description: Deterministically re-drives failed nodes from the recorded log.
+      summary: Replay an instance from its execution log
+      description: >-
+        Folds the ordered execution log into an immutable projection, compares it with the persisted
+        instance and node executions, and records a replay_runs audit row. With dryRun=true the
+        projection report is returned and no outbox, instance or node row is written. Without
+        dryRun the replay is audited, guarded by a per-instance lock and optimistic version, and
+        then re-drives the instance. A divergence raises REPLAY_DIVERGENCE (409).
       tags: [Workflow Instances]
       parameters:
         - $ref: "#/components/parameters/WorkflowInstanceId"
+        - name: dryRun
+          in: query
+          required: false
+          description: >-
+            When true, only projects and compares the log; zero side effects other than the audit
+            row.
+          schema:
+            type: boolean
+            default: false
       responses:
         "200":
-          description: Replayed instance.
+          description: >-
+            Dry-run returns a projection report; a real replay returns the replayed instance.
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/WorkflowInstanceResponse"
+                oneOf:
+                  - $ref: "#/components/schemas/ReplayReport"
+                  - $ref: "#/components/schemas/WorkflowInstanceResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "413":
+          description: The execution log exceeds the configured replay row cap.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "422":
+          description: The replay exceeded its configured execution timeout.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
 
   /api/v1/workflow-instances/{id}/fail:
     post:
@@ -1233,8 +1300,11 @@ paths:
   /api/v1/files:
     post:
       operationId: createFileUpload
-      summary: Create a file upload slot
-      description: Creates a presigned MinIO upload slot for a file.
+      summary: Create a quarantined file upload slot
+      description: >-
+        Creates a short-lived (<= 5 minutes) presigned PUT that targets the `awap-quarantine`
+        bucket only. Files are promoted to `awap-files` after ClamAV clears them. Allowed
+        extensions: pdf, docx, xlsx, pptx, png, jpg, jpeg, txt; maximum size 500 MB.
       tags: [Files]
       requestBody:
         required: true
@@ -1250,6 +1320,8 @@ paths:
                   type: string
                 size:
                   type: integer
+                  minimum: 1
+                  maximum: 524288000
       responses:
         "201":
           description: Upload slot created.
@@ -1263,12 +1335,32 @@ paths:
                     format: uuid
                   uploadUrl:
                     type: string
+        "400":
+          description: Empty file or invalid request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "413":
+          description: File exceeds the 500 MB limit.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "415":
+          description: File extension is not supported.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
 
   /api/v1/files/{id}:
     get:
       operationId: getFileDownloadUrl
       summary: Get a file download URL
-      description: Returns a presigned download URL for an uploaded file.
+      description: >-
+        Returns a presigned GET on `awap-files` only when the file is PROMOTED. INFECTED returns
+        403, SCAN_FAILED returns 503, and files still quarantined/scanning return 409.
       tags: [Files]
       parameters:
         - name: id
@@ -1287,6 +1379,30 @@ paths:
                 properties:
                   downloadUrl:
                     type: string
+        "403":
+          description: The file was rejected by antivirus scanning.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "404":
+          description: File not found for this tenant.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "409":
+          description: The file is still quarantined or being scanned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "503":
+          description: The antivirus scan failed; promotion has not happened.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
 
   /api/v1/workflow-instances/{id}/recover:
     post:
@@ -1785,6 +1901,56 @@ paths:
                 items:
                   $ref: "#/components/schemas/AnalyticsAggregateResponse"
 
+  /api/v1/webhook-deliveries:
+    get:
+      operationId: listWebhookDeliveries
+      summary: List webhook deliveries
+      description: >-
+        Tenant-scoped view of the durable delivery queue used by WEBHOOK workflow nodes. Filter
+        with `status=DEAD` to inspect dead-letter rows. Payloads, HMAC signatures and URL query
+        strings are never returned.
+      tags: [Webhooks]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Optional delivery status filter.
+          schema:
+            type: string
+            enum: [PENDING, RETRYING, SENT, DEAD, CANCELLED]
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of rows (1-100).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: Deliveries of the current tenant, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WebhookDeliveryResponse"
+        "400":
+          description: The status filter is not a known delivery status.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: The caller does not hold INSTANCE_READ.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -1837,6 +2003,36 @@ components:
       schema:
         type: string
         format: uuid
+    UsageFrom:
+      name: from
+      in: query
+      required: false
+      description: First UTC day of the window (inclusive). Defaults to 29 days before `to`.
+      schema:
+        type: string
+        format: date
+    UsageTo:
+      name: to
+      in: query
+      required: false
+      description: Last UTC day of the window (inclusive). Defaults to today (UTC).
+      schema:
+        type: string
+        format: date
+    UsageMetric:
+      name: metric
+      in: query
+      required: false
+      description: Restricts the report to one metric key.
+      schema:
+        type: string
+        enum:
+          - workflow_executions
+          - task_decisions
+          - ai_calls
+          - document_bytes
+          - active_users
+          - api_requests
     NotificationId:
       name: id
       in: path
@@ -1886,7 +2082,7 @@ components:
           schema:
             $ref: "#/components/schemas/ProblemDetails"
     TooManyRequests:
-      description: Rate limit exceeded.
+      description: Rate limit or tenant daily quota exceeded.
       headers:
         Retry-After:
           schema:
@@ -1898,6 +2094,96 @@ components:
             $ref: "#/components/schemas/ProblemDetails"
 
   schemas:
+    ReplayReport:
+      type: object
+      description: Projection report of a deterministic log replay.
+      required: [instanceId, dryRun, result, projection, divergences, logRows, stateHash]
+      properties:
+        instanceId:
+          type: string
+          format: uuid
+        dryRun:
+          type: boolean
+        result:
+          type: string
+          enum: [MATCHED, DIVERGED]
+        errorCode:
+          type: string
+          nullable: true
+          example: AWAP-ENG-0004
+        projection:
+          $ref: "#/components/schemas/ReplayStateView"
+        divergences:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReplayDivergenceView"
+        logRows:
+          type: integer
+        logPages:
+          type: integer
+        durationMs:
+          type: integer
+          format: int64
+        stateHash:
+          type: string
+
+    ReplayStateView:
+      type: object
+      description: Redacted projection of an instance rebuilt from its execution log.
+      properties:
+        instanceId:
+          type: string
+          format: uuid
+        instanceState:
+          type: string
+          enum: [CREATED, STARTED, RUNNING, WAITING, COMPLETED, FAILED, CANCELLED, PAUSED]
+        currentNodeId:
+          type: string
+          nullable: true
+        nodeStatuses:
+          type: object
+          additionalProperties:
+            type: string
+        branchTokens:
+          type: object
+          additionalProperties:
+            type: integer
+        mergedBranches:
+          type: object
+          additionalProperties:
+            type: integer
+        outputSummaries:
+          type: object
+          additionalProperties:
+            type: string
+        appliedActions:
+          type: integer
+
+    ReplayDivergenceView:
+      type: object
+      description: One difference between the log projection and the persisted state.
+      required: [type, detail]
+      properties:
+        type:
+          type: string
+          enum:
+            - UNKNOWN_ACTION
+            - MALFORMED_LOG
+            - MALFORMED_PAYLOAD
+            - OUT_OF_ORDER_LOG
+            - EXTERNAL_RESULT_MISSING
+            - INSTANCE_STATE_MISMATCH
+            - MISSING_NODE_COMPLETION
+            - NODE_STATUS_MISMATCH
+            - NODE_NOT_PERSISTED
+            - BRANCH_TOKEN_MISMATCH
+            - BRANCH_MERGE_MISMATCH
+        nodeId:
+          type: string
+          nullable: true
+        detail:
+          type: string
+
     ProblemDetails:
       type: object
       description: RFC 7807 problem detail.
@@ -1927,6 +2213,62 @@ components:
       properties:
         message:
           type: string
+
+    UsageDay:
+      type: object
+      required: [day, value]
+      properties:
+        day:
+          type: string
+          format: date
+        value:
+          type: integer
+          format: int64
+
+    UsageMetricUsage:
+      type: object
+      required: [metric, unit, total, limit, remaining, days]
+      properties:
+        metric:
+          type: string
+          description: Stable metric key (bounded enum, never a free-form label).
+          example: workflow_executions
+        unit:
+          type: string
+          enum: [COUNT, BYTES]
+        total:
+          type: integer
+          format: int64
+        limit:
+          type: integer
+          format: int64
+          description: Effective daily limit (tenant override or metric default).
+        remaining:
+          type: integer
+          format: int64
+          description: limit - total, floored at zero; -1 when the metric is uncapped.
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/UsageDay"
+
+    UsageResponse:
+      type: object
+      required: [tenantId, from, to, metrics]
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        metrics:
+          type: array
+          items:
+            $ref: "#/components/schemas/UsageMetricUsage"
 
     TokenResponse:
       type: object
@@ -2092,16 +2434,26 @@ components:
 
     WorkflowVersionResponse:
       type: object
+      description: >-
+        A workflow version snapshot. `status` is the publish state (DRAFT or PUBLISHED), `archived`
+        marks soft-deleted snapshots that cannot be selected by SUB_PROCESS, and `current` marks the
+        version the definition currently resolves to.
       properties:
         id:
           type: string
           format: uuid
         version:
           type: integer
+          minimum: 1
         definitionJson:
           type: string
         status:
           type: string
+          enum: [DRAFT, PUBLISHED]
+        archived:
+          type: boolean
+        current:
+          type: boolean
         createdAt:
           type: string
           format: date-time
@@ -2284,9 +2636,27 @@ components:
         lastError:
           type: string
           nullable: true
+        nextAttemptAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: When the retry scheduler will make the next attempt (null for SENT/FAILED).
         createdAt:
           type: string
           format: date-time
+        businessKey:
+          type: string
+          nullable: true
+          description: >-
+            Business identity (workflow instance, task, approval or form id) used for
+            de-duplication, when the producer supplied one.
+        dedupeExpiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            End of the active de-duplication window. A repeat after this instant creates a
+            new delivery.
         read:
           type: boolean
           description: True when the notification has been acknowledged.
@@ -2304,6 +2674,50 @@ components:
           type: integer
           format: int64
           minimum: 0
+
+    WebhookDeliveryResponse:
+      type: object
+      description: One durable webhook delivery; never contains the payload or query string.
+      properties:
+        id:
+          type: string
+          format: uuid
+        workflowInstanceId:
+          type: string
+          format: uuid
+        nodeExecutionId:
+          type: string
+          format: uuid
+        nodeId:
+          type: string
+        targetUrl:
+          type: string
+          description: Target URL with the query string and fragment removed.
+        status:
+          type: string
+          enum: [PENDING, RETRYING, SENT, DEAD, CANCELLED]
+        attempts:
+          type: integer
+        maxAttempts:
+          type: integer
+        nextAttemptAt:
+          type: string
+          format: date-time
+        lastStatusCode:
+          type: integer
+          nullable: true
+        lastError:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
 
     AnalyticsAggregateResponse:
       type: object

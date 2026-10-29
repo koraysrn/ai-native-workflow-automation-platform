@@ -15,8 +15,15 @@ import com.awap.task.infrastructure.TaskRepository;
 import com.awap.task.interfaces.dto.TaskMapperImpl;
 import com.awap.task.interfaces.dto.TaskRequest;
 import com.awap.task.interfaces.dto.TaskResponse;
+import com.awap.usage.application.InMemoryUsageCounterStore;
+import com.awap.usage.application.UsageMeteringService;
+import com.awap.usage.domain.UsageMetric;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Clock;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -32,6 +39,7 @@ class TaskServiceTest {
   @Mock private OutboxEventPublisher outboxEventPublisher;
   @Mock private MeterRegistry meterRegistry;
   @Mock private Counter counter;
+  @Mock private UsageMeteringService usageMeteringService;
 
   private TaskService service;
 
@@ -41,7 +49,12 @@ class TaskServiceTest {
         .when(meterRegistry.counter(anyString(), anyString(), anyString()))
         .thenReturn(counter);
     service =
-        new TaskService(taskRepository, outboxEventPublisher, meterRegistry, new TaskMapperImpl());
+        new TaskService(
+            taskRepository,
+            outboxEventPublisher,
+            meterRegistry,
+            new TaskMapperImpl(),
+            usageMeteringService);
   }
 
   @Test
@@ -79,6 +92,29 @@ class TaskServiceTest {
 
     verify(counter).increment();
     verify(meterRegistry).counter("awap.task.decisions", "decision", "APPROVED");
+  }
+
+  @Test
+  void approveMetersExactlyOneTaskDecision() {
+    UUID tenantId = UUID.randomUUID();
+    UUID id = UUID.randomUUID();
+    UUID assigneeId = UUID.randomUUID();
+    Task task = new Task(tenantId, null, null, "Review", null, assigneeId);
+    task.claim(assigneeId);
+    when(taskRepository.findByIdAndTenantIdAndDeletedFalse(id, tenantId))
+        .thenReturn(Optional.of(task));
+
+    InMemoryUsageCounterStore store = new InMemoryUsageCounterStore();
+    UsageMeteringService metering =
+        new UsageMeteringService(store, new SimpleMeterRegistry(), false, Clock.systemUTC());
+    TaskService meteredService =
+        new TaskService(
+            taskRepository, outboxEventPublisher, meterRegistry, new TaskMapperImpl(), metering);
+
+    meteredService.approve(tenantId, id, assigneeId, "EMPLOYEE", "Looks good");
+
+    assertThat(store.value(tenantId, LocalDate.now(ZoneOffset.UTC), UsageMetric.TASK_DECISION))
+        .isEqualTo(1L);
   }
 
   @Test

@@ -10,6 +10,9 @@ import com.awap.task.interfaces.dto.TaskAssignRequest;
 import com.awap.task.interfaces.dto.TaskMapper;
 import com.awap.task.interfaces.dto.TaskRequest;
 import com.awap.task.interfaces.dto.TaskResponse;
+import com.awap.usage.application.UsageMeteringService;
+import com.awap.usage.domain.UsageEventKeys;
+import com.awap.usage.domain.UsageMetric;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.time.Duration;
 import java.time.Instant;
@@ -29,16 +32,19 @@ public class TaskService {
   private final OutboxEventPublisher outboxEventPublisher;
   private final MeterRegistry meterRegistry;
   private final TaskMapper taskMapper;
+  private final UsageMeteringService usageMeteringService;
 
   public TaskService(
       TaskRepository taskRepository,
       OutboxEventPublisher outboxEventPublisher,
       MeterRegistry meterRegistry,
-      TaskMapper taskMapper) {
+      TaskMapper taskMapper,
+      UsageMeteringService usageMeteringService) {
     this.taskRepository = taskRepository;
     this.outboxEventPublisher = outboxEventPublisher;
     this.meterRegistry = meterRegistry;
     this.taskMapper = taskMapper;
+    this.usageMeteringService = usageMeteringService;
   }
 
   @Transactional
@@ -97,6 +103,7 @@ public class TaskService {
     publishCompleted(task, "{\"decision\":\"APPROVED\"}");
     publishAnalytics(task, "APPROVAL_COMPLETED");
     recordDecision("APPROVED");
+    recordUsage(task);
     return taskMapper.toResponse(task);
   }
 
@@ -109,6 +116,7 @@ public class TaskService {
     publishCompleted(task, "{\"decision\":\"REJECTED\"}");
     publishAnalytics(task, "APPROVAL_COMPLETED");
     recordDecision("REJECTED");
+    recordUsage(task);
     return taskMapper.toResponse(task);
   }
 
@@ -130,6 +138,14 @@ public class TaskService {
 
   private void recordDecision(String decision) {
     meterRegistry.counter("awap.task.decisions", "decision", decision).increment();
+  }
+
+  private void recordUsage(Task task) {
+    usageMeteringService.record(
+        task.getTenantId(),
+        UsageMetric.TASK_DECISION,
+        1L,
+        UsageEventKeys.taskDecision(task.getId()));
   }
 
   private void publishAnalytics(Task task, String eventType) {
