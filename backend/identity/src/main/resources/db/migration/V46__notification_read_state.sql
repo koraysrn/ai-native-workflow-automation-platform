@@ -15,7 +15,9 @@
 -- otherwise hide every row.
 
 ALTER TABLE notification_deliveries ADD COLUMN read_at TIMESTAMPTZ;
-ALTER TABLE notification_deliveries ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+-- V42 (notification retry scheduler) also introduces the optimistic-locking column; keep this
+-- idempotent so both migrations can run in either order on an existing database.
+ALTER TABLE notification_deliveries ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0;
 
 CREATE INDEX idx_notification_deliveries_tenant_read
     ON notification_deliveries (tenant_id, read_at);

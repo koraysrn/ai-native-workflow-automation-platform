@@ -134,6 +134,7 @@ public class OutboxRelayService {
       case "WEBHOOK_DELIVERY_DEAD" -> "webhook.delivery.dlq";
       case "ANALYTICS_EVENT" -> "analytics.events";
       case "NOTIFICATION_REQUESTED" -> "notification.send";
+      case "NOTIFICATION_DLQ" -> "notification.send.dlq";
       case "DOCUMENT_REGISTERED",
           "DOCUMENT_VERSION_CREATED",
           "DOCUMENT_ARCHIVED",

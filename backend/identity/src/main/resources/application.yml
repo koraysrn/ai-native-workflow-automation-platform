@@ -31,6 +31,12 @@ spring:
     producer:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    consumer:
+      # Offset commits happen only after the listener returns, i.e. after the delivery row is
+      # durable; a DB outage must not commit the offset.
+      enable-auto-commit: false
+    listener:
+      ack-mode: record
 
 awap:
   kafka:
@@ -58,7 +64,16 @@ awap:
     retention-days: ${NOTIFICATION_RETENTION_DAYS:30}
     read-retention-days: ${NOTIFICATION_READ_RETENTION_DAYS:30}
     unread-retention-days: ${NOTIFICATION_UNREAD_RETENTION_DAYS:180}
-    retry-delays-ms: ${NOTIFICATION_RETRY_DELAYS_MS:1000,5000,25000}
+    # Retry rows are scheduled, never slept on: the leased scheduler drives the remaining attempts.
+    retry-delays-ms: ${NOTIFICATION_RETRY_DELAYS_MS:1000,5000,25000,120000,600000}
+    max-attempts: ${NOTIFICATION_MAX_ATTEMPTS:5}
+    retry-interval-ms: ${NOTIFICATION_RETRY_INTERVAL_MS:5000}
+    retry-lease-seconds: ${NOTIFICATION_RETRY_LEASE_SECONDS:120}
+    retry-batch-size: ${NOTIFICATION_RETRY_BATCH_SIZE:50}
+    retry-per-tenant-limit: ${NOTIFICATION_RETRY_PER_TENANT_LIMIT:5}
+    max-body-bytes: ${NOTIFICATION_MAX_BODY_BYTES:262144}
+    first-attempt-grace-ms: ${NOTIFICATION_FIRST_ATTEMPT_GRACE_MS:60000}
+    retry-scheduler-enabled: ${NOTIFICATION_RETRY_SCHEDULER_ENABLED:true}
   ai:
     # Fail-closed: the AI workflow node refuses to run until an operator enables it.
     node-enabled: ${AI_NODE_ENABLED:false}

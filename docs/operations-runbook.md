@@ -399,3 +399,51 @@ versioning and a lifecycle rule (expire quarantine objects after
 `FILE_QUARANTINE_RETENTION_DAYS`, abort incomplete multipart uploads after one day). `awap-files`
 is versioned with `FILE_PROMOTED_RETENTION_DAYS`. Existing buckets are not recreated; object lock
 cannot be enabled in place, so a pre-existing quarantine bucket must be recreated by ops.
+
+## O11 — Notification retries (issue #119)
+
+The Kafka consumer performs only the first provider attempt. It persists the delivery row (plus
+`nextAttemptAt`) and returns; no retry ever sleeps inside the consumer transaction. The offset is
+committed only after the listener returns, so a database outage re-delivers the record instead of
+losing it.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `awap.notification.retry-interval-ms` | 5000 | scheduler tick |
+| `awap.notification.retry-delays-ms` | 1000,5000,25000,120000,600000 | backoff per failed attempt |
+| `awap.notification.max-attempts` | 5 | attempts before `FAILED` + dead letter |
+| `awap.notification.retry-lease-seconds` | 120 | claim window before another replica may take over |
+| `awap.notification.retry-batch-size` | 50 | rows per tick |
+| `awap.notification.retry-per-tenant-limit` | 5 | fairness cap per tenant per tick |
+| `awap.notification.max-body-bytes` | 262144 | rendered body limit (permanent failure above it) |
+| `awap.notification.first-attempt-grace-ms` | 60000 | scheduler waits this long before retrying an in-flight first attempt |
+| `awap.notification.retention-days` | 30 | SENT/FAILED audit window |
+| `awap.notification.retry-retention-days` | 7 | PENDING/RETRYING purge window |
+
+Operational behaviour:
+
+- **Claiming** uses `awap_claim_notification_retries` (SECURITY DEFINER, pinned `search_path`) with
+  `FOR UPDATE SKIP LOCKED` and a per-tenant `row_number()` cap. Concurrent replicas therefore never
+  process the same row while a lease is valid.
+- **Crash recovery**: if a replica dies after claiming, the lease expires and another replica claims
+  the row. A replica that lost its lease cannot write SENT/RETRYING/FAILED because every update is
+  guarded by `lease_token` and the retriable status.
+- **Exhaustion**: at `max-attempts` the row becomes `FAILED`, `NOTIFICATION_FAILED` and
+  `NOTIFICATION_DLQ` are written to the outbox and the relay publishes to `notification.send.dlq`.
+  The `awap-dlq` consumer counts it and the alerts below fire.
+- **Permanent failures** (unrenderable template, oversized body, missing adapter) are `FAILED`
+  immediately with no retry, and are dead-lettered for inspection.
+- **Metrics**: `awap.notification.retry.lag` (timer), `awap.notification.retry.claims`,
+  `awap.notification.retry.attempts`, `awap.notification.retry.failures`,
+  `awap.notification.retry.successes`, `awap.notification.retry.lease.conflicts`,
+  `awap.notification.retry.permanent.failures`, `awap.notification.retry.dlq`,
+  `awap.notification.retention.purged`.
+- **Alerts** (`infra/prometheus/alert-rules.yml`, group `awap-notification-retry`): retry lag p95 >
+  60s, any dead-lettered delivery, and elevated lease conflicts.
+
+Manual recovery: inspect `notification.send.dlq` for the poison payload, then either fix the
+template/provider and reset the row (`UPDATE notification_deliveries SET status='RETRYING',
+next_attempt_at=now(), lease_until=NULL, lease_token=NULL WHERE id=...`) or leave it `FAILED`.
+Rollback: the scheduler is additive; set `NOTIFICATION_RETRY_SCHEDULER_ENABLED=false` to stop the
+retry loop, and revert V42 only after the migration has been released (destructive rollback drops
+the retry columns).
