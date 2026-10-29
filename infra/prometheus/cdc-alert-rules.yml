@@ -1,0 +1,39 @@
+# CDC (Debezium outbox) alerts, kept separate from the polling-relay rules so the connector can be
+# enabled or removed without touching the main alert file (issue #131).
+#
+# Requires postgres_exporter scraping the database; the connector's own state is checked through
+# the replication slot (an inactive slot means the connector stopped consuming WAL).
+groups:
+  - name: awap-cdc
+    rules:
+      - alert: AwapCdcSlotInactive
+        expr: pg_replication_slots_active{slot_name="awap_outbox"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Outbox replication slot is inactive"
+          description: "The awap_outbox slot has had no active consumer for 5 minutes; CDC is not advancing while WAL keeps growing."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/cdc-cutover-runbook.md#monitoring"
+
+      - alert: AwapCdcSlotLagHigh
+        expr: pg_replication_slot_pg_wal_lsn_diff{slot_name="awap_outbox"} > 536870912
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Outbox replication slot lag above 512 MiB"
+          description: "The awap_outbox slot retains {{ $value }} bytes of WAL; the database disk can fill up."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/cdc-cutover-runbook.md#monitoring"
+
+      - alert: AwapCdcDuplicateRateHigh
+        expr: |
+          sum(rate(awap_notification_attempts_total{result="failed"}[10m]))
+            / clamp_min(sum(rate(awap_notification_deliveries_total[10m])), 0.001) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Delivery failure ratio suggests duplicate/poison events"
+          description: "Failed attempts are {{ $value | humanizePercentage }} of deliveries during the dual run; check for duplicate CDC events."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/cdc-cutover-runbook.md#dual-run-minimum-48h"

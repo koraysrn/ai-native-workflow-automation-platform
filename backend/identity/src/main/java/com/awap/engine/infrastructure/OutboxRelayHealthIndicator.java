@@ -2,7 +2,6 @@ package com.awap.engine.infrastructure;
 
 import com.awap.engine.application.OutboxRelayConfigurationGuard;
 import com.awap.engine.application.OutboxRelayMode;
-import com.awap.engine.application.OutboxRelaySource;
 import com.awap.engine.application.OutboxRelayStatus;
 import java.time.Instant;
 import java.util.Optional;
@@ -31,13 +30,10 @@ public class OutboxRelayHealthIndicator implements HealthIndicator {
 
   private static final String NEVER = "none";
 
-  private final OutboxRelaySource source;
   private final OutboxRelayStatus status;
   private final OutboxRelayConfigurationGuard guard;
 
-  public OutboxRelayHealthIndicator(
-      OutboxRelaySource source, OutboxRelayStatus status, OutboxRelayConfigurationGuard guard) {
-    this.source = source;
+  public OutboxRelayHealthIndicator(OutboxRelayStatus status, OutboxRelayConfigurationGuard guard) {
     this.status = status;
     this.guard = guard;
   }
@@ -46,7 +42,7 @@ public class OutboxRelayHealthIndicator implements HealthIndicator {
   public Health health() {
     OutboxRelayStatus.Snapshot snapshot = status.snapshot();
     Health.Builder builder = builder(snapshot);
-    OutboxRelayMode mode = source.mode();
+    OutboxRelayMode mode = guard.mode();
     builder
         .withDetail("mode", mode.tag())
         .withDetail("relayDatasource", guard.datasourceName())

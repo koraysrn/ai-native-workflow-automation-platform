@@ -180,6 +180,7 @@ class WorkflowDefinitionServiceTest {
   @Test
   void versionsListsVersionsDescending() {
     WorkflowDefinition definition = new WorkflowDefinition(tenantId, "Approval", null);
+    definition.publish(1);
     WorkflowVersion version =
         new WorkflowVersion(tenantId, definition.getId(), 1, VALID_GRAPH, WorkflowStatus.PUBLISHED);
     when(definitionRepository.findByIdAndTenantIdAndDeletedFalse(definition.getId(), tenantId))
@@ -190,7 +191,7 @@ class WorkflowDefinitionServiceTest {
     List<?> result = service.versions(tenantId, definition.getId());
 
     assertThat(result).hasSize(1);
-    verify(workflowMapper).toResponse(version);
+    verify(workflowMapper).toVersionResponse(version, 1);
   }
 
   @Test

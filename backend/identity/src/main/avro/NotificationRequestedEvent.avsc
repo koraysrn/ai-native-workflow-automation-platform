@@ -7,6 +7,9 @@
     {"name": "recipient", "type": "string"},
     {"name": "channel", "type": "string"},
     {"name": "templateKey", "type": "string"},
-    {"name": "variablesJson", "type": ["null", "string"], "default": null}
+    {"name": "variablesJson", "type": ["null", "string"], "default": null},
+    {"name": "dedupeKey", "type": ["null", "string"], "default": null},
+    {"name": "businessKey", "type": ["null", "string"], "default": null},
+    {"name": "eventType", "type": ["null", "string"], "default": null}
   ]
 }

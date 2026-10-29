@@ -1,19 +1,23 @@
 package com.awap.engine.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -30,129 +34,144 @@ import org.springframework.kafka.support.SendResult;
 @ExtendWith(MockitoExtension.class)
 class OutboxRelayServiceTest {
 
-  private static final int BATCH = 100;
+  private static final Duration LEASE = Duration.ofSeconds(60);
+  private static final int MAX_ATTEMPTS = 5;
 
-  @Mock private OutboxRelaySource source;
-  @Mock private ObjectProvider<KafkaTemplate<String, String>> kafkaTemplateProvider;
+  @Mock private OutboxClaimStore claimStore;
   @Mock private KafkaTemplate<String, String> kafkaTemplate;
 
+  @SuppressWarnings("unchecked")
+  @Mock
+  private ObjectProvider<KafkaTemplate<String, String>> kafkaTemplateProvider;
+
   private SimpleMeterRegistry meterRegistry;
-  private OutboxRelayStatus status;
   private OutboxRelayService service;
 
   @BeforeEach
   void setUp() {
     meterRegistry = new SimpleMeterRegistry();
-    status = new OutboxRelayStatus();
     service =
         new OutboxRelayService(
-            source,
             kafkaTemplateProvider,
-            status,
-            new OutboxRelayMetrics(meterRegistry, OutboxRelayMode.JDBC),
-            BATCH);
+            claimStore,
+            new ObjectMapper(),
+            new OutboxMetrics(meterRegistry),
+            100,
+            LEASE,
+            MAX_ATTEMPTS);
   }
 
   private static CompletableFuture<SendResult<String, String>> sent() {
     return CompletableFuture.completedFuture(new SendResult<>(null, null));
   }
 
-  private double modeGauge(OutboxRelayMode mode) {
-    return meterRegistry
-        .get(OutboxRelayMetrics.RELAY_MODE)
-        .tag(OutboxRelayMetrics.MODE_TAG, mode.tag())
-        .gauge()
-        .value();
-  }
-
-  private double failures(OutboxRelayMode mode, String reason) {
-    return meterRegistry
-        .get(OutboxRelayMetrics.PUBLISH_FAILURES)
-        .tag(OutboxRelayMetrics.MODE_TAG, mode.tag())
-        .tag(OutboxRelayMetrics.REASON_TAG, reason)
-        .counter()
-        .count();
-  }
-
-  private static OutboxRelaySource.PendingEvent pending(String eventType, UUID aggregateId) {
-    return new OutboxRelaySource.PendingEvent(
-        UUID.randomUUID(), eventType, aggregateId, "{\"ok\":true}");
+  private static OutboxClaimStore.ClaimedOutboxEvent claimed(
+      String eventType, String payload, UUID aggregateId, UUID token) {
+    return new OutboxClaimStore.ClaimedOutboxEvent(
+        UUID.randomUUID(), eventType, aggregateId, payload, token);
   }
 
   @Test
-  void publishesClaimedEventsAndRecordsASuccessfulRun() {
+  void claimsPublishesWithAggregateIdKeyAndMarksPublished() {
     when(kafkaTemplateProvider.getIfAvailable()).thenReturn(kafkaTemplate);
-    OutboxRelaySource.PendingEvent event = pending("TASK_COMPLETED", UUID.randomUUID());
-    when(source.claimBatch(BATCH)).thenReturn(List.of(event));
+    UUID aggregateId = UUID.randomUUID();
+    UUID token = UUID.randomUUID();
+    OutboxClaimStore.ClaimedOutboxEvent event =
+        claimed("TASK_COMPLETED", "{\"ok\":true}", aggregateId, token);
+    when(claimStore.claimBatch(100, LEASE, MAX_ATTEMPTS)).thenReturn(List.of(event));
     when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenReturn(sent());
+    when(claimStore.markPublished(event.id(), token)).thenReturn(true);
 
     service.relayEvents();
 
-    verify(kafkaTemplate)
-        .send("workflow.task.events", event.aggregateId().toString(), "{\"ok\":true}");
-    verify(source, never()).release(any());
-    OutboxRelayStatus.Snapshot snapshot = status.snapshot();
-    assertThat(snapshot.healthy()).isTrue();
-    assertThat(snapshot.publishedEvents()).isEqualTo(1L);
-    assertThat(snapshot.lastSuccessfulPublishAt()).isPresent();
-    assertThat(modeGauge(OutboxRelayMode.JDBC)).isEqualTo(1.0d);
-    assertThat(modeGauge(OutboxRelayMode.JPA)).isZero();
-    assertThat(failures(OutboxRelayMode.JDBC, "send_failed")).isZero();
-    assertThat(failures(OutboxRelayMode.JDBC, "claim_failed")).isZero();
+    verify(kafkaTemplate).send("workflow.task.events", aggregateId.toString(), "{\"ok\":true}");
+    verify(claimStore).markPublished(event.id(), token);
+    verify(claimStore, never()).release(any(), any());
+    assertThat(meterRegistry.find(OutboxMetrics.PUBLISH_FAILURES).counters()).isEmpty();
   }
 
   @Test
-  void releasesTheClaimAndRecordsAFailureWhenTheSendFails() {
+  void failedSendReleasesClaimAndIncrementsAttempts() {
     when(kafkaTemplateProvider.getIfAvailable()).thenReturn(kafkaTemplate);
-    OutboxRelaySource.PendingEvent event = pending("FORM_SUBMITTED", UUID.randomUUID());
-    when(source.claimBatch(BATCH)).thenReturn(List.of(event));
+    OutboxClaimStore.ClaimedOutboxEvent event =
+        claimed("FORM_SUBMITTED", "{\"ok\":true}", UUID.randomUUID(), UUID.randomUUID());
+    when(claimStore.claimBatch(100, LEASE, MAX_ATTEMPTS)).thenReturn(List.of(event));
     when(kafkaTemplate.send(anyString(), anyString(), anyString()))
         .thenReturn(CompletableFuture.failedFuture(new RuntimeException("broker down")));
 
     service.relayEvents();
 
-    verify(source).release(event.id());
-    OutboxRelayStatus.Snapshot snapshot = status.snapshot();
-    assertThat(snapshot.healthy()).isFalse();
-    assertThat(snapshot.consecutiveFailures()).isEqualTo(1);
-    assertThat(snapshot.lastFailureReason()).contains("send_failed");
-    assertThat(snapshot.lastSuccessfulPublishAt()).isEmpty();
-    assertThat(failures(OutboxRelayMode.JDBC, "send_failed")).isEqualTo(1.0d);
+    verify(claimStore).release(event.id(), event.claimToken());
+    verify(claimStore, never()).markPublished(any(), any());
+    assertThat(
+            meterRegistry
+                .get(OutboxMetrics.PUBLISH_FAILURES)
+                .tag(OutboxMetrics.REASON_TAG, OutboxMetrics.REASON_SEND_FAILED)
+                .counter()
+                .count())
+        .isEqualTo(1.0d);
   }
 
   @Test
-  void claimFailureIsRecordedSoTheNextRunCanRetry() {
+  void corruptedPayloadIsReleasedWithoutBeingSent() {
     when(kafkaTemplateProvider.getIfAvailable()).thenReturn(kafkaTemplate);
-    when(source.mode()).thenReturn(OutboxRelayMode.JDBC);
-    when(source.claimBatch(anyInt())).thenThrow(new IllegalStateException("database unavailable"));
+    OutboxClaimStore.ClaimedOutboxEvent event =
+        claimed("TASK_COMPLETED", "{not-json", UUID.randomUUID(), UUID.randomUUID());
+    when(claimStore.claimBatch(100, LEASE, MAX_ATTEMPTS)).thenReturn(List.of(event));
 
     service.relayEvents();
 
     verifyNoInteractions(kafkaTemplate);
-    OutboxRelayStatus.Snapshot snapshot = status.snapshot();
-    assertThat(snapshot.consecutiveFailures()).isEqualTo(1);
-    assertThat(snapshot.lastFailureReason()).contains("claim_failed");
-    assertThat(failures(OutboxRelayMode.JDBC, "claim_failed")).isEqualTo(1.0d);
+    verify(claimStore).release(event.id(), event.claimToken());
+    verify(claimStore, never()).markPublished(any(), any());
+    assertThat(
+            meterRegistry
+                .get(OutboxMetrics.PUBLISH_FAILURES)
+                .tag(OutboxMetrics.REASON_TAG, OutboxMetrics.REASON_CORRUPTED_PAYLOAD)
+                .counter()
+                .count())
+        .isEqualTo(1.0d);
   }
 
   @Test
-  void aSuccessfulRunClearsTheFailureAndReportsUpAgain() {
+  void lostLeaseOnMarkIsReportedAndNeverReleasesSomeoneElsesClaim() {
     when(kafkaTemplateProvider.getIfAvailable()).thenReturn(kafkaTemplate);
-    OutboxRelaySource.PendingEvent event = pending("TASK_COMPLETED", UUID.randomUUID());
-    when(source.claimBatch(BATCH)).thenReturn(List.of(event)).thenReturn(List.of(event));
-    when(kafkaTemplate.send(anyString(), anyString(), anyString()))
-        .thenReturn(CompletableFuture.failedFuture(new RuntimeException("broker down")))
-        .thenReturn(sent());
-
-    service.relayEvents();
-    assertThat(status.snapshot().healthy()).isFalse();
+    OutboxClaimStore.ClaimedOutboxEvent event =
+        claimed("TASK_COMPLETED", "{\"ok\":true}", UUID.randomUUID(), UUID.randomUUID());
+    when(claimStore.claimBatch(100, LEASE, MAX_ATTEMPTS)).thenReturn(List.of(event));
+    when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenReturn(sent());
+    when(claimStore.markPublished(event.id(), event.claimToken())).thenReturn(false);
 
     service.relayEvents();
 
-    OutboxRelayStatus.Snapshot recovered = status.snapshot();
-    assertThat(recovered.healthy()).isTrue();
-    assertThat(recovered.consecutiveFailures()).isZero();
-    assertThat(recovered.lastSuccessfulPublishAt()).isPresent();
+    verify(claimStore, never()).release(any(), any());
+    assertThat(
+            meterRegistry
+                .get(OutboxMetrics.PUBLISH_FAILURES)
+                .tag(OutboxMetrics.REASON_TAG, OutboxMetrics.REASON_CLAIM_LOST)
+                .counter()
+                .count())
+        .isEqualTo(1.0d);
+  }
+
+  @Test
+  void twoRelaysWithTheSameLeaseCannotBothPublishTheRow() {
+    when(kafkaTemplateProvider.getIfAvailable()).thenReturn(kafkaTemplate);
+    OutboxClaimStore.ClaimedOutboxEvent event =
+        claimed("TASK_COMPLETED", "{\"ok\":true}", UUID.randomUUID(), UUID.randomUUID());
+    // First relay wins the lease, the second one gets an empty batch for the same row.
+    when(claimStore.claimBatch(100, LEASE, MAX_ATTEMPTS))
+        .thenReturn(List.of(event))
+        .thenReturn(List.of());
+    when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenReturn(sent());
+    when(claimStore.markPublished(event.id(), event.claimToken())).thenReturn(true);
+
+    service.relayEvents();
+    service.relayEvents();
+
+    verify(claimStore, times(2)).claimBatch(100, LEASE, MAX_ATTEMPTS);
+    verify(kafkaTemplate, times(1)).send(anyString(), anyString(), anyString());
+    verify(claimStore, times(1)).markPublished(event.id(), event.claimToken());
   }
 
   @Test
@@ -161,75 +180,49 @@ class OutboxRelayServiceTest {
 
     service.relayEvents();
 
-    verifyNoInteractions(source, kafkaTemplate);
-    assertThat(status.snapshot().hasRun()).isFalse();
+    verifyNoInteractions(claimStore, kafkaTemplate);
   }
 
   @Test
-  void mapsEveryEventTypeToItsSpecifiedTopic() {
+  void claimFailureIsContainedSoTheNextRunCanRetry() {
     when(kafkaTemplateProvider.getIfAvailable()).thenReturn(kafkaTemplate);
-    List<OutboxRelaySource.PendingEvent> events =
-        List.of(
-            pending("TASK_COMPLETED", UUID.randomUUID()),
-            pending("TASK_ESCALATION_DUE", UUID.randomUUID()),
-            pending("FORM_SUBMITTED", UUID.randomUUID()),
-            pending("SUB_PROCESS_COMPLETED", UUID.randomUUID()),
-            pending("ANALYTICS_EVENT", UUID.randomUUID()),
-            pending("NOTIFICATION_REQUESTED", UUID.randomUUID()),
-            pending("DOCUMENT_REGISTERED", UUID.randomUUID()),
-            pending("organization.company.created", UUID.randomUUID()),
-            pending("SOMETHING_ELSE", UUID.randomUUID()));
-    when(source.claimBatch(BATCH)).thenReturn(events);
-    when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenReturn(sent());
+    when(claimStore.claimBatch(anyInt(), any(), anyInt()))
+        .thenThrow(new IllegalStateException("database unavailable"));
 
-    service.relayEvents();
+    assertThatCode(service::relayEvents).doesNotThrowAnyException();
 
-    assertThat(events)
-        .allSatisfy(
-            event -> {
-              String topic =
-                  switch (event.eventType()) {
-                    case "TASK_COMPLETED", "TASK_ESCALATION_DUE" -> "workflow.task.events";
-                    case "FORM_SUBMITTED" -> "workflow.instance.events";
-                    case "SUB_PROCESS_COMPLETED" -> "workflow.subprocess.events";
-                    case "ANALYTICS_EVENT" -> "analytics.events";
-                    case "NOTIFICATION_REQUESTED" -> "notification.send";
-                    case "DOCUMENT_REGISTERED" -> "document.events";
-                    case "organization.company.created" -> "organization.events";
-                    default -> "workflow.instance.events";
-                  };
-              verify(kafkaTemplate)
-                  .send(topic, event.aggregateId().toString(), event.payloadJson());
-            });
-    assertThat(status.snapshot().publishedEvents()).isEqualTo(events.size());
+    verifyNoInteractions(kafkaTemplate);
   }
 
   @Test
-  void aSendThatThrowsSynchronouslyIsReleasedAndMetered() {
+  void interruptedSendReleasesTheClaimAndRestoresTheInterruptFlag() {
     when(kafkaTemplateProvider.getIfAvailable()).thenReturn(kafkaTemplate);
-    OutboxRelaySource.PendingEvent event = pending("TASK_COMPLETED", UUID.randomUUID());
-    when(source.claimBatch(BATCH)).thenReturn(List.of(event));
-    when(kafkaTemplate.send(anyString(), anyString(), anyString()))
-        .thenThrow(new IllegalStateException("producer closed"));
+    OutboxClaimStore.ClaimedOutboxEvent event =
+        claimed("TASK_COMPLETED", "{\"ok\":true}", UUID.randomUUID(), UUID.randomUUID());
+    when(claimStore.claimBatch(100, LEASE, MAX_ATTEMPTS)).thenReturn(List.of(event));
+    CompletableFuture<SendResult<String, String>> neverCompletes = new CompletableFuture<>();
+    when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenReturn(neverCompletes);
 
+    Thread.currentThread().interrupt();
     service.relayEvents();
 
-    verify(source).release(event.id());
-    assertThat(status.snapshot().consecutiveFailures()).isEqualTo(1);
-    assertThat(failures(OutboxRelayMode.JDBC, "send_failed")).isEqualTo(1.0d);
+    assertThat(Thread.interrupted()).isTrue();
+    verify(claimStore).release(event.id(), event.claimToken());
   }
 
   @Test
-  void timedOutSendReleasesTheClaim() {
-    when(kafkaTemplateProvider.getIfAvailable()).thenReturn(kafkaTemplate);
-    OutboxRelaySource.PendingEvent event = pending("TASK_COMPLETED", UUID.randomUUID());
-    when(source.claimBatch(BATCH)).thenReturn(List.of(event));
-    when(kafkaTemplate.send(anyString(), anyString(), anyString()))
-        .thenReturn(CompletableFuture.failedFuture(new TimeoutException("send timeout")));
-
-    service.relayEvents();
-
-    verify(source).release(event.id());
-    assertThat(failures(OutboxRelayMode.JDBC, "send_failed")).isEqualTo(1.0d);
+  void rejectsALeaseThatIsNotLongerThanTheSendTimeout() {
+    assertThatThrownBy(
+            () ->
+                new OutboxRelayService(
+                    kafkaTemplateProvider,
+                    claimStore,
+                    new ObjectMapper(),
+                    new OutboxMetrics(meterRegistry),
+                    100,
+                    Duration.ofSeconds(5),
+                    MAX_ATTEMPTS))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("awap.outbox.claim-lease");
   }
 }
