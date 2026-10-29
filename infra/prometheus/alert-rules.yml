@@ -355,3 +355,56 @@ groups:
           summary: "Analytics sink circuit breaker is open"
           description: "The OpenSearch analytics sink has been failing; raw events are being shed while PostgreSQL aggregates remain authoritative."
           runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o16--analytics-opensearch-sink-124"
+
+
+  - name: awap-usage
+    rules:
+      - alert: AwapUsageQuotaExceeded
+        expr: increase(awap_usage_quota_exceeded_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tenant usage quota exceeded"
+          description: "{{ $value }} requests were rejected with 429 because the tenant daily quota for {{ $labels.metric }} was reached."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o17--tenant-usage-metering-and-quotas-125"
+
+      - alert: AwapUsageQuotaNearLimit
+        expr: increase(awap_usage_quota_near_limit_total[1h]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Tenant usage is approaching its daily quota"
+          description: "{{ $labels.metric }} usage crossed 80% of the tenant daily limit; quota rejections are likely if traffic continues."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o17--tenant-usage-metering-and-quotas-125"
+
+      - alert: AwapUsageMeteringFailures
+        expr: increase(awap_usage_metering_failures_total[5m]) > 0
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Usage metering is failing"
+          description: "Metering writes for {{ $labels.metric }} failed; observational meters are fail-open while quota-enforcing calls are fail-closed (503)."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o17--tenant-usage-metering-and-quotas-125"
+
+      - alert: AwapUsageReconciliationDrift
+        expr: increase(awap_usage_reconciliation_drift_total[1h]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Usage counters drifted from the raw event ledger"
+          description: "{{ $value }} counter rows for {{ $labels.metric }} were repaired by reconciliation; investigate the write path that lost increments."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o17--tenant-usage-metering-and-quotas-125"
+
+      - alert: AwapUsageReconciliationStale
+        expr: absent_over_time(awap_usage_reconciliation_runs_total[25h])
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Nightly usage reconciliation did not run"
+          description: "No reconciliation run was observed in the last 25 hours; check USAGE_RECONCILIATION_CRON and the application logs."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o17--tenant-usage-metering-and-quotas-125"

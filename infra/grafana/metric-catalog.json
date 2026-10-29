@@ -170,6 +170,26 @@
       "source": "OpenSearchAnalyticsSink (awap.analytics.sink.circuit.open gauge)"
     },
     {
+      "name": "awap_usage_quota_exceeded_total",
+      "source": "UsageMeteringService (awap.usage.quota.exceeded counter)"
+    },
+    {
+      "name": "awap_usage_quota_near_limit_total",
+      "source": "UsageMeteringService (awap.usage.quota.near.limit counter)"
+    },
+    {
+      "name": "awap_usage_metering_failures_total",
+      "source": "UsageMeteringService (awap.usage.metering.failures counter)"
+    },
+    {
+      "name": "awap_usage_reconciliation_drift_total",
+      "source": "UsageReconciliationScheduler (awap.usage.reconciliation.drift counter)"
+    },
+    {
+      "name": "awap_usage_reconciliation_runs_total",
+      "source": "UsageReconciliationScheduler (awap.usage.reconciliation.runs counter)"
+    },
+    {
       "name": "http_server_requests_seconds_count",
       "source": "Spring Boot HTTP server observations"
     },

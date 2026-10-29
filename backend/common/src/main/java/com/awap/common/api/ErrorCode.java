@@ -14,6 +14,8 @@ public enum ErrorCode {
   TENANT_NOT_FOUND("AWAP-IDN-0004", "The tenant was not found."),
   ACCOUNT_LOCKED("AWAP-IDN-0005", "Account is temporarily locked."),
   QUOTA_EXCEEDED("AWAP-IDN-0006", "Tenant quota exceeded."),
+  USAGE_METRIC_UNKNOWN("AWAP-IDN-0007", "The usage metric is unknown."),
+  USAGE_METERING_UNAVAILABLE("AWAP-IDN-0008", "Usage metering is unavailable."),
   WORKFLOW_INVALID_DEFINITION("AWAP-ENG-0001", "The workflow definition is invalid."),
   WORKFLOW_NOT_PUBLISHED("AWAP-ENG-0002", "The workflow definition is not published."),
   WORKFLOW_STATE_CONFLICT("AWAP-ENG-0003", "The workflow state transition is not allowed."),

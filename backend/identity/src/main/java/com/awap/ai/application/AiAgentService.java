@@ -2,7 +2,11 @@ package com.awap.ai.application;
 
 import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
+import com.awap.usage.application.UsageMeteringService;
+import com.awap.usage.domain.UsageEventKeys;
+import com.awap.usage.domain.UsageMetric;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -27,21 +31,33 @@ public class AiAgentService {
   private final long timeoutMs;
   private final int maxInputChars;
   private final ExecutorService executor;
+  private final UsageMeteringService usageMeteringService;
 
   @Autowired
   public AiAgentService(
       AiBackendClient backend,
       @Value("${awap.ai.timeout-ms:5000}") long timeoutMs,
-      @Value("${awap.ai.max-input-chars:4000}") int maxInputChars) {
-    this(backend, timeoutMs, maxInputChars, Executors.newSingleThreadExecutor());
+      @Value("${awap.ai.max-input-chars:4000}") int maxInputChars,
+      UsageMeteringService usageMeteringService) {
+    this(
+        backend,
+        timeoutMs,
+        maxInputChars,
+        Executors.newSingleThreadExecutor(),
+        usageMeteringService);
   }
 
   AiAgentService(
-      AiBackendClient backend, long timeoutMs, int maxInputChars, ExecutorService executor) {
+      AiBackendClient backend,
+      long timeoutMs,
+      int maxInputChars,
+      ExecutorService executor,
+      UsageMeteringService usageMeteringService) {
     this.backend = backend;
     this.timeoutMs = timeoutMs;
     this.maxInputChars = maxInputChars;
     this.executor = executor;
+    this.usageMeteringService = usageMeteringService;
   }
 
   public String summarize(String input) {
@@ -50,6 +66,26 @@ public class AiAgentService {
 
   public String classify(String input) {
     return run("classify:" + input, 64);
+  }
+
+  /**
+   * Tenant-aware summarize: reserves one AI-call unit before the model is invoked, so a tenant at
+   * its daily quota gets {@code 429} without spending tokens.
+   */
+  public String summarize(UUID tenantId, String input) {
+    reserveAiCall(tenantId);
+    return summarize(input);
+  }
+
+  /** Tenant-aware classify; identical quota semantics to {@link #summarize(UUID, String)}. */
+  public String classify(UUID tenantId, String input) {
+    reserveAiCall(tenantId);
+    return classify(input);
+  }
+
+  private void reserveAiCall(UUID tenantId) {
+    usageMeteringService.reserve(
+        tenantId, UsageMetric.AI_CALL, 1L, UsageEventKeys.aiCall(UUID.randomUUID()));
   }
 
   private String run(String prompt, int maxTokens) {

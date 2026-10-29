@@ -18,6 +18,9 @@ import com.awap.engine.interfaces.dto.StartWorkflowRequest;
 import com.awap.engine.interfaces.dto.WorkflowInstanceResponse;
 import com.awap.identity.infrastructure.UserRepository;
 import com.awap.task.application.TaskService;
+import com.awap.usage.application.UsageMeteringService;
+import com.awap.usage.domain.UsageEventKeys;
+import com.awap.usage.domain.UsageMetric;
 import com.awap.webhook.application.WebhookDeliveryService;
 import com.awap.workflow.application.SpelExpressionService;
 import com.awap.workflow.application.WorkflowDefinitionService;
@@ -58,6 +61,7 @@ public class WorkflowEngineService implements WorkflowEnginePort {
   private final ObjectMapper objectMapper;
   private final OutboxEventPublisher outboxEventPublisher;
   private final EngineMapper engineMapper;
+  private final UsageMeteringService usageMeteringService;
 
   private final NodeConfigReader configReader;
   private final TransitionResolver transitionResolver;
@@ -77,7 +81,8 @@ public class WorkflowEngineService implements WorkflowEnginePort {
       ObjectMapper objectMapper,
       UserRepository userRepository,
       OutboxEventPublisher outboxEventPublisher,
-      EngineMapper engineMapper) {
+      EngineMapper engineMapper,
+      UsageMeteringService usageMeteringService) {
     this(
         instanceRepository,
         executionLogRepository,
@@ -96,7 +101,8 @@ public class WorkflowEngineService implements WorkflowEnginePort {
         null,
         null,
         null,
-        null);
+        null,
+        usageMeteringService);
   }
 
   @Autowired
@@ -118,7 +124,8 @@ public class WorkflowEngineService implements WorkflowEnginePort {
       com.awap.script.application.ScriptNodeService scriptNodeService,
       NodeTimeoutSettings nodeTimeoutSettings,
       NodeExecutionWatchdog nodeExecutionWatchdog,
-      NodeTimeoutMetrics nodeTimeoutMetrics) {
+      NodeTimeoutMetrics nodeTimeoutMetrics,
+      UsageMeteringService usageMeteringService) {
     this.instanceRepository = instanceRepository;
     this.executionLogRepository = executionLogRepository;
     this.workflowDefinitionService = workflowDefinitionService;
@@ -127,6 +134,7 @@ public class WorkflowEngineService implements WorkflowEnginePort {
     this.objectMapper = objectMapper;
     this.outboxEventPublisher = outboxEventPublisher;
     this.engineMapper = engineMapper;
+    this.usageMeteringService = usageMeteringService;
 
     this.configReader = new NodeConfigReader(objectMapper);
     this.transitionResolver =
@@ -186,6 +194,13 @@ public class WorkflowEngineService implements WorkflowEnginePort {
             request.idempotencyKey(),
             request.contextJson());
     instanceRepository.save(instance);
+    if (usageMeteringService != null) {
+      usageMeteringService.reserve(
+          tenantId,
+          UsageMetric.WORKFLOW_EXECUTION,
+          1L,
+          UsageEventKeys.workflowStarted(instance.getId()));
+    }
     executionContextRepository.save(
         new ExecutionContext(tenantId, instance.getId(), request.contextJson()));
 

@@ -261,6 +261,34 @@ paths:
               schema:
                 $ref: "#/components/schemas/TenantResponse"
 
+  /api/v1/tenants/{id}/usage:
+    get:
+      operationId: getTenantUsage
+      summary: Tenant usage and remaining quota
+      description: >-
+        Returns per UTC day counters for the requested window. Unknown metric keys are
+        rejected with 400, a soft-deleted or unknown tenant with 404, and cross-tenant
+        reads without SYSTEM_ADMIN with 403. Metrics without usage report zero values.
+      tags: [Tenants]
+      parameters:
+        - $ref: "#/components/parameters/TenantId"
+        - $ref: "#/components/parameters/UsageFrom"
+        - $ref: "#/components/parameters/UsageTo"
+        - $ref: "#/components/parameters/UsageMetric"
+      responses:
+        "200":
+          description: Usage report.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
+
   /api/v1/tenants/{id}/invitations:
     post:
       operationId: inviteTenantUser
@@ -1975,6 +2003,36 @@ components:
       schema:
         type: string
         format: uuid
+    UsageFrom:
+      name: from
+      in: query
+      required: false
+      description: First UTC day of the window (inclusive). Defaults to 29 days before `to`.
+      schema:
+        type: string
+        format: date
+    UsageTo:
+      name: to
+      in: query
+      required: false
+      description: Last UTC day of the window (inclusive). Defaults to today (UTC).
+      schema:
+        type: string
+        format: date
+    UsageMetric:
+      name: metric
+      in: query
+      required: false
+      description: Restricts the report to one metric key.
+      schema:
+        type: string
+        enum:
+          - workflow_executions
+          - task_decisions
+          - ai_calls
+          - document_bytes
+          - active_users
+          - api_requests
     NotificationId:
       name: id
       in: path
@@ -2024,7 +2082,7 @@ components:
           schema:
             $ref: "#/components/schemas/ProblemDetails"
     TooManyRequests:
-      description: Rate limit exceeded.
+      description: Rate limit or tenant daily quota exceeded.
       headers:
         Retry-After:
           schema:
@@ -2155,6 +2213,62 @@ components:
       properties:
         message:
           type: string
+
+    UsageDay:
+      type: object
+      required: [day, value]
+      properties:
+        day:
+          type: string
+          format: date
+        value:
+          type: integer
+          format: int64
+
+    UsageMetricUsage:
+      type: object
+      required: [metric, unit, total, limit, remaining, days]
+      properties:
+        metric:
+          type: string
+          description: Stable metric key (bounded enum, never a free-form label).
+          example: workflow_executions
+        unit:
+          type: string
+          enum: [COUNT, BYTES]
+        total:
+          type: integer
+          format: int64
+        limit:
+          type: integer
+          format: int64
+          description: Effective daily limit (tenant override or metric default).
+        remaining:
+          type: integer
+          format: int64
+          description: limit - total, floored at zero; -1 when the metric is uncapped.
+        days:
+          type: array
+          items:
+            $ref: "#/components/schemas/UsageDay"
+
+    UsageResponse:
+      type: object
+      required: [tenantId, from, to, metrics]
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        from:
+          type: string
+          format: date
+        to:
+          type: string
+          format: date
+        metrics:
+          type: array
+          items:
+            $ref: "#/components/schemas/UsageMetricUsage"
 
     TokenResponse:
       type: object

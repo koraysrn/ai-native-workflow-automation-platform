@@ -763,3 +763,48 @@ Set `OPENSEARCH_ENABLED=false` and restart; the no-op sink takes over and Postgr
 serving. Deleting the templates/policy is optional and only affects future indices. Raw event data
 follows ISM deletion at 180 days; a tenant deletion does not remove its historical analytics events
 early — retention is time-based and documented in the compliance inventory.
+
+## O17 — Tenant usage metering and quotas (#125)
+
+**Model.** `usage_counters` holds one row per `(tenant_id, day, metric)`; `day` is always the UTC
+calendar day. `usage_events` is the idempotency ledger whose primary key is the per-event key, so
+an HTTP retry or a redelivered Kafka record cannot double count. Metric keys are a bounded enum
+(`workflow_executions`, `task_decisions`, `ai_calls`, `document_bytes`, `active_users`,
+`api_requests`); never add a free-form key because the value is used as a Prometheus label.
+`tenant_usage_limits` carries per-tenant daily overrides; missing rows fall back to the documented
+enum defaults (workflow 1000/day, task decisions 10000/day, AI calls 1000/day, document bytes 5 GiB,
+active users 100, API requests 1 000 000).
+
+**Write path.** `awap_usage_record_event` inserts the event key and conditionally updates the
+counter in one statement. The `UPDATE … WHERE value + delta <= limit` predicate is re-evaluated
+after the row-lock wait, so N concurrent attempts at the boundary admit exactly `limit` increments.
+Rejected attempts roll their ledger row back. Synchronous hooks (workflow start, task decision,
+document version, tenant-aware AI call) and the `analytics.events` consumer share the same
+deterministic key (`usage:workflow-started:<instanceId>`, `usage:task-decision:<taskId>`, …).
+
+**Failure policy.** Observational metering (task decisions, document bytes) is **fail-open**: a
+metering outage increments `awap.usage.metering.failures` and the business operation proceeds.
+Quota-enforcing metering (workflow start, AI call) is **fail-closed** by default and returns
+`503 AWAP-IDN-0008`; set `USAGE_METERING_FAIL_OPEN=true` to prefer availability over strict quota.
+A genuine limit breach always returns `429 AWAP-IDN-0006` with the metric and limit in `detail`.
+
+**API.** `GET /api/v1/tenants/{id}/usage?from=&to=&metric=` returns per-day values, the effective
+limit and the remaining quota. Omitting the window defaults to the last 30 UTC days. Unknown metric
+keys return `400 AWAP-IDN-0007`; a soft-deleted or unknown tenant returns `404`.
+
+**Reconciliation and retention.** `awap.usage.reconciliation-cron` (default `0 20 2 * * *`) recomputes
+the last three UTC days from `usage_events`, repairs drift and exports
+`awap.usage.reconciliation.drift{metric}` / `awap.usage.reconciliation.runs{outcome}`.
+`awap.usage.retention-cron` (default `0 40 3 * * *`) moves counters older than
+`USAGE_RETENTION_DAYS` (400) and all counters of soft-deleted tenants to `usage_counter_archive`,
+then deletes the live rows and their raw events. Archive rows are kept for audit and reporting.
+
+**Metrics and alerts.** Micrometer exports `awap.usage.increments{metric}`,
+`awap.usage.quota.near_limit{metric}` (≥80% of the daily limit), `awap.usage.quota.exceeded{metric}`
+(rejected request), `awap.usage.metering.failures{metric}`, `awap.usage.archived` and the
+reconciliation series above. Prometheus alerts live in `alert-rules.yml` under `awap-usage`.
+
+**Rollback.** The feature is additive and the read API is independent of the write hooks. To disable
+enforcement without losing telemetry, set `USAGE_METERING_FAIL_OPEN=true`; to stop metering
+entirely, remove the hooks in a follow-up release and keep the tables (they are read-only then).
+V45 does not alter existing tables, so no data migration or down-migration is required.

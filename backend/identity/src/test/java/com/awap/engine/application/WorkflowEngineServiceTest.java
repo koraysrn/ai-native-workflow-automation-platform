@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.startsWith;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -26,6 +27,8 @@ import com.awap.engine.interfaces.dto.StartWorkflowRequest;
 import com.awap.engine.interfaces.dto.WorkflowInstanceResponse;
 import com.awap.identity.infrastructure.UserRepository;
 import com.awap.task.application.TaskService;
+import com.awap.usage.application.UsageMeteringService;
+import com.awap.usage.domain.UsageMetric;
 import com.awap.workflow.application.SpelExpressionService;
 import com.awap.workflow.application.WorkflowDefinitionService;
 import com.awap.workflow.domain.NodeDefinition;
@@ -58,6 +61,7 @@ class WorkflowEngineServiceTest {
   @Mock private SpelExpressionService spelExpressionService;
   @Mock private UserRepository userRepository;
   @Mock private OutboxEventPublisher outboxEventPublisher;
+  @Mock private UsageMeteringService usageMeteringService;
 
   private WorkflowEngineService service;
   private final UUID tenantId = UUID.randomUUID();
@@ -77,7 +81,8 @@ class WorkflowEngineServiceTest {
             new ObjectMapper(),
             userRepository,
             outboxEventPublisher,
-            new EngineMapperImpl());
+            new EngineMapperImpl(),
+            usageMeteringService);
   }
 
   private WorkflowInstance instance(WorkflowState state) {
@@ -128,6 +133,37 @@ class WorkflowEngineServiceTest {
         service.start(tenantId, new StartWorkflowRequest(workflowDefinitionId, null, "{}"));
 
     assertThat(response.state()).isEqualTo("RUNNING");
+    verify(usageMeteringService)
+        .reserve(
+            eq(tenantId),
+            eq(UsageMetric.WORKFLOW_EXECUTION),
+            eq(1L),
+            startsWith("usage:workflow-started:"));
+  }
+
+  @Test
+  void startRejectsWhenQuotaIsExceeded() {
+    WorkflowDefinition definition = new WorkflowDefinition(tenantId, "Approval flow", null);
+    definition.publish(1);
+    when(workflowDefinitionService.getPublished(tenantId, workflowDefinitionId))
+        .thenReturn(definition);
+    when(instanceRepository.save(any(WorkflowInstance.class)))
+        .thenAnswer(inv -> inv.getArgument(0));
+    org.mockito.Mockito.doThrow(
+            new AwapException(
+                ErrorCode.QUOTA_EXCEEDED,
+                HttpStatus.TOO_MANY_REQUESTS,
+                "Daily quota of 1000 workflow_executions exceeded."))
+        .when(usageMeteringService)
+        .reserve(eq(tenantId), eq(UsageMetric.WORKFLOW_EXECUTION), eq(1L), anyString());
+
+    assertThatThrownBy(
+            () ->
+                service.start(tenantId, new StartWorkflowRequest(workflowDefinitionId, null, "{}")))
+        .isInstanceOf(AwapException.class)
+        .satisfies(
+            ex ->
+                assertThat(((AwapException) ex).status()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
   }
 
   @Test
