@@ -166,6 +166,19 @@ final class TransitionResolver {
                         "Merge node has no matching parallel gateway: " + mergeNode.getNodeId()));
     parallel.recordBranchMerge();
     nodeExecutionRepository.save(parallel);
+    // Deterministic replay needs the merge counter in the log; without it the projected branch
+    // counters cannot be compared with node_executions.branch_token_count/merged_branch_count.
+    port.log(
+        instance,
+        parallel.getNodeId(),
+        parallel.getNodeType(),
+        "NODE_MERGED",
+        "merge="
+            + mergeNode.getNodeId()
+            + ";merged="
+            + parallel.getMergedBranchCount()
+            + ";tokens="
+            + parallel.getBranchTokenCount());
     if (parallel.getMergedBranchCount() >= parallel.getBranchTokenCount()
         && instance.getState() != WorkflowState.FAILED) {
       port.executeNode(instance, mergeNode);

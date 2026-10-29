@@ -129,6 +129,12 @@ public class WorkflowInstance {
     this.updatedAt = Instant.now();
   }
 
+  /** Records the latest context snapshot, e.g. the pinned child definition version. */
+  public void updateContextJson(String contextJson) {
+    this.contextJson = contextJson;
+    this.updatedAt = Instant.now();
+  }
+
   public UUID getId() {
     return id;
   }

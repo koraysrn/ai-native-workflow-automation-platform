@@ -5,9 +5,13 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.awap.common.api.AwapException;
+import com.awap.common.api.ErrorCode;
 import com.awap.engine.domain.NodeExecution;
 import com.awap.engine.domain.NodeExecutionStatus;
 import com.awap.engine.domain.WorkflowInstance;
@@ -18,6 +22,7 @@ import com.awap.identity.domain.User;
 import com.awap.identity.infrastructure.UserRepository;
 import com.awap.task.application.TaskService;
 import com.awap.task.interfaces.dto.TaskRequest;
+import com.awap.webhook.application.WebhookAttemptResult;
 import com.awap.workflow.application.WorkflowDefinitionService;
 import com.awap.workflow.domain.NodeDefinition;
 import com.awap.workflow.domain.NodeType;
@@ -32,6 +37,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 
 @ExtendWith(MockitoExtension.class)
 class NodeExecutorTest {
@@ -243,7 +249,8 @@ class NodeExecutorTest {
   void webhookNodeInvokesExternalCallAndCompletesWithResponse() {
     WorkflowInstance instance = instance(WorkflowState.RUNNING);
     stubFreshExecution();
-    when(webhookInvoker.invoke(any(), any(), any())).thenReturn("{\"ok\":true}");
+    when(webhookInvoker.invoke(any(), any(), any()))
+        .thenReturn(WebhookAttemptResult.success(200, "{\"ok\":true}"));
 
     executor.executeNode(
         instance, node("hook", NodeType.WEBHOOK, "{\"url\":\"https://hooks.example.com\"}"));
@@ -254,11 +261,11 @@ class NodeExecutorTest {
   }
 
   @Test
-  void webhookFailureSchedulesRetryWhenAttemptsRemain() {
+  void webhookRetryableFailureWithoutADurableQueueFailsClosed() {
     WorkflowInstance instance = instance(WorkflowState.RUNNING);
     stubFreshExecution();
     when(webhookInvoker.invoke(any(), any(), any()))
-        .thenThrow(new IllegalStateException("target timeout"));
+        .thenReturn(WebhookAttemptResult.httpError(500, "", null));
 
     executor.executeNode(
         instance,
@@ -266,17 +273,16 @@ class NodeExecutorTest {
             "hook", NodeType.WEBHOOK, "{\"url\":\"https://hooks.example.com\",\"maxAttempts\":2}"));
 
     assertThat(capturedExecution().getStatus()).isEqualTo(NodeExecutionStatus.FAILED);
-    assertThat(capturedExecution().getResumeAt()).isNotNull();
-    verify(port, org.mockito.Mockito.never())
-        .transition(any(), eq(WorkflowState.FAILED), anyString());
+    assertThat(capturedExecution().getError()).contains("status 500");
+    verify(port).transition(instance, WorkflowState.FAILED, "NODE_FAILED");
   }
 
   @Test
-  void webhookFailureFailsWorkflowWhenAttemptsExhausted() {
+  void webhookPermanentFailureFailsTheNodeImmediately() {
     WorkflowInstance instance = instance(WorkflowState.RUNNING);
     stubFreshExecution();
     when(webhookInvoker.invoke(any(), any(), any()))
-        .thenThrow(new IllegalStateException("target timeout"));
+        .thenReturn(WebhookAttemptResult.httpError(404, "", null));
 
     executor.executeNode(
         instance,
@@ -302,6 +308,50 @@ class NodeExecutorTest {
     assertThat(instance.getState()).isEqualTo(WorkflowState.WAITING);
     assertThat(capturedExecution().getStatus()).isEqualTo(NodeExecutionStatus.WAITING);
     verify(port).startSubProcess(eq(instance), any(), any());
+  }
+
+  @Test
+  void subProcessInvalidConfiguredVersionFailsNodeWithoutStartingChild() {
+    WorkflowInstance instance = instance(WorkflowState.RUNNING);
+    stubFreshExecution();
+
+    executor.executeNode(
+        instance,
+        node(
+            "sub",
+            NodeType.SUB_PROCESS,
+            "{\"workflowDefinitionId\":\"00000000-0000-0000-0000-000000000001\","
+                + "\"version\":0}"));
+
+    assertThat(capturedExecution().getStatus()).isEqualTo(NodeExecutionStatus.FAILED);
+    assertThat(capturedExecution().getError()).contains("positive integer");
+    verify(port, never()).startSubProcess(any(), any(), any());
+    verify(port).transition(instance, WorkflowState.FAILED, "NODE_FAILED");
+  }
+
+  @Test
+  void deletedChildDefinitionFailsParentSubProcessNode() {
+    WorkflowInstance instance = instance(WorkflowState.RUNNING);
+    stubFreshExecution();
+    doThrow(
+            new AwapException(
+                ErrorCode.WORKFLOW_VERSION_NOT_FOUND,
+                HttpStatus.NOT_FOUND,
+                "Workflow version 1 was not found."))
+        .when(port)
+        .startSubProcess(any(), any(), any());
+
+    executor.executeNode(
+        instance,
+        node(
+            "sub",
+            NodeType.SUB_PROCESS,
+            "{\"workflowDefinitionId\":\"00000000-0000-0000-0000-000000000001\","
+                + "\"version\":1}"));
+
+    assertThat(capturedExecution().getStatus()).isEqualTo(NodeExecutionStatus.FAILED);
+    verify(port).transition(instance, WorkflowState.FAILED, "NODE_FAILED");
+    verify(port, never()).advanceFrom(any(), anyString());
   }
 
   @Test

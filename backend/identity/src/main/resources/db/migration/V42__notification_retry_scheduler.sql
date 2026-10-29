@@ -13,7 +13,8 @@ ALTER TABLE notification_deliveries
     -- Locale and variables are persisted so a retry renders exactly the same template.
     ADD COLUMN locale VARCHAR(20) NOT NULL DEFAULT 'en',
     ADD COLUMN variables_json TEXT,
-    ADD COLUMN version BIGINT NOT NULL DEFAULT 0;
+    -- V46 (notification read state) also adds this column; keep it idempotent.
+    ADD COLUMN IF NOT EXISTS version BIGINT NOT NULL DEFAULT 0;
 
 -- Rows created before this migration have no schedule; make them immediately eligible so the
 -- scheduler (and not the consumer) finishes the in-flight deliveries.

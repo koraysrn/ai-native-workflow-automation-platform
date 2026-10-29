@@ -7,10 +7,13 @@ import com.awap.notification.domain.NotificationChannel;
 import com.awap.notification.domain.NotificationDelivery;
 import com.awap.notification.domain.NotificationRetryPolicy;
 import com.awap.notification.infrastructure.NotificationDeliveryRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Metrics;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.EnumMap;
 import java.util.HexFormat;
@@ -27,7 +30,8 @@ import org.springframework.stereotype.Service;
 
 /**
  * Notification dispatch orchestration. A durable delivery row de-duplicates repeated Kafka
- * deliveries, the template is rendered per locale, and only the <b>first</b> attempt happens here.
+ * deliveries, the tenant template is rendered per locale, and only the <b>first</b> attempt happens
+ * here.
  *
  * <p>A failure stores {@code RETRYING} plus {@code nextAttemptAt} and returns immediately; no
  * thread ever sleeps inside the consumer transaction. {@link NotificationRetryScheduler} performs
@@ -47,6 +51,7 @@ public class NotificationService {
   private final int maxBodyBytes;
   private final long firstAttemptGraceMs;
   private final Clock clock;
+  private final MeterRegistry meterRegistry;
 
   /** Test convenience: no persistence, default policy. */
   NotificationService(
@@ -61,7 +66,8 @@ public class NotificationService {
         NotificationRetryPolicy.defaults(),
         262_144,
         60_000L,
-        Clock.systemUTC());
+        Clock.systemUTC(),
+        Metrics.globalRegistry);
   }
 
   @Autowired
@@ -74,7 +80,8 @@ public class NotificationService {
           String retryDelays,
       @Value("${awap.notification.max-attempts:5}") int maxAttempts,
       @Value("${awap.notification.max-body-bytes:262144}") int maxBodyBytes,
-      @Value("${awap.notification.first-attempt-grace-ms:60000}") long firstAttemptGraceMs) {
+      @Value("${awap.notification.first-attempt-grace-ms:60000}") long firstAttemptGraceMs,
+      MeterRegistry meterRegistry) {
     this(
         channelAdapters,
         renderer,
@@ -83,7 +90,8 @@ public class NotificationService {
         NotificationRetryPolicy.fromCommaSeparated(retryDelays, maxAttempts),
         maxBodyBytes,
         firstAttemptGraceMs,
-        Clock.systemUTC());
+        Clock.systemUTC(),
+        meterRegistry);
   }
 
   NotificationService(
@@ -95,6 +103,28 @@ public class NotificationService {
       int maxBodyBytes,
       long firstAttemptGraceMs,
       Clock clock) {
+    this(
+        channelAdapters,
+        renderer,
+        outboxEventPublisher,
+        deliveryRepository,
+        retryPolicy,
+        maxBodyBytes,
+        firstAttemptGraceMs,
+        clock,
+        Metrics.globalRegistry);
+  }
+
+  NotificationService(
+      List<NotificationChannelAdapter> channelAdapters,
+      NotificationTemplateRenderer renderer,
+      OutboxEventPublisher outboxEventPublisher,
+      NotificationDeliveryRepository deliveryRepository,
+      NotificationRetryPolicy retryPolicy,
+      int maxBodyBytes,
+      long firstAttemptGraceMs,
+      Clock clock,
+      MeterRegistry meterRegistry) {
     this.renderer = renderer;
     this.outboxEventPublisher = outboxEventPublisher;
     this.deliveryRepository = deliveryRepository;
@@ -102,6 +132,7 @@ public class NotificationService {
     this.maxBodyBytes = maxBodyBytes;
     this.firstAttemptGraceMs = firstAttemptGraceMs;
     this.clock = clock;
+    this.meterRegistry = meterRegistry;
     for (NotificationChannelAdapter adapter : channelAdapters) {
       adapters.put(adapter.channel(), adapter);
     }
@@ -156,9 +187,9 @@ public class NotificationService {
       return;
     }
 
-    String body;
+    NotificationTemplateRenderer.RenderedNotificationTemplate rendered;
     try {
-      body = renderer.render(templateKey, locale, variablesJson);
+      rendered = renderer.render(tenantId, templateKey, locale, variablesJson);
     } catch (RuntimeException ex) {
       failPermanently(
           delivery,
@@ -170,6 +201,7 @@ public class NotificationService {
           now);
       return;
     }
+    String body = rendered.body();
     if (body.getBytes(StandardCharsets.UTF_8).length > maxBodyBytes) {
       failPermanently(
           delivery,
@@ -183,7 +215,8 @@ public class NotificationService {
     }
 
     NotificationMessage message =
-        new NotificationMessage(tenantId, recipient, channel, "Notification", body, recipient);
+        new NotificationMessage(tenantId, recipient, channel, rendered.subject(), body, recipient);
+    long startedNanos = System.nanoTime();
     try {
       adapter.dispatch(message);
     } catch (RuntimeException ex) {
@@ -194,6 +227,9 @@ public class NotificationService {
           retryPolicy.nextAttemptAt(attemptAt, attemptAt, delivery.getAttempts()),
           attemptAt);
       persistExistingDelivery(delivery);
+      meterRegistry
+          .counter("awap.notification.attempts", "channel", channel.name(), "result", "failed")
+          .increment();
       log.warn(
           "Notification first attempt failed for channel {}; scheduled retry at {}: {}",
           channel,
@@ -220,6 +256,22 @@ public class NotificationService {
             effectiveKey,
             "attempts",
             delivery.getAttempts()));
+    recordDispatchMetrics(channel, "sent", startedNanos);
+  }
+
+  /**
+   * Records delivery latency, which the notification panels and retry-lag alert use (issue #130).
+   * The retry lag itself is recorded by {@link NotificationRetryScheduler} at claim time.
+   */
+  private void recordDispatchMetrics(
+      NotificationChannel channel, String result, long startedNanos) {
+    Duration elapsed = Duration.ofNanos(System.nanoTime() - startedNanos);
+    meterRegistry
+        .counter("awap.notification.deliveries", "channel", channel.name(), "result", result)
+        .increment();
+    meterRegistry
+        .timer("awap.notification.dispatch.latency", "channel", channel.name())
+        .record(elapsed);
   }
 
   /** Lists in-app/web notifications and delivery history for the tenant dashboard. */

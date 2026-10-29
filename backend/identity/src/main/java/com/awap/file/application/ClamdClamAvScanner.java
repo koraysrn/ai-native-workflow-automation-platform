@@ -3,8 +3,6 @@ package com.awap.file.application;
 import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
 import com.awap.file.domain.FileScanStatus;
-import io.minio.GetObjectArgs;
-import io.minio.MinioClient;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -18,31 +16,28 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 /**
- * Real ClamAV scanner: streams the MinIO object to a clamd daemon over the {@code INSTREAM}
+ * Real ClamAV scanner: streams the supplied content to a clamd daemon over the {@code INSTREAM}
  * protocol and interprets the {@code stream: OK} / {@code stream: <name> FOUND} response.
  */
 @Component
 @ConditionalOnProperty(name = "awap.clamav.enabled", havingValue = "true")
 public class ClamdClamAvScanner implements ClamAvScanner {
 
-  private final MinioClient minioClient;
   private final String host;
   private final int port;
   private final int timeoutMs;
 
   public ClamdClamAvScanner(
-      MinioClient minioClient,
       @Value("${awap.clamav.host:localhost}") String host,
       @Value("${awap.clamav.port:3310}") int port,
       @Value("${awap.clamav.timeout-ms:10000}") int timeoutMs) {
-    this.minioClient = minioClient;
     this.host = host;
     this.port = port;
     this.timeoutMs = timeoutMs;
   }
 
   @Override
-  public FileScanStatus scan(String bucket, String objectKey) {
+  public FileScanStatus scan(InputStream content) {
     try (Socket socket = new Socket()) {
       socket.connect(new InetSocketAddress(host, port), timeoutMs);
       socket.setSoTimeout(timeoutMs);
@@ -50,36 +45,36 @@ public class ClamdClamAvScanner implements ClamAvScanner {
       out.write("zINSTREAM\0".getBytes(StandardCharsets.US_ASCII));
       out.flush();
 
-      try (InputStream in =
-          minioClient.getObject(GetObjectArgs.builder().bucket(bucket).object(objectKey).build())) {
-        byte[] buffer = new byte[8192];
-        int read;
-        while ((read = in.read(buffer)) != -1) {
-          out.write(chunkHeader(read));
-          out.write(buffer, 0, read);
-        }
-      }
-      out.write(new byte[] {0, 0, 0, 0});
-      out.flush();
+      ClamAvStream.pump(content, out);
 
       String response = readResponse(socket.getInputStream());
-      return response.startsWith("stream: OK") ? FileScanStatus.CLEAN : FileScanStatus.INFECTED;
+      if (response.startsWith("stream: OK")) {
+        return FileScanStatus.CLEAN;
+      }
+      if (response.contains("FOUND")) {
+        return FileScanStatus.INFECTED;
+      }
+      throw new AwapException(
+          ErrorCode.FILE_SCAN_FAILED,
+          HttpStatus.SERVICE_UNAVAILABLE,
+          "Antivirus scan returned an unexpected response.");
+    } catch (AwapException ex) {
+      throw ex;
     } catch (Exception ex) {
       throw new AwapException(
-          ErrorCode.GENERIC_INTERNAL_ERROR,
-          HttpStatus.INTERNAL_SERVER_ERROR,
-          "Antivirus scan failed.");
+          ErrorCode.FILE_SCAN_FAILED,
+          HttpStatus.SERVICE_UNAVAILABLE,
+          "Antivirus scan failed: " + rootMessage(ex));
     }
   }
 
-  private byte[] chunkHeader(int length) {
-    return new byte[] {
-      (byte) (length >>> 24), (byte) (length >>> 16), (byte) (length >>> 8), (byte) length
-    };
+  private String rootMessage(Exception ex) {
+    String message = ex.getMessage();
+    return message == null || message.isBlank() ? ex.getClass().getSimpleName() : message;
   }
 
   private String readResponse(InputStream in) throws IOException {
-    ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+    ByteArrayOutputStream buffer = new ByteArrayOutputStream(64);
     int b;
     while ((b = in.read()) != -1) {
       if (b == 0) {

@@ -57,7 +57,7 @@ class NotificationServiceTest {
             invocation ->
                 Optional.ofNullable(
                     persisted.get(key(invocation.getArgument(0), invocation.getArgument(1)))));
-    when(renderer.render(any(), any(), any())).thenReturn("Hello Ada");
+    when(renderer.render(any(), any(), any(), any())).thenReturn(rendered("Hello Ada"));
     service =
         new NotificationService(
             List.of(adapter),
@@ -114,7 +114,7 @@ class NotificationServiceTest {
 
   @Test
   void templateRenderFailureFailsPermanentlyWithoutRetry() {
-    when(renderer.render(any(), any(), any()))
+    when(renderer.render(any(), any(), any(), any()))
         .thenThrow(new IllegalStateException("broken template"));
 
     service.send(TENANT, "a@example.com", NotificationChannel.EMAIL, "welcome", null);
@@ -131,7 +131,7 @@ class NotificationServiceTest {
 
   @Test
   void oversizedPayloadFailsPermanentlyWithoutBlockingTheConsumer() {
-    when(renderer.render(any(), any(), any())).thenReturn("x".repeat(200));
+    when(renderer.render(any(), any(), any(), any())).thenReturn(rendered("x".repeat(200)));
 
     service.send(TENANT, "a@example.com", NotificationChannel.EMAIL, "welcome", null);
 
@@ -200,7 +200,7 @@ class NotificationServiceTest {
     NotificationDelivery delivery = persisted.get(key(TENANT, "dedupe-1"));
     assertThat(delivery.getLocale()).isEqualTo("tr");
     assertThat(delivery.getVariablesJson()).isEqualTo("{\"name\":\"Ada\"}");
-    verify(renderer).render("welcome", "tr", "{\"name\":\"Ada\"}");
+    verify(renderer).render(TENANT, "welcome", "tr", "{\"name\":\"Ada\"}");
   }
 
   @Test
@@ -211,6 +211,10 @@ class NotificationServiceTest {
             () ->
                 noAdapters.send(TENANT, "a@example.com", NotificationChannel.SMS, "welcome", null))
         .isInstanceOf(AwapException.class);
+  }
+
+  private static NotificationTemplateRenderer.RenderedNotificationTemplate rendered(String body) {
+    return new NotificationTemplateRenderer.RenderedNotificationTemplate("Welcome", body);
   }
 
   private static String key(UUID tenantId, String dedupeKey) {

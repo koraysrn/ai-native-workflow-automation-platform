@@ -48,10 +48,23 @@ awap:
     datasource:
       enabled: ${OUTBOX_SEPARATE_POOL:true}
       maximum-pool-size: ${OUTBOX_POOL_SIZE:4}
+  engine:
+    node-timeout:
+      # Budget applied to nodes that do not configure timeoutSeconds (minimum 1s).
+      default-seconds: ${NODE_TIMEOUT_DEFAULT_SECONDS:30}
+      # Upper bound accepted for a node timeoutSeconds value; longer budgets belong to the async
+      # job model described in docs/adr/0004-node-timeout-enforcement.md.
+      max-seconds: ${NODE_TIMEOUT_MAX_SECONDS:3600}
+      # Bounded executor used only for interrupt-safe (external) node work.
+      worker-threads: ${NODE_TIMEOUT_WORKER_THREADS:8}
+      queue-capacity: ${NODE_TIMEOUT_QUEUE_CAPACITY:64}
   notification:
-    # Delivered/permanently failed rows keep a 30-day audit window; retry rows are purged after 7.
+    # Deprecated single-window value kept for compatibility; the purge scheduler now uses the two
+    # explicit windows below so read acknowledgements can age out without deleting unread rows.
     retention-days: ${NOTIFICATION_RETENTION_DAYS:30}
-    retry-retention-days: ${NOTIFICATION_RETRY_RETENTION_DAYS:7}
+    read-retention-days: ${NOTIFICATION_READ_RETENTION_DAYS:30}
+    unread-retention-days: ${NOTIFICATION_UNREAD_RETENTION_DAYS:180}
+    # Retry rows are scheduled, never slept on: the leased scheduler drives the remaining attempts.
     retry-delays-ms: ${NOTIFICATION_RETRY_DELAYS_MS:1000,5000,25000,120000,600000}
     max-attempts: ${NOTIFICATION_MAX_ATTEMPTS:5}
     retry-interval-ms: ${NOTIFICATION_RETRY_INTERVAL_MS:5000}
@@ -61,6 +74,24 @@ awap:
     max-body-bytes: ${NOTIFICATION_MAX_BODY_BYTES:262144}
     first-attempt-grace-ms: ${NOTIFICATION_FIRST_ATTEMPT_GRACE_MS:60000}
     retry-scheduler-enabled: ${NOTIFICATION_RETRY_SCHEDULER_ENABLED:true}
+  ai:
+    # Fail-closed: the AI workflow node refuses to run until an operator enables it.
+    node-enabled: ${AI_NODE_ENABLED:false}
+    # local (deterministic heuristic) or openai (OpenAI-compatible endpoint).
+    provider: ${AI_PROVIDER:local}
+    openai:
+      base-url: ${AI_OPENAI_BASE_URL:https://api.openai.com/v1}
+      api-key: ${AI_OPENAI_API_KEY:}
+      model: ${AI_OPENAI_MODEL:gpt-4o-mini}
+    confidence-threshold: ${AI_CONFIDENCE_THRESHOLD:0.7}
+    monthly-token-budget: ${AI_MONTHLY_TOKEN_BUDGET:200000}
+    cost-micros-per-token: ${AI_COST_MICROS_PER_TOKEN:2}
+  script:
+    # Fail-closed: the SCRIPT node is disabled unless the sandbox is explicitly enabled.
+    enabled: ${SCRIPT_NODE_ENABLED:false}
+    timeout-ms: ${SCRIPT_TIMEOUT_MS:10000}
+    max-output-chars: ${SCRIPT_MAX_OUTPUT_CHARS:8192}
+    max-context-chars: ${SCRIPT_MAX_CONTEXT_CHARS:32768}
   analytics:
     opensearch:
       enabled: ${OPENSEARCH_ENABLED:false}
@@ -80,6 +111,18 @@ awap:
     secret: ${WEBHOOK_SECRET:}
     allowed-hosts: ${WEBHOOK_ALLOWED_HOSTS:}
     max-timestamp-skew-ms: ${WEBHOOK_MAX_TIMESTAMP_SKEW_MS:300000}
+    retry:
+      enabled: ${WEBHOOK_RETRY_ENABLED:true}
+      # Attempt budget per delivery (includes the synchronous first attempt, capped at 10).
+      max-attempts: ${WEBHOOK_RETRY_MAX_ATTEMPTS:10}
+      # 1s, 5s, 25s, 2m, 10m; longer budgets reuse the last delay.
+      delays-ms: ${WEBHOOK_RETRY_DELAYS_MS:1000,5000,25000,120000,600000}
+      jitter-ratio: ${WEBHOOK_RETRY_JITTER_RATIO:0.2}
+      lease-seconds: ${WEBHOOK_RETRY_LEASE_SECONDS:30}
+      batch-size: ${WEBHOOK_RETRY_BATCH_SIZE:25}
+      retention-days: ${WEBHOOK_RETRY_RETENTION_DAYS:7}
+      timeout-seconds: ${WEBHOOK_RETRY_TIMEOUT_SECONDS:10}
+      scheduler-delay-ms: ${WEBHOOK_RETRY_SCHEDULER_DELAY_MS:5000}
   clamav:
     enabled: ${CLAMAV_ENABLED:false}
     host: ${CLAMAV_HOST:localhost}
@@ -89,6 +132,22 @@ awap:
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
     access-key: ${MINIO_ACCESS_KEY:awapadmin}
     secret-key: ${MINIO_SECRET_KEY:awapadmin123}
+  files:
+    quarantine-bucket: ${FILE_QUARANTINE_BUCKET:awap-quarantine}
+    promoted-bucket: ${FILE_PROMOTED_BUCKET:awap-files}
+    max-size-bytes: ${FILE_MAX_SIZE_BYTES:524288000}
+    presign-ttl-seconds: ${FILE_PRESIGN_TTL_SECONDS:300}
+    allowed-extensions: ${FILE_ALLOWED_EXTENSIONS:pdf,docx,xlsx,pptx,png,jpg,jpeg,txt}
+    max-scan-attempts: ${FILE_MAX_SCAN_ATTEMPTS:5}
+    infected-policy: ${FILE_INFECTED_POLICY:DELETE}
+    quarantine-retention-days: ${FILE_QUARANTINE_RETENTION_DAYS:7}
+    promoted-retention-days: ${FILE_PROMOTED_RETENTION_DAYS:365}
+    object-lock-retention-days: ${FILE_OBJECT_LOCK_RETENTION_DAYS:1}
+    scan-interval-ms: ${FILE_SCAN_INTERVAL_MS:60000}
+  replay:
+    max-rows: ${REPLAY_MAX_ROWS:100000}
+    page-size: ${REPLAY_PAGE_SIZE:500}
+    timeout: ${REPLAY_TIMEOUT:30s}
 
 management:
   endpoints:

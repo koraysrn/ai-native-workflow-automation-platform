@@ -3,6 +3,8 @@ package com.awap.engine.application;
 import com.awap.engine.domain.OutboxEvent;
 import com.awap.engine.infrastructure.OutboxEventRepository;
 import com.awap.engine.infrastructure.OutboxRelayJdbcRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Metrics;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import org.springframework.beans.factory.ObjectProvider;
@@ -23,12 +25,28 @@ public class OutboxRelayService {
   private final ObjectProvider<KafkaTemplate<String, String>> kafkaTemplateProvider;
   private final ObjectProvider<OutboxRelayJdbcRepository> jdbcRepositoryProvider;
   private final int batchSize;
+  private final MeterRegistry meterRegistry;
+  private final java.util.concurrent.atomic.AtomicLong pendingOutbox =
+      new java.util.concurrent.atomic.AtomicLong();
 
   /** Test/backward-compatible constructor using the shared JPA repository. */
   OutboxRelayService(
       OutboxEventRepository outboxRepository,
       ObjectProvider<KafkaTemplate<String, String>> kafkaTemplateProvider) {
-    this(outboxRepository, kafkaTemplateProvider, null, 100);
+    this(outboxRepository, kafkaTemplateProvider, null, 100, Metrics.globalRegistry);
+  }
+
+  OutboxRelayService(
+      OutboxEventRepository outboxRepository,
+      ObjectProvider<KafkaTemplate<String, String>> kafkaTemplateProvider,
+      ObjectProvider<OutboxRelayJdbcRepository> jdbcRepositoryProvider,
+      int batchSize) {
+    this(
+        outboxRepository,
+        kafkaTemplateProvider,
+        jdbcRepositoryProvider,
+        batchSize,
+        Metrics.globalRegistry);
   }
 
   @Autowired
@@ -36,11 +54,14 @@ public class OutboxRelayService {
       OutboxEventRepository outboxRepository,
       ObjectProvider<KafkaTemplate<String, String>> kafkaTemplateProvider,
       ObjectProvider<OutboxRelayJdbcRepository> jdbcRepositoryProvider,
-      @Value("${awap.outbox.batch-size:100}") int batchSize) {
+      @Value("${awap.outbox.batch-size:100}") int batchSize,
+      MeterRegistry meterRegistry) {
     this.outboxRepository = outboxRepository;
     this.kafkaTemplateProvider = kafkaTemplateProvider;
     this.jdbcRepositoryProvider = jdbcRepositoryProvider;
     this.batchSize = Math.max(1, batchSize);
+    this.meterRegistry = meterRegistry;
+    meterRegistry.gauge("awap.outbox.pending", pendingOutbox);
   }
 
   @Scheduled(fixedDelay = 5000)
@@ -56,6 +77,12 @@ public class OutboxRelayService {
       relayWithDedicatedPool(jdbcRepository, kafkaTemplate);
     } else {
       relayWithJpa(kafkaTemplate);
+    }
+    // Backlog gauge feeds the outbox health panels/alerts (issue #130).
+    try {
+      pendingOutbox.set(outboxRepository.countByPublishedFalse());
+    } catch (RuntimeException ex) {
+      // Metrics must never break the relay loop.
     }
   }
 
@@ -90,8 +117,10 @@ public class OutboxRelayService {
       kafkaTemplate
           .send(topicFor(eventType), aggregateId.toString(), payloadJson)
           .get(SEND_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+      meterRegistry.counter("awap.outbox.events", "result", "relayed").increment();
       return true;
     } catch (Exception ex) {
+      meterRegistry.counter("awap.outbox.events", "result", "failed").increment();
       return false;
     }
   }
@@ -102,6 +131,7 @@ public class OutboxRelayService {
       case "TASK_COMPLETED", "TASK_ESCALATION_DUE" -> "workflow.task.events";
       case "FORM_SUBMITTED" -> "workflow.instance.events";
       case "SUB_PROCESS_COMPLETED" -> "workflow.subprocess.events";
+      case "WEBHOOK_DELIVERY_DEAD" -> "webhook.delivery.dlq";
       case "ANALYTICS_EVENT" -> "analytics.events";
       case "NOTIFICATION_REQUESTED" -> "notification.send";
       case "NOTIFICATION_DLQ" -> "notification.send.dlq";

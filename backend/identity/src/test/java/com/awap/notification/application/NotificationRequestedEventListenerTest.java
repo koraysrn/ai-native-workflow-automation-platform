@@ -53,7 +53,9 @@ class NotificationRequestedEventListenerTest {
 
   @BeforeEach
   void setUp() {
-    when(renderer.render(any(), any(), any())).thenReturn("Hello Ada");
+    when(renderer.render(any(), any(), any(), any()))
+        .thenReturn(
+            new NotificationTemplateRenderer.RenderedNotificationTemplate("Welcome", "Hello Ada"));
     when(repository.save(any()))
         .thenAnswer(
             invocation -> {
