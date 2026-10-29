@@ -2051,12 +2051,6 @@ components:
         format: uuid
 
   responses:
-    BadRequest:
-      description: The request is invalid (unknown metric key or inverted date window).
-      content:
-        application/problem+json:
-          schema:
-            $ref: "#/components/schemas/ProblemDetails"
     NotFound:
       description: The requested resource was not found.
       content:
