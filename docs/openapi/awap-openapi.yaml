@@ -41,6 +41,8 @@ tags:
     description: Tenant notification inbox and delivery history.
   - name: Analytics
     description: Process, task and approval analytics aggregates.
+  - name: Webhooks
+    description: Durable webhook delivery queue and dead-letter inspection.
 
 paths:
   /actuator/health:
@@ -1785,6 +1787,56 @@ paths:
                 items:
                   $ref: "#/components/schemas/AnalyticsAggregateResponse"
 
+  /api/v1/webhook-deliveries:
+    get:
+      operationId: listWebhookDeliveries
+      summary: List webhook deliveries
+      description: >-
+        Tenant-scoped view of the durable delivery queue used by WEBHOOK workflow nodes. Filter
+        with `status=DEAD` to inspect dead-letter rows. Payloads, HMAC signatures and URL query
+        strings are never returned.
+      tags: [Webhooks]
+      parameters:
+        - name: status
+          in: query
+          required: false
+          description: Optional delivery status filter.
+          schema:
+            type: string
+            enum: [PENDING, RETRYING, SENT, DEAD, CANCELLED]
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of rows (1-100).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+      responses:
+        "200":
+          description: Deliveries of the current tenant, newest first.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/WebhookDeliveryResponse"
+        "400":
+          description: The status filter is not a known delivery status.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          description: The caller does not hold INSTANCE_READ.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+
 components:
   securitySchemes:
     bearerAuth:
@@ -2304,6 +2356,50 @@ components:
           type: integer
           format: int64
           minimum: 0
+
+    WebhookDeliveryResponse:
+      type: object
+      description: One durable webhook delivery; never contains the payload or query string.
+      properties:
+        id:
+          type: string
+          format: uuid
+        workflowInstanceId:
+          type: string
+          format: uuid
+        nodeExecutionId:
+          type: string
+          format: uuid
+        nodeId:
+          type: string
+        targetUrl:
+          type: string
+          description: Target URL with the query string and fragment removed.
+        status:
+          type: string
+          enum: [PENDING, RETRYING, SENT, DEAD, CANCELLED]
+        attempts:
+          type: integer
+        maxAttempts:
+          type: integer
+        nextAttemptAt:
+          type: string
+          format: date-time
+        lastStatusCode:
+          type: integer
+          nullable: true
+        lastError:
+          type: string
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
 
     AnalyticsAggregateResponse:
       type: object

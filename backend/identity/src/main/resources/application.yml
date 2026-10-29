@@ -86,6 +86,18 @@ awap:
     secret: ${WEBHOOK_SECRET:}
     allowed-hosts: ${WEBHOOK_ALLOWED_HOSTS:}
     max-timestamp-skew-ms: ${WEBHOOK_MAX_TIMESTAMP_SKEW_MS:300000}
+    retry:
+      enabled: ${WEBHOOK_RETRY_ENABLED:true}
+      # Attempt budget per delivery (includes the synchronous first attempt, capped at 10).
+      max-attempts: ${WEBHOOK_RETRY_MAX_ATTEMPTS:10}
+      # 1s, 5s, 25s, 2m, 10m; longer budgets reuse the last delay.
+      delays-ms: ${WEBHOOK_RETRY_DELAYS_MS:1000,5000,25000,120000,600000}
+      jitter-ratio: ${WEBHOOK_RETRY_JITTER_RATIO:0.2}
+      lease-seconds: ${WEBHOOK_RETRY_LEASE_SECONDS:30}
+      batch-size: ${WEBHOOK_RETRY_BATCH_SIZE:25}
+      retention-days: ${WEBHOOK_RETRY_RETENTION_DAYS:7}
+      timeout-seconds: ${WEBHOOK_RETRY_TIMEOUT_SECONDS:10}
+      scheduler-delay-ms: ${WEBHOOK_RETRY_SCHEDULER_DELAY_MS:5000}
   clamav:
     enabled: ${CLAMAV_ENABLED:false}
     host: ${CLAMAV_HOST:localhost}

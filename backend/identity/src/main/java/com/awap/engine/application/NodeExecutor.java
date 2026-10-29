@@ -14,6 +14,9 @@ import com.awap.identity.infrastructure.UserRepository;
 import com.awap.script.application.ScriptNodeService;
 import com.awap.task.application.TaskService;
 import com.awap.task.interfaces.dto.TaskRequest;
+import com.awap.webhook.application.WebhookAttemptResult;
+import com.awap.webhook.application.WebhookDeliveryService;
+import com.awap.webhook.domain.WebhookDelivery;
 import com.awap.workflow.application.WorkflowDefinitionService;
 import com.awap.workflow.domain.NodeDefinition;
 import com.awap.workflow.domain.NodeType;
@@ -37,6 +40,7 @@ final class NodeExecutor {
   private final UserRepository userRepository;
   private final WorkflowEnginePort port;
   private final WebhookInvoker webhookInvoker;
+  private final WebhookDeliveryService webhookDeliveryService;
   private final AiNodeService aiNodeService;
   private final ScriptNodeService scriptNodeService;
 
@@ -55,6 +59,7 @@ final class NodeExecutor {
         taskService,
         userRepository,
         port,
+        null,
         null,
         null,
         null);
@@ -77,6 +82,7 @@ final class NodeExecutor {
         port,
         webhookInvoker,
         null,
+        null,
         null);
   }
 
@@ -88,6 +94,29 @@ final class NodeExecutor {
       UserRepository userRepository,
       WorkflowEnginePort port,
       WebhookInvoker webhookInvoker,
+      WebhookDeliveryService webhookDeliveryService) {
+    this(
+        nodeExecutionRepository,
+        workflowDefinitionService,
+        configReader,
+        taskService,
+        userRepository,
+        port,
+        webhookInvoker,
+        webhookDeliveryService,
+        null,
+        null);
+  }
+
+  NodeExecutor(
+      NodeExecutionRepository nodeExecutionRepository,
+      WorkflowDefinitionService workflowDefinitionService,
+      NodeConfigReader configReader,
+      TaskService taskService,
+      UserRepository userRepository,
+      WorkflowEnginePort port,
+      WebhookInvoker webhookInvoker,
+      WebhookDeliveryService webhookDeliveryService,
       AiNodeService aiNodeService,
       ScriptNodeService scriptNodeService) {
     this.nodeExecutionRepository = nodeExecutionRepository;
@@ -97,6 +126,7 @@ final class NodeExecutor {
     this.userRepository = userRepository;
     this.port = port;
     this.webhookInvoker = webhookInvoker;
+    this.webhookDeliveryService = webhookDeliveryService;
     this.aiNodeService = aiNodeService;
     this.scriptNodeService = scriptNodeService;
   }
@@ -225,19 +255,7 @@ final class NodeExecutor {
           port.log(instance, node.getNodeId(), node.getNodeType().name(), "NODE_COMPLETED", null);
           port.advanceFrom(instance, node.getNodeId());
         }
-        case WEBHOOK -> {
-          if (webhookInvoker == null) {
-            throw new AwapException(
-                ErrorCode.GENERIC_INTERNAL_ERROR,
-                HttpStatus.SERVICE_UNAVAILABLE,
-                "WEBHOOK executor is not configured.");
-          }
-          String output = webhookInvoker.invoke(instance, node, execution);
-          execution.complete(output);
-          nodeExecutionRepository.save(execution);
-          port.log(instance, node.getNodeId(), node.getNodeType().name(), "NODE_COMPLETED", output);
-          port.advanceFrom(instance, node.getNodeId());
-        }
+        case WEBHOOK -> executeWebhookNode(instance, node, execution);
         case SUB_PROCESS -> {
           String definitionId = configReader.readSubProcessDefinitionId(node);
           if (definitionId == null) {
@@ -340,6 +358,112 @@ final class NodeExecutor {
     nodeExecutionRepository.save(execution);
     instance.transitionTo(WorkflowState.WAITING);
     port.log(instance, node.getNodeId(), node.getNodeType().name(), action, null);
+  }
+
+  /**
+   * WEBHOOK semantics: the first attempt is synchronous. Retryable failures are handed over to the
+   * durable delivery queue (the node waits; the scheduler drives the remaining attempts) instead of
+   * being retried in-thread. Permanent failures and exhausted budgets fail the node and instance.
+   */
+  private void executeWebhookNode(
+      WorkflowInstance instance, NodeDefinition node, NodeExecution execution) {
+    if (webhookInvoker == null) {
+      throw new AwapException(
+          ErrorCode.GENERIC_INTERNAL_ERROR,
+          HttpStatus.SERVICE_UNAVAILABLE,
+          "WEBHOOK executor is not configured.");
+    }
+    WebhookAttemptResult attempt = webhookInvoker.invoke(instance, node, execution);
+    if (attempt.success()) {
+      String output = attempt.responseBodyOrEmptyObject();
+      execution.complete(output);
+      nodeExecutionRepository.save(execution);
+      port.log(instance, node.getNodeId(), node.getNodeType().name(), "NODE_COMPLETED", output);
+      port.advanceFrom(instance, node.getNodeId());
+      return;
+    }
+
+    String error = errorOf(attempt);
+    int maxAttempts = configReader.readMaxAttempts(node);
+    String targetUrl = webhookInvoker.targetUrl(node);
+    if (webhookDeliveryService == null
+        || targetUrl == null
+        || webhookDeliveryService.policy().isPermanent(attempt.statusCode())) {
+      if (webhookDeliveryService != null && targetUrl != null) {
+        webhookDeliveryService.recordPermanentFailure(
+            pendingDelivery(instance, node, execution, targetUrl, maxAttempts, attempt, error),
+            Instant.now());
+      }
+      failWebhookNode(instance, node, execution, error);
+      return;
+    }
+
+    WebhookDelivery delivery =
+        webhookDeliveryService.scheduleRetryAfterFailure(
+            pendingDelivery(instance, node, execution, targetUrl, maxAttempts, attempt, error),
+            Instant.now());
+    handOverToScheduler(instance, node, execution, delivery, maxAttempts);
+  }
+
+  private void handOverToScheduler(
+      WorkflowInstance instance,
+      NodeDefinition node,
+      NodeExecution execution,
+      WebhookDelivery delivery,
+      int maxAttempts) {
+    execution.waitForExternal();
+    nodeExecutionRepository.save(execution);
+    instance.transitionTo(WorkflowState.WAITING);
+    port.log(
+        instance,
+        node.getNodeId(),
+        node.getNodeType().name(),
+        "NODE_RETRY_SCHEDULED",
+        "attempt=1 maxAttempts="
+            + maxAttempts
+            + " deliveryId="
+            + delivery.getId()
+            + " nextAttemptAt="
+            + delivery.getNextAttemptAt());
+  }
+
+  private WebhookDeliveryService.PendingDelivery pendingDelivery(
+      WorkflowInstance instance,
+      NodeDefinition node,
+      NodeExecution execution,
+      String targetUrl,
+      int maxAttempts,
+      WebhookAttemptResult attempt,
+      String error) {
+    return new WebhookDeliveryService.PendingDelivery(
+        instance.getTenantId(),
+        instance.getId(),
+        execution.getId(),
+        node.getNodeId(),
+        targetUrl,
+        webhookInvoker.payload(node),
+        WebhookDelivery.idempotencyKey(instance.getId(), node.getNodeId(), execution.getId()),
+        1,
+        maxAttempts,
+        attempt.statusCode(),
+        error);
+  }
+
+  private void failWebhookNode(
+      WorkflowInstance instance, NodeDefinition node, NodeExecution execution, String error) {
+    execution.fail(error);
+    nodeExecutionRepository.save(execution);
+    port.log(instance, node.getNodeId(), node.getNodeType().name(), "NODE_FAILED", error);
+    port.transition(instance, WorkflowState.FAILED, "NODE_FAILED");
+  }
+
+  private String errorOf(WebhookAttemptResult attempt) {
+    if (attempt.error().isPresent()) {
+      return attempt.error().get();
+    }
+    return attempt.transportFailure()
+        ? "Webhook transport failure."
+        : "Webhook target returned status " + attempt.statusCode() + ".";
   }
 
   private void handleFailure(
