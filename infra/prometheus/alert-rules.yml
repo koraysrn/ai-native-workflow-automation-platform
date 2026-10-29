@@ -119,6 +119,31 @@ groups:
           description: "{{ $value }} node executions were rejected by the bounded timeout executor."
           runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o31--node-timeouts"
 
+  - name: awap-replay
+    rules:
+      # A single divergence means the execution log no longer explains the persisted state.
+      # Replay must never be "fixed" by silently republishing; see docs/operations-runbook.md (O9).
+      - alert: AwapReplayDivergence
+        expr: increase(awap_replay_divergences_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Deterministic replay divergence detected"
+          description: "{{ $value }} replay divergence(s) in the last 5 minutes; open the replay_runs audit row and follow runbook O9."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o9--deterministic-replay-issue-116"
+
+      # Controlled rejections (row cap, timeout, concurrent replay) are a capacity signal.
+      - alert: AwapReplayRejected
+        expr: increase(awap_replay_limits_total{reason="timeout"}[15m]) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Replay timeouts are frequent"
+          description: "{{ $value }} replay timeouts in 15 minutes; check awap.replay.timeout and log growth."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o9--deterministic-replay-issue-116"
+
   - name: awap-slo
     rules:
       - alert: AwapHighErrorRate

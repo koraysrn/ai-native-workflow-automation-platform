@@ -74,6 +74,22 @@
       "source": "NodeExecutionWatchdog (awap.node.timeout.abandoned gauge)"
     },
     {
+      "name": "awap_replay_divergences_total",
+      "source": "ReplayMetrics (awap.replay.divergences counter)"
+    },
+    {
+      "name": "awap_replay_limits_total",
+      "source": "ReplayMetrics (awap.replay.limits counter)"
+    },
+    {
+      "name": "awap_replay_runs_total",
+      "source": "ReplayMetrics (awap.replay.runs counter)"
+    },
+    {
+      "name": "awap_replay_duration_seconds",
+      "source": "ReplayMetrics (awap.replay.duration timer)"
+    },
+    {
       "name": "http_server_requests_seconds_count",
       "source": "Spring Boot HTTP server observations"
     },
