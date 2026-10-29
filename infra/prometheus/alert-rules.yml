@@ -1,4 +1,56 @@
 groups:
+  - name: awap-workflow
+    rules:
+      # Failure ratio = failures / (successes + failures); the clamp keeps an idle
+      # tenant from producing a division by zero. 20% over 10m ignores a single spike.
+      - alert: AwapWorkflowFailureRateHigh
+        expr: |
+          sum(rate(awap_workflow_failure_total[10m]))
+            / clamp_min(
+                sum(rate(awap_workflow_success_total[10m]))
+                  + sum(rate(awap_workflow_failure_total[10m])),
+                0.001
+              ) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Workflow failure ratio above 20%"
+          description: "{{ $value | humanizePercentage }} of workflow executions failed over 10 minutes."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o3--slo-alerts"
+
+      - alert: AwapNotificationRetryLagHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(awap_notification_retry_lag_seconds_bucket[10m]))) > 10
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Notification retry lag p95 above 10s"
+          description: "Deliveries that needed a retry are taking {{ $value }}s at p95."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#notification-templates-cache-and-rendering-metrics"
+
+      - alert: AwapWebhookDeadGrowth
+        expr: increase(awap_dlq_messages_total[15m]) > 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Webhook/DLQ dead messages are growing"
+          description: "{{ $value }} messages landed in the DLQ within 15 minutes; webhook retries are exhausting."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o3--slo-alerts"
+
+      - alert: AwapOutboxBacklogStuck
+        expr: awap_outbox_pending > 1000
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Outbox backlog is stuck"
+          description: "{{ $value }} outbox rows are unpublished after 15 minutes; the relay is not draining."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o3--slo-alerts"
+
   - name: awap
     rules:
       # A small trickle of DLQ messages is tolerable (transient poison messages are
@@ -11,6 +63,7 @@ groups:
         annotations:
           summary: "Dead-letter messages detected"
           description: "{{ $value }} dead-letter messages were consumed in the last 5 minutes."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o3--slo-alerts"
 
       - alert: AwapDlqMessagesCritical
         expr: increase(awap_dlq_messages_total[5m]) > 50
@@ -20,6 +73,76 @@ groups:
         annotations:
           summary: "Dead-letter backlog is growing fast"
           description: "{{ $value }} dead-letter messages in 5 minutes; investigate the consumer pipeline immediately."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o3--slo-alerts"
+
+      # Node timeouts: a sustained rate means either a too-tight budget or a slow dependency.
+      # See docs/node-timeouts.md before tuning awap.engine.node-timeout.*.
+      - alert: AwapNodeTimeouts
+        expr: sum(increase(awap_node_timeout_total[10m])) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Workflow node timeouts are elevated"
+          description: "{{ $value }} node timeouts in 10 minutes; check awap.node.duration{type=...} and the node timeout budgets."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o31--node-timeouts"
+
+      - alert: AwapNodeTimeoutFailures
+        expr: sum(increase(awap_node_timeout_failures_total[10m])) > 3
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Workflow nodes are failing terminally on timeouts"
+          description: "{{ $value }} node executions exhausted their retry budget after a timeout."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o31--node-timeouts"
+
+      # A worker that swallows the interrupt keeps a thread alive past its budget; this is the
+      # thread-leak alert for the node timeout executor.
+      - alert: AwapNodeTimeoutAbandonedWorkers
+        expr: max(awap_node_timeout_abandoned) > 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Node timeout workers are leaking"
+          description: "{{ $value }} timeout worker(s) ignored the interrupt for more than 5 minutes."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o31--node-timeouts"
+
+      - alert: AwapNodeTimeoutExecutorRejections
+        expr: sum(increase(awap_node_timeout_rejected_total[5m])) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node timeout executor is saturated"
+          description: "{{ $value }} node executions were rejected by the bounded timeout executor."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o31--node-timeouts"
+
+  - name: awap-replay
+    rules:
+      # A single divergence means the execution log no longer explains the persisted state.
+      # Replay must never be "fixed" by silently republishing; see docs/operations-runbook.md (O9).
+      - alert: AwapReplayDivergence
+        expr: increase(awap_replay_divergences_total[5m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Deterministic replay divergence detected"
+          description: "{{ $value }} replay divergence(s) in the last 5 minutes; open the replay_runs audit row and follow runbook O9."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o9--deterministic-replay-issue-116"
+
+      # Controlled rejections (row cap, timeout, concurrent replay) are a capacity signal.
+      - alert: AwapReplayRejected
+        expr: increase(awap_replay_limits_total{reason="timeout"}[15m]) > 3
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Replay timeouts are frequent"
+          description: "{{ $value }} replay timeouts in 15 minutes; check awap.replay.timeout and log growth."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o9--deterministic-replay-issue-116"
 
   - name: awap-slo
     rules:
@@ -33,6 +156,7 @@ groups:
         annotations:
           summary: "Error rate above 5%"
           description: "{{ $value | humanizePercentage }} of requests are failing (5xx)."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o3--slo-alerts"
 
       - alert: AwapHighLatency
         expr: |
@@ -44,6 +168,7 @@ groups:
         annotations:
           summary: "p95 latency above 2s"
           description: "p95 request latency is {{ $value }}s over the last 5 minutes."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o3--slo-alerts"
 
       - alert: AwapInstanceDown
         expr: up{job="awap-identity"} == 0
@@ -53,3 +178,4 @@ groups:
         annotations:
           summary: "AWAP identity instance is down"
           description: "The awap-identity scrape target has been unreachable for 1 minute."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o3--slo-alerts"

@@ -22,6 +22,7 @@ import com.awap.identity.domain.User;
 import com.awap.identity.infrastructure.UserRepository;
 import com.awap.task.application.TaskService;
 import com.awap.task.interfaces.dto.TaskRequest;
+import com.awap.webhook.application.WebhookAttemptResult;
 import com.awap.workflow.application.WorkflowDefinitionService;
 import com.awap.workflow.domain.NodeDefinition;
 import com.awap.workflow.domain.NodeType;
@@ -248,7 +249,8 @@ class NodeExecutorTest {
   void webhookNodeInvokesExternalCallAndCompletesWithResponse() {
     WorkflowInstance instance = instance(WorkflowState.RUNNING);
     stubFreshExecution();
-    when(webhookInvoker.invoke(any(), any(), any())).thenReturn("{\"ok\":true}");
+    when(webhookInvoker.invoke(any(), any(), any()))
+        .thenReturn(WebhookAttemptResult.success(200, "{\"ok\":true}"));
 
     executor.executeNode(
         instance, node("hook", NodeType.WEBHOOK, "{\"url\":\"https://hooks.example.com\"}"));
@@ -259,11 +261,11 @@ class NodeExecutorTest {
   }
 
   @Test
-  void webhookFailureSchedulesRetryWhenAttemptsRemain() {
+  void webhookRetryableFailureWithoutADurableQueueFailsClosed() {
     WorkflowInstance instance = instance(WorkflowState.RUNNING);
     stubFreshExecution();
     when(webhookInvoker.invoke(any(), any(), any()))
-        .thenThrow(new IllegalStateException("target timeout"));
+        .thenReturn(WebhookAttemptResult.httpError(500, "", null));
 
     executor.executeNode(
         instance,
@@ -271,17 +273,16 @@ class NodeExecutorTest {
             "hook", NodeType.WEBHOOK, "{\"url\":\"https://hooks.example.com\",\"maxAttempts\":2}"));
 
     assertThat(capturedExecution().getStatus()).isEqualTo(NodeExecutionStatus.FAILED);
-    assertThat(capturedExecution().getResumeAt()).isNotNull();
-    verify(port, org.mockito.Mockito.never())
-        .transition(any(), eq(WorkflowState.FAILED), anyString());
+    assertThat(capturedExecution().getError()).contains("status 500");
+    verify(port).transition(instance, WorkflowState.FAILED, "NODE_FAILED");
   }
 
   @Test
-  void webhookFailureFailsWorkflowWhenAttemptsExhausted() {
+  void webhookPermanentFailureFailsTheNodeImmediately() {
     WorkflowInstance instance = instance(WorkflowState.RUNNING);
     stubFreshExecution();
     when(webhookInvoker.invoke(any(), any(), any()))
-        .thenThrow(new IllegalStateException("target timeout"));
+        .thenReturn(WebhookAttemptResult.httpError(404, "", null));
 
     executor.executeNode(
         instance,

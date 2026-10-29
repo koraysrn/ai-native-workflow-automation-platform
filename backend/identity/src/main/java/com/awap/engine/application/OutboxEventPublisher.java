@@ -35,6 +35,17 @@ public class OutboxEventPublisher {
     applicationEventPublisher.publishEvent(payload);
   }
 
+  /**
+   * Writes the event to the outbox only. Used when the caller drives the local side effect itself
+   * (e.g. the webhook scheduler completes the node explicitly after a retried delivery succeeded).
+   */
+  @Transactional
+  public void publishDurably(
+      UUID tenantId, String aggregateType, UUID aggregateId, String eventType, Object payload) {
+    repository.save(
+        new OutboxEvent(tenantId, aggregateType, aggregateId, eventType, toJson(payload)));
+  }
+
   private String toJson(Object payload) {
     try {
       return objectMapper.writeValueAsString(payload);
