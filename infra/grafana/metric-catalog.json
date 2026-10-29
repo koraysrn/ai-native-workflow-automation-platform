@@ -118,6 +118,10 @@
       "source": "NotificationDeliveryPurgeScheduler (awap.notification.retention.purged counter)"
     },
     {
+      "name": "awap_notification_dedupe_suppressed_total",
+      "source": "NotificationService (awap.notification.dedupe.suppressed counter)"
+    },
+    {
       "name": "http_server_requests_seconds_count",
       "source": "Spring Boot HTTP server observations"
     },

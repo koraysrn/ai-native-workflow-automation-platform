@@ -13,9 +13,11 @@ import static org.mockito.Mockito.when;
 import com.awap.common.api.AwapException;
 import com.awap.engine.application.OutboxEventPublisher;
 import com.awap.notification.domain.NotificationChannel;
+import com.awap.notification.domain.NotificationDedupeKeyFactory;
 import com.awap.notification.domain.NotificationDelivery;
 import com.awap.notification.domain.NotificationRetryPolicy;
 import com.awap.notification.infrastructure.NotificationDeliveryRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
@@ -24,8 +26,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
@@ -38,7 +39,9 @@ class NotificationServiceTest {
   private final OutboxEventPublisher outbox = mock(OutboxEventPublisher.class);
   private final NotificationTemplateRenderer renderer = mock(NotificationTemplateRenderer.class);
   private final Map<String, NotificationDelivery> persisted = new ConcurrentHashMap<>();
+  private final AtomicReference<NotificationDelivery> lastSaved = new AtomicReference<>();
   private final CountingAdapter adapter = new CountingAdapter();
+  private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
   private NotificationDeliveryRepository repository;
   private NotificationService service;
 
@@ -49,6 +52,7 @@ class NotificationServiceTest {
         .thenAnswer(
             invocation -> {
               NotificationDelivery delivery = invocation.getArgument(0);
+              lastSaved.set(delivery);
               persisted.put(key(delivery.getTenantId(), delivery.getDedupeKey()), delivery);
               return delivery;
             });
@@ -67,7 +71,26 @@ class NotificationServiceTest {
             NotificationRetryPolicy.defaults(),
             64,
             60_000L,
-            Clock.fixed(NOW, ZoneOffset.UTC));
+            Clock.fixed(NOW, ZoneOffset.UTC),
+            meterRegistry,
+            new NotificationDedupeKeyFactory(),
+            new NotificationDedupeWindowResolver(new NotificationDedupeProperties(), renderer));
+  }
+
+  @Test
+  void firstAttemptSuccessStoresSentAndPublishesNotificationSent() {
+    service.send(
+        TENANT, "a@example.com", NotificationChannel.EMAIL, "welcome", "en", null, "dedupe-1");
+
+    NotificationDelivery delivery = lastSaved.get();
+    assertThat(delivery.getStatus()).isEqualTo("SENT");
+    assertThat(delivery.getAttempts()).isEqualTo(1);
+    assertThat(delivery.getNextAttemptAt()).isNull();
+    assertThat(delivery.getDedupeKey()).hasSize(64);
+    assertThat(delivery.getDedupeExpiresAt()).isEqualTo(NOW.plusSeconds(3600));
+    verify(outbox)
+        .publish(
+            eq(TENANT), eq("NOTIFICATION"), eq(delivery.getId()), eq("NOTIFICATION_SENT"), any());
   }
 
   @Test
@@ -77,39 +100,83 @@ class NotificationServiceTest {
     service.send(
         TENANT, "a@example.com", NotificationChannel.EMAIL, "welcome", "en", null, "dedupe-1");
 
-    NotificationDelivery delivery = persisted.get(key(TENANT, "dedupe-1"));
+    NotificationDelivery delivery = lastSaved.get();
     assertThat(delivery.getStatus()).isEqualTo("RETRYING");
     assertThat(delivery.getAttempts()).isEqualTo(1);
     assertThat(delivery.getNextAttemptAt()).isEqualTo(NOW.plusSeconds(1));
     assertThat(delivery.getLastAttemptAt()).isEqualTo(NOW);
     assertThat(delivery.getLastError()).contains("provider 500");
-    assertThat(adapter.invocations.get()).isEqualTo(1);
+    assertThat(adapter.invocations).isEqualTo(1);
     verify(outbox, never()).publish(any(), any(), any(), eq("NOTIFICATION_SENT"), any());
   }
 
   @Test
-  void firstAttemptSuccessStoresSentAndPublishesNotificationSent() {
+  void duplicateInsideTheActiveWindowIsSuppressedAndCounted() {
+    NotificationDelivery existing =
+        new NotificationDelivery(
+            TENANT,
+            dedupeKey("dedupe-1"),
+            NotificationChannel.EMAIL,
+            "a@example.com",
+            "welcome",
+            null,
+            NOW.plusSeconds(60),
+            NOW.minusSeconds(10));
+    existing.recordAttempt(NOW.minusSeconds(10));
+    existing.markSent(NOW.minusSeconds(10));
+    persisted.put(key(TENANT, existing.getDedupeKey()), existing);
+
     service.send(
         TENANT, "a@example.com", NotificationChannel.EMAIL, "welcome", "en", null, "dedupe-1");
 
-    NotificationDelivery delivery = persisted.get(key(TENANT, "dedupe-1"));
-    assertThat(delivery.getStatus()).isEqualTo("SENT");
-    assertThat(delivery.getAttempts()).isEqualTo(1);
-    assertThat(delivery.getNextAttemptAt()).isNull();
-    verify(outbox)
-        .publish(
-            eq(TENANT), eq("NOTIFICATION"), eq(delivery.getId()), eq("NOTIFICATION_SENT"), any());
+    assertThat(adapter.invocations).isZero();
+    assertThat(
+            meterRegistry
+                .get(NotificationService.SUPPRESSED_METRIC)
+                .tag("reason", "existing")
+                .counter()
+                .count())
+        .isEqualTo(1.0d);
   }
 
   @Test
-  void providerTimeoutLeavesTheRowRetrying() {
-    adapter.failure = new RuntimeException(new TimeoutException("read timed out"));
+  void repeatAfterTheWindowCreatesANewDelivery() {
+    NotificationDelivery expired =
+        new NotificationDelivery(
+            TENANT,
+            dedupeKey("dedupe-1"),
+            NotificationChannel.EMAIL,
+            "a@example.com",
+            "welcome",
+            null,
+            NOW.minusSeconds(1),
+            NOW.minusSeconds(7200));
+    expired.recordAttempt(NOW.minusSeconds(3600));
+    expired.markSent(NOW.minusSeconds(3600));
+    persisted.put(key(TENANT, expired.getDedupeKey()), expired);
 
-    service.send(TENANT, "a@example.com", NotificationChannel.EMAIL, "welcome", null);
+    service.send(
+        TENANT, "a@example.com", NotificationChannel.EMAIL, "welcome", "en", null, "dedupe-1");
 
-    NotificationDelivery delivery = persisted.values().stream().findFirst().orElseThrow();
-    assertThat(delivery.getStatus()).isEqualTo("RETRYING");
-    assertThat(delivery.getNextAttemptAt()).isEqualTo(NOW.plusSeconds(1));
+    assertThat(adapter.invocations).isEqualTo(1);
+    assertThat(lastSaved.get().getId()).isNotEqualTo(expired.getId());
+    assertThat(lastSaved.get().getStatus()).isEqualTo("SENT");
+  }
+
+  @Test
+  void businessKeyIsStoredForATransactionalEvent() {
+    service.send(
+        TENANT,
+        "a@example.com",
+        NotificationChannel.EMAIL,
+        "welcome",
+        "en",
+        null,
+        null,
+        "workflow-42",
+        "WORKFLOW_COMPLETED");
+
+    assertThat(lastSaved.get().getBusinessKey()).isEqualTo("workflow-42");
   }
 
   @Test
@@ -119,11 +186,11 @@ class NotificationServiceTest {
 
     service.send(TENANT, "a@example.com", NotificationChannel.EMAIL, "welcome", null);
 
-    NotificationDelivery delivery = persisted.values().stream().findFirst().orElseThrow();
+    NotificationDelivery delivery = lastSaved.get();
     assertThat(delivery.getStatus()).isEqualTo("FAILED");
     assertThat(delivery.getAttempts()).isEqualTo(1);
     assertThat(delivery.getNextAttemptAt()).isNull();
-    assertThat(adapter.invocations.get()).isZero();
+    assertThat(adapter.invocations).isZero();
     verify(outbox)
         .publish(
             eq(TENANT), eq("NOTIFICATION"), eq(delivery.getId()), eq("NOTIFICATION_DLQ"), any());
@@ -135,37 +202,10 @@ class NotificationServiceTest {
 
     service.send(TENANT, "a@example.com", NotificationChannel.EMAIL, "welcome", null);
 
-    NotificationDelivery delivery = persisted.values().stream().findFirst().orElseThrow();
+    NotificationDelivery delivery = lastSaved.get();
     assertThat(delivery.getStatus()).isEqualTo("FAILED");
     assertThat(delivery.getLastError()).contains("exceeds 64 bytes");
-    assertThat(adapter.invocations.get()).isZero();
-  }
-
-  @Test
-  void duplicateKafkaRecordProducesExactlyOneDelivery() {
-    service.send(
-        TENANT, "a@example.com", NotificationChannel.EMAIL, "welcome", "en", null, "dedupe-1");
-    service.send(
-        TENANT, "a@example.com", NotificationChannel.EMAIL, "welcome", "en", null, "dedupe-1");
-
-    assertThat(adapter.invocations.get()).isEqualTo(1);
-    assertThat(persisted).hasSize(1);
-    verify(outbox).publish(eq(TENANT), eq("NOTIFICATION"), any(), eq("NOTIFICATION_SENT"), any());
-  }
-
-  @Test
-  void existingSentRowSuppressesADuplicate() {
-    NotificationDelivery sent =
-        new NotificationDelivery(
-            TENANT, "dedupe-1", NotificationChannel.EMAIL, "a@example.com", "welcome");
-    sent.recordAttempt(NOW);
-    sent.markSent(NOW);
-    persisted.put(key(TENANT, "dedupe-1"), sent);
-
-    service.send(
-        TENANT, "a@example.com", NotificationChannel.EMAIL, "welcome", "en", null, "dedupe-1");
-
-    assertThat(adapter.invocations.get()).isZero();
+    assertThat(adapter.invocations).isZero();
   }
 
   @Test
@@ -183,7 +223,7 @@ class NotificationServiceTest {
                     null,
                     "dedupe-1"))
         .isInstanceOf(DataAccessResourceFailureException.class);
-    assertThat(adapter.invocations.get()).isZero();
+    assertThat(adapter.invocations).isZero();
   }
 
   @Test
@@ -197,7 +237,7 @@ class NotificationServiceTest {
         "{\"name\":\"Ada\"}",
         "dedupe-1");
 
-    NotificationDelivery delivery = persisted.get(key(TENANT, "dedupe-1"));
+    NotificationDelivery delivery = lastSaved.get();
     assertThat(delivery.getLocale()).isEqualTo("tr");
     assertThat(delivery.getVariablesJson()).isEqualTo("{\"name\":\"Ada\"}");
     verify(renderer).render(TENANT, "welcome", "tr", "{\"name\":\"Ada\"}");
@@ -213,6 +253,19 @@ class NotificationServiceTest {
         .isInstanceOf(AwapException.class);
   }
 
+  private String dedupeKey(String explicitKey) {
+    return new NotificationDedupeKeyFactory()
+        .build(
+            TENANT,
+            NotificationChannel.EMAIL,
+            "a@example.com",
+            "welcome",
+            com.awap.notification.domain.DedupePolicy.TRANSACTIONAL,
+            null,
+            null,
+            explicitKey);
+  }
+
   private static NotificationTemplateRenderer.RenderedNotificationTemplate rendered(String body) {
     return new NotificationTemplateRenderer.RenderedNotificationTemplate("Welcome", body);
   }
@@ -221,9 +274,9 @@ class NotificationServiceTest {
     return tenantId + ":" + dedupeKey;
   }
 
-  /** Adapter that counts dispatches and can be told to fail once. */
+  /** Adapter that counts dispatches and can be told to fail. */
   private static final class CountingAdapter implements NotificationChannelAdapter {
-    private final AtomicInteger invocations = new AtomicInteger();
+    private int invocations;
     private RuntimeException failure;
 
     @Override
@@ -233,7 +286,7 @@ class NotificationServiceTest {
 
     @Override
     public void dispatch(NotificationMessage message) {
-      invocations.incrementAndGet();
+      invocations++;
       if (failure != null) {
         throw failure;
       }

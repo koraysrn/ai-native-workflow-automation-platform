@@ -22,7 +22,9 @@ import org.springframework.transaction.annotation.Transactional;
  * Bounds the notification delivery table with two independent windows: read acknowledgements age
  * out from {@code read_at}, unread notifications only from {@code created_at} after a much longer
  * window. Unread rows are therefore never deleted by the read retention clock, which also keeps
- * deliveries owned by the retry scheduler until they either converge or age out.
+ * deliveries owned by the retry scheduler until they either converge or age out. The SQL helpers
+ * additionally require the de-duplication window to be closed, so a purge can never reopen an
+ * active key and allow an unexpected resend.
  */
 @Service
 public class NotificationDeliveryPurgeScheduler {

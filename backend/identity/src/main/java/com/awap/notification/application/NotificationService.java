@@ -3,22 +3,23 @@ package com.awap.notification.application;
 import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
 import com.awap.engine.application.OutboxEventPublisher;
+import com.awap.notification.domain.DedupePolicy;
 import com.awap.notification.domain.NotificationChannel;
+import com.awap.notification.domain.NotificationDedupeKeyFactory;
 import com.awap.notification.domain.NotificationDelivery;
 import com.awap.notification.domain.NotificationRetryPolicy;
 import com.awap.notification.infrastructure.NotificationDeliveryRepository;
+import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Metrics;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.EnumMap;
-import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,12 +34,21 @@ import org.springframework.stereotype.Service;
  * deliveries, the tenant template is rendered per locale, and only the <b>first</b> attempt happens
  * here.
  *
+ * <p>De-duplication is time-boxed: the key is only unique while {@code dedupeExpiresAt} is active,
+ * so a repeat inside the window is suppressed (and counted) while a repeat after it creates a new
+ * delivery. The window and the per-template overrides come from {@link
+ * NotificationDedupeWindowResolver}; the business key is part of the SHA-256 material.
+ *
  * <p>A failure stores {@code RETRYING} plus {@code nextAttemptAt} and returns immediately; no
  * thread ever sleeps inside the consumer transaction. {@link NotificationRetryScheduler} performs
  * the remaining attempts outside Kafka.
  */
 @Service
 public class NotificationService {
+
+  public static final String SUPPRESSED_METRIC = "awap.notification.dedupe.suppressed";
+
+  static final String DEFAULT_EVENT_TYPE = "NOTIFICATION_REQUESTED";
 
   private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
 
@@ -52,6 +62,8 @@ public class NotificationService {
   private final long firstAttemptGraceMs;
   private final Clock clock;
   private final MeterRegistry meterRegistry;
+  private final NotificationDedupeKeyFactory dedupeKeyFactory;
+  private final NotificationDedupeWindowResolver dedupeWindowResolver;
 
   /** Test convenience: no persistence, default policy. */
   NotificationService(
@@ -76,12 +88,14 @@ public class NotificationService {
       NotificationTemplateRenderer renderer,
       OutboxEventPublisher outboxEventPublisher,
       NotificationDeliveryRepository deliveryRepository,
+      NotificationDedupeKeyFactory dedupeKeyFactory,
+      NotificationDedupeWindowResolver dedupeWindowResolver,
+      MeterRegistry meterRegistry,
       @Value("${awap.notification.retry-delays-ms:1000,5000,25000,120000,600000}")
           String retryDelays,
       @Value("${awap.notification.max-attempts:5}") int maxAttempts,
       @Value("${awap.notification.max-body-bytes:262144}") int maxBodyBytes,
-      @Value("${awap.notification.first-attempt-grace-ms:60000}") long firstAttemptGraceMs,
-      MeterRegistry meterRegistry) {
+      @Value("${awap.notification.first-attempt-grace-ms:60000}") long firstAttemptGraceMs) {
     this(
         channelAdapters,
         renderer,
@@ -91,7 +105,9 @@ public class NotificationService {
         maxBodyBytes,
         firstAttemptGraceMs,
         Clock.systemUTC(),
-        meterRegistry);
+        meterRegistry,
+        dedupeKeyFactory,
+        dedupeWindowResolver);
   }
 
   NotificationService(
@@ -125,6 +141,78 @@ public class NotificationService {
       long firstAttemptGraceMs,
       Clock clock,
       MeterRegistry meterRegistry) {
+    this(
+        channelAdapters,
+        renderer,
+        outboxEventPublisher,
+        deliveryRepository,
+        retryPolicy,
+        maxBodyBytes,
+        firstAttemptGraceMs,
+        clock,
+        meterRegistry,
+        new NotificationDedupeKeyFactory(),
+        new NotificationDedupeWindowResolver(new NotificationDedupeProperties(), renderer));
+  }
+
+  /** Backward-compatible constructor for the pre-scheduler retry tests. */
+  NotificationService(
+      List<NotificationChannelAdapter> channelAdapters,
+      NotificationTemplateRenderer renderer,
+      OutboxEventPublisher outboxEventPublisher,
+      NotificationDeliveryRepository deliveryRepository,
+      long[] retryDelaysMs,
+      Sleeper sleeper) {
+    this(
+        channelAdapters,
+        renderer,
+        outboxEventPublisher,
+        deliveryRepository,
+        retryDelaysMs,
+        sleeper,
+        new NotificationDedupeKeyFactory(),
+        new NotificationDedupeWindowResolver(new NotificationDedupeProperties(), renderer),
+        Metrics.globalRegistry,
+        Clock.systemUTC());
+  }
+
+  NotificationService(
+      List<NotificationChannelAdapter> channelAdapters,
+      NotificationTemplateRenderer renderer,
+      OutboxEventPublisher outboxEventPublisher,
+      NotificationDeliveryRepository deliveryRepository,
+      long[] retryDelaysMs,
+      Sleeper sleeper,
+      NotificationDedupeKeyFactory dedupeKeyFactory,
+      NotificationDedupeWindowResolver dedupeWindowResolver,
+      MeterRegistry meterRegistry,
+      Clock clock) {
+    this(
+        channelAdapters,
+        renderer,
+        outboxEventPublisher,
+        deliveryRepository,
+        new NotificationRetryPolicy(retryDelaysMs, NotificationRetryPolicy.DEFAULT_MAX_ATTEMPTS),
+        262_144,
+        60_000L,
+        clock,
+        meterRegistry,
+        dedupeKeyFactory,
+        dedupeWindowResolver);
+  }
+
+  NotificationService(
+      List<NotificationChannelAdapter> channelAdapters,
+      NotificationTemplateRenderer renderer,
+      OutboxEventPublisher outboxEventPublisher,
+      NotificationDeliveryRepository deliveryRepository,
+      NotificationRetryPolicy retryPolicy,
+      int maxBodyBytes,
+      long firstAttemptGraceMs,
+      Clock clock,
+      MeterRegistry meterRegistry,
+      NotificationDedupeKeyFactory dedupeKeyFactory,
+      NotificationDedupeWindowResolver dedupeWindowResolver) {
     this.renderer = renderer;
     this.outboxEventPublisher = outboxEventPublisher;
     this.deliveryRepository = deliveryRepository;
@@ -133,6 +221,8 @@ public class NotificationService {
     this.firstAttemptGraceMs = firstAttemptGraceMs;
     this.clock = clock;
     this.meterRegistry = meterRegistry;
+    this.dedupeKeyFactory = dedupeKeyFactory;
+    this.dedupeWindowResolver = dedupeWindowResolver;
     for (NotificationChannelAdapter adapter : channelAdapters) {
       adapters.put(adapter.channel(), adapter);
     }
@@ -144,14 +234,9 @@ public class NotificationService {
       NotificationChannel channel,
       String templateKey,
       String variablesJson) {
-    send(tenantId, recipient, channel, templateKey, "en", variablesJson, null);
+    send(tenantId, recipient, channel, templateKey, "en", variablesJson, null, null, null);
   }
 
-  /**
-   * Performs the first (and only) in-consumer attempt and returns fast. Retries are persisted, not
-   * slept on; the Kafka offset is committed only after this method returns, i.e. after the delivery
-   * row (and any failure schedule) is durable.
-   */
   public void send(
       UUID tenantId,
       String recipient,
@@ -160,6 +245,27 @@ public class NotificationService {
       String locale,
       String variablesJson,
       String dedupeKey) {
+    send(tenantId, recipient, channel, templateKey, locale, variablesJson, dedupeKey, null, null);
+  }
+
+  /**
+   * Performs the first (and only) in-consumer attempt and returns fast. Retries are persisted, not
+   * slept on; the Kafka offset is committed only after this method returns, i.e. after the delivery
+   * row (and any failure schedule) is durable.
+   *
+   * @param businessKey workflow instance / task / approval / form identity when available
+   * @param eventType produces the de-duplication policy; unknown values fail safe as transactional
+   */
+  public void send(
+      UUID tenantId,
+      String recipient,
+      NotificationChannel channel,
+      String templateKey,
+      String locale,
+      String variablesJson,
+      String dedupeKey,
+      String businessKey,
+      String eventType) {
     NotificationChannelAdapter adapter = adapters.get(channel);
     if (adapter == null) {
       throw new AwapException(
@@ -167,23 +273,49 @@ public class NotificationService {
           HttpStatus.BAD_REQUEST,
           "No adapter configured for channel " + channel + ".");
     }
+    DedupePolicy policy =
+        DedupePolicy.forEventType(eventType == null ? DEFAULT_EVENT_TYPE : eventType);
     String effectiveKey =
-        dedupeKey(dedupeKey, tenantId, channel, recipient, templateKey, variablesJson);
-    if (deliveryRepository != null
-        && deliveryRepository.findByTenantIdAndDedupeKey(tenantId, effectiveKey).isPresent()) {
-      // Any existing row is the system of record: SENT is a duplicate, PENDING/RETRYING is owned by
-      // the scheduler and FAILED is terminal. A re-delivered Kafka record must not send again.
-      log.info("Duplicate notification {} for tenant {} suppressed.", effectiveKey, tenantId);
-      return;
+        dedupeKeyFactory.build(
+            tenantId,
+            channel,
+            recipient,
+            templateKey,
+            policy,
+            businessKey,
+            variablesJson,
+            dedupeKey);
+    Instant now = clock.instant();
+    Instant dedupeExpiresAt = now.plusSeconds(dedupeWindowResolver.windowSeconds(templateKey));
+    if (deliveryRepository != null) {
+      Optional<NotificationDelivery> existing =
+          deliveryRepository.findByTenantIdAndDedupeKey(tenantId, effectiveKey);
+      if (existing.isPresent()) {
+        NotificationDelivery row = existing.get();
+        if (row.isDedupeActiveAt(now) || !row.isTerminal()) {
+          // An active window is the system of record, and a pending/retrying row is owned by the
+          // scheduler. A re-delivered Kafka record must not send again.
+          recordSuppressed(policy, templateKey, "existing");
+          log.info("Duplicate notification {} for tenant {} suppressed.", effectiveKey, tenantId);
+          return;
+        }
+      }
     }
 
-    Instant now = clock.instant();
     NotificationDelivery delivery =
         new NotificationDelivery(
-            tenantId, effectiveKey, channel, recipient, templateKey, locale, variablesJson);
+            tenantId,
+            effectiveKey,
+            channel,
+            recipient,
+            templateKey,
+            locale,
+            variablesJson,
+            businessKey,
+            dedupeExpiresAt);
     // Durable before any provider call: a crash cannot lose the delivery.
     delivery.scheduleFirstAttempt(now.plusMillis(firstAttemptGraceMs));
-    if (!persistNewDelivery(delivery)) {
+    if (!persistNewDelivery(delivery, policy, templateKey)) {
       return;
     }
 
@@ -307,7 +439,8 @@ public class NotificationService {
     log.warn("Notification {} failed permanently ({}): {}", delivery.getId(), reason, detail);
   }
 
-  private boolean persistNewDelivery(NotificationDelivery delivery) {
+  private boolean persistNewDelivery(
+      NotificationDelivery delivery, DedupePolicy policy, String templateKey) {
     if (deliveryRepository == null) {
       return true;
     }
@@ -317,6 +450,7 @@ public class NotificationService {
     } catch (DataIntegrityViolationException ex) {
       // A concurrent consumer inserted the same (tenant, dedupe_key); the unique constraint wins
       // and this delivery must not send a duplicate.
+      recordSuppressed(policy, templateKey, "constraint");
       log.info("Concurrent duplicate notification {} suppressed.", delivery.getDedupeKey());
       return false;
     }
@@ -328,36 +462,26 @@ public class NotificationService {
     }
   }
 
-  private String dedupeKey(
-      String explicit,
-      UUID tenantId,
-      NotificationChannel channel,
-      String recipient,
-      String templateKey,
-      String variablesJson) {
-    if (explicit != null && !explicit.isBlank()) {
-      return explicit;
-    }
-    String source =
-        tenantId
-            + "|"
-            + channel
-            + "|"
-            + recipient
-            + "|"
-            + templateKey
-            + "|"
-            + (variablesJson == null ? "" : variablesJson);
-    try {
-      MessageDigest digest = MessageDigest.getInstance("SHA-256");
-      return HexFormat.of().formatHex(digest.digest(source.getBytes(StandardCharsets.UTF_8)));
-    } catch (NoSuchAlgorithmException ex) {
-      throw new IllegalStateException("SHA-256 is not available", ex);
-    }
+  private void recordSuppressed(DedupePolicy policy, String templateKey, String reason) {
+    Counter.builder(SUPPRESSED_METRIC)
+        .description("Notifications suppressed by the active de-duplication window.")
+        .tag("policy", policy.name())
+        .tag("template", templateKey == null ? "unknown" : templateKey)
+        .tag("reason", reason)
+        .register(meterRegistry)
+        .increment();
   }
 
   private static String rootMessage(RuntimeException ex) {
     String message = ex.getMessage();
     return message == null || message.isBlank() ? ex.getClass().getSimpleName() : message;
+  }
+
+  /**
+   * Test seam kept for the legacy constructor; the retry scheduler never sleeps in the consumer.
+   */
+  @FunctionalInterface
+  interface Sleeper {
+    void sleep(long millis);
   }
 }

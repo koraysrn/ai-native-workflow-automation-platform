@@ -74,6 +74,12 @@ awap:
     max-body-bytes: ${NOTIFICATION_MAX_BODY_BYTES:262144}
     first-attempt-grace-ms: ${NOTIFICATION_FIRST_ATTEMPT_GRACE_MS:60000}
     retry-scheduler-enabled: ${NOTIFICATION_RETRY_SCHEDULER_ENABLED:true}
+    # Active de-duplication window in seconds; a repeat inside it is suppressed.
+    dedupe-window-seconds: ${NOTIFICATION_DEDUPE_WINDOW_SECONDS:3600}
+    # Optional per-template overrides, e.g.:
+    # dedupe-template-windows:
+    #   task-assigned: 300
+    # Unknown template keys fail startup.
   ai:
     # Fail-closed: the AI workflow node refuses to run until an operator enables it.
     node-enabled: ${AI_NODE_ENABLED:false}

@@ -261,20 +261,33 @@ class NotificationRetryClaimITest {
       Instant createdAt,
       Instant updatedAt,
       Instant nextAttemptAt) {
+    ensureTenant(tenantId);
     UUID id = UUID.randomUUID();
     admin.update(
         "INSERT INTO notification_deliveries"
             + " (id, tenant_id, dedupe_key, channel, recipient, template_key, status, attempts,"
-            + " created_at, updated_at, locale, next_attempt_at, version)"
-            + " VALUES (?, ?, ?, 'EMAIL', 'a@example.com', 'welcome', ?, 1, ?, ?, 'en', ?, 0)",
+            + " created_at, updated_at, locale, next_attempt_at, dedupe_expires_at, version)"
+            + " VALUES (?, ?, ?, 'EMAIL', 'a@example.com', 'welcome', ?, 1, ?, ?, 'en', ?, ?, 0)",
         id,
         tenantId,
         dedupeKey,
         status,
         OffsetDateTime.ofInstant(createdAt, ZoneOffset.UTC),
         OffsetDateTime.ofInstant(updatedAt, ZoneOffset.UTC),
-        nextAttemptAt == null ? null : OffsetDateTime.ofInstant(nextAttemptAt, ZoneOffset.UTC));
+        nextAttemptAt == null ? null : OffsetDateTime.ofInstant(nextAttemptAt, ZoneOffset.UTC),
+        OffsetDateTime.ofInstant(createdAt.plusSeconds(3_600L), ZoneOffset.UTC));
     return id;
+  }
+
+  /** The de-duplication trigger rejects deliveries for a tenant that does not exist. */
+  private static void ensureTenant(UUID tenantId) {
+    admin.update(
+        "INSERT INTO tenants (id, slug, name, plan, max_users, max_workflows,"
+            + " max_ai_calls_per_month, active, created_at, updated_at, deleted)"
+            + " VALUES (?, ?, 'IT', 'FREE', 10, 10, 100, true, now(), now(), false)"
+            + " ON CONFLICT (id) DO NOTHING",
+        tenantId,
+        "it-" + tenantId);
   }
 
   private static boolean exists(UUID id) {

@@ -38,7 +38,9 @@ DECLARE
 BEGIN
   DELETE FROM notification_deliveries
    WHERE read_at IS NOT NULL
-     AND read_at < p_cutoff;
+     AND read_at < p_cutoff
+     -- Never reopen a still-active de-duplication window: deleting the row would allow a resend.
+     AND (dedupe_expires_at IS NULL OR dedupe_expires_at < p_cutoff);
   GET DIAGNOSTICS removed = ROW_COUNT;
   RETURN removed;
 END;
@@ -55,7 +57,8 @@ DECLARE
 BEGIN
   DELETE FROM notification_deliveries
    WHERE read_at IS NULL
-     AND created_at < p_cutoff;
+     AND created_at < p_cutoff
+     AND (dedupe_expires_at IS NULL OR dedupe_expires_at < p_cutoff);
   GET DIAGNOSTICS removed = ROW_COUNT;
   RETURN removed;
 END;

@@ -2530,6 +2530,19 @@ components:
         createdAt:
           type: string
           format: date-time
+        businessKey:
+          type: string
+          nullable: true
+          description: >-
+            Business identity (workflow instance, task, approval or form id) used for
+            de-duplication, when the producer supplied one.
+        dedupeExpiresAt:
+          type: string
+          format: date-time
+          nullable: true
+          description: >-
+            End of the active de-duplication window. A repeat after this instant creates a
+            new delivery.
         read:
           type: boolean
           description: True when the notification has been acknowledged.

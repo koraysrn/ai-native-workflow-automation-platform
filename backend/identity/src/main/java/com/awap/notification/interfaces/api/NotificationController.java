@@ -112,6 +112,8 @@ public class NotificationController {
         delivery.getLastError(),
         delivery.getNextAttemptAt(),
         delivery.getCreatedAt(),
+        delivery.getBusinessKey(),
+        delivery.getDedupeExpiresAt(),
         delivery.isRead(),
         delivery.readAt().orElse(null));
   }
@@ -127,6 +129,8 @@ public class NotificationController {
       String lastError,
       Instant nextAttemptAt,
       Instant createdAt,
+      String businessKey,
+      Instant dedupeExpiresAt,
       boolean read,
       Instant readAt) {}
 

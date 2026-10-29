@@ -8,6 +8,7 @@ import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import jakarta.persistence.Version;
+import java.time.Duration;
 import java.time.Instant;
 import java.util.Optional;
 import java.util.UUID;
@@ -18,6 +19,11 @@ import java.util.UUID;
  *
  * <p>The row is written before the first provider call, so a consumer crash cannot lose the
  * delivery: the scheduler picks the row up again once {@code nextAttemptAt} passes.
+ *
+ * <p>Uniqueness is scoped to the active de-duplication window: the database trigger retires
+ * terminal rows once {@code dedupeExpiresAt} passes, and {@link #isDedupeActiveAt(Instant)}
+ * implements the same inclusive boundary in the application so a cached row cannot suppress a
+ * legitimate repeat.
  */
 @Entity
 @Table(
@@ -33,6 +39,8 @@ public class NotificationDelivery {
   public static final String SENT = "SENT";
   public static final String FAILED = "FAILED";
 
+  private static final long DEFAULT_DEDUPE_WINDOW_SECONDS = 3_600L;
+
   @Id
   @Column(nullable = false)
   private UUID id;
@@ -42,6 +50,16 @@ public class NotificationDelivery {
 
   @Column(name = "dedupe_key", nullable = false)
   private String dedupeKey;
+
+  /**
+   * Business identity (workflow instance / task / approval / form) when the producer supplied one.
+   */
+  @Column(name = "business_key", columnDefinition = "TEXT")
+  private String businessKey;
+
+  /** End of the active de-duplication window; the key is reusable strictly after this instant. */
+  @Column(name = "dedupe_expires_at", nullable = false)
+  private Instant dedupeExpiresAt;
 
   @Enumerated(EnumType.STRING)
   @Column(nullable = false)
@@ -103,7 +121,60 @@ public class NotificationDelivery {
       NotificationChannel channel,
       String recipient,
       String templateKey) {
-    this(tenantId, dedupeKey, channel, recipient, templateKey, "en", null);
+    this(
+        tenantId,
+        dedupeKey,
+        channel,
+        recipient,
+        templateKey,
+        "en",
+        null,
+        null,
+        Instant.now().plusSeconds(DEFAULT_DEDUPE_WINDOW_SECONDS));
+  }
+
+  /** Retry-scheduler constructor: locale and variables are captured for a stable re-render. */
+  public NotificationDelivery(
+      UUID tenantId,
+      String dedupeKey,
+      NotificationChannel channel,
+      String recipient,
+      String templateKey,
+      String locale,
+      String variablesJson) {
+    this(
+        tenantId,
+        dedupeKey,
+        channel,
+        recipient,
+        templateKey,
+        locale,
+        variablesJson,
+        null,
+        Instant.now().plusSeconds(DEFAULT_DEDUPE_WINDOW_SECONDS));
+  }
+
+  /** De-duplication constructor: caller decides the window and the business identity. */
+  public NotificationDelivery(
+      UUID tenantId,
+      String dedupeKey,
+      NotificationChannel channel,
+      String recipient,
+      String templateKey,
+      String businessKey,
+      Instant dedupeExpiresAt,
+      Instant createdAt) {
+    this(
+        tenantId,
+        dedupeKey,
+        channel,
+        recipient,
+        templateKey,
+        "en",
+        null,
+        businessKey,
+        dedupeExpiresAt,
+        createdAt);
   }
 
   public NotificationDelivery(
@@ -113,8 +184,33 @@ public class NotificationDelivery {
       String recipient,
       String templateKey,
       String locale,
-      String variablesJson) {
-    Instant now = Instant.now();
+      String variablesJson,
+      String businessKey,
+      Instant dedupeExpiresAt) {
+    this(
+        tenantId,
+        dedupeKey,
+        channel,
+        recipient,
+        templateKey,
+        locale,
+        variablesJson,
+        businessKey,
+        dedupeExpiresAt,
+        Instant.now());
+  }
+
+  private NotificationDelivery(
+      UUID tenantId,
+      String dedupeKey,
+      NotificationChannel channel,
+      String recipient,
+      String templateKey,
+      String locale,
+      String variablesJson,
+      String businessKey,
+      Instant dedupeExpiresAt,
+      Instant createdAt) {
     this.id = UUID.randomUUID();
     this.tenantId = tenantId;
     this.dedupeKey = dedupeKey;
@@ -123,10 +219,26 @@ public class NotificationDelivery {
     this.templateKey = templateKey;
     this.locale = locale == null || locale.isBlank() ? "en" : locale;
     this.variablesJson = variablesJson;
+    this.businessKey = businessKey;
+    this.dedupeExpiresAt = dedupeExpiresAt;
     this.status = PENDING;
     this.attempts = 0;
-    this.createdAt = now;
-    this.updatedAt = now;
+    this.createdAt = createdAt;
+    this.updatedAt = createdAt;
+  }
+
+  /** Active-window check; the TTL boundary itself is still inside the window. */
+  public boolean isDedupeActiveAt(Instant at) {
+    return dedupeExpiresAt != null && !at.isAfter(dedupeExpiresAt);
+  }
+
+  /** Remaining window; a rolled-back clock can make it larger but never negative. */
+  public Duration dedupeWindowRemaining(Instant at) {
+    if (dedupeExpiresAt == null) {
+      return Duration.ZERO;
+    }
+    Duration remaining = Duration.between(at, dedupeExpiresAt);
+    return remaining.isNegative() ? Duration.ZERO : remaining;
   }
 
   /**
@@ -147,6 +259,10 @@ public class NotificationDelivery {
     this.updatedAt = at;
   }
 
+  public void recordAttempt() {
+    recordAttempt(Instant.now());
+  }
+
   public void markSent(Instant at) {
     this.status = SENT;
     this.lastError = null;
@@ -154,6 +270,10 @@ public class NotificationDelivery {
     this.leaseUntil = null;
     this.leaseToken = null;
     this.updatedAt = at;
+  }
+
+  public void markSent() {
+    markSent(Instant.now());
   }
 
   /** Retains the row for a later scheduler attempt. */
@@ -164,6 +284,20 @@ public class NotificationDelivery {
     this.leaseUntil = null;
     this.leaseToken = null;
     this.updatedAt = at;
+  }
+
+  /** Terminal failure: no further attempts, the row stays for audit until retention purges it. */
+  public void markFailedPermanently(String error, Instant at) {
+    this.status = FAILED;
+    this.lastError = error;
+    this.nextAttemptAt = null;
+    this.leaseUntil = null;
+    this.leaseToken = null;
+    this.updatedAt = at;
+  }
+
+  public void markFailed(String error) {
+    markFailedPermanently(error, Instant.now());
   }
 
   /**
@@ -199,16 +333,6 @@ public class NotificationDelivery {
     return readAt != null;
   }
 
-  /** Terminal failure: no further attempts, the row stays for audit until retention purges it. */
-  public void markFailedPermanently(String error, Instant at) {
-    this.status = FAILED;
-    this.lastError = error;
-    this.nextAttemptAt = null;
-    this.leaseUntil = null;
-    this.leaseToken = null;
-    this.updatedAt = at;
-  }
-
   public boolean isSent() {
     return SENT.equals(status);
   }
@@ -227,6 +351,14 @@ public class NotificationDelivery {
 
   public String getDedupeKey() {
     return dedupeKey;
+  }
+
+  public String getBusinessKey() {
+    return businessKey;
+  }
+
+  public Instant getDedupeExpiresAt() {
+    return dedupeExpiresAt;
   }
 
   public NotificationChannel getChannel() {
