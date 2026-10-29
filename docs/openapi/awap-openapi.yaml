@@ -1272,8 +1272,11 @@ paths:
   /api/v1/files:
     post:
       operationId: createFileUpload
-      summary: Create a file upload slot
-      description: Creates a presigned MinIO upload slot for a file.
+      summary: Create a quarantined file upload slot
+      description: >-
+        Creates a short-lived (<= 5 minutes) presigned PUT that targets the `awap-quarantine`
+        bucket only. Files are promoted to `awap-files` after ClamAV clears them. Allowed
+        extensions: pdf, docx, xlsx, pptx, png, jpg, jpeg, txt; maximum size 500 MB.
       tags: [Files]
       requestBody:
         required: true
@@ -1289,6 +1292,8 @@ paths:
                   type: string
                 size:
                   type: integer
+                  minimum: 1
+                  maximum: 524288000
       responses:
         "201":
           description: Upload slot created.
@@ -1302,12 +1307,32 @@ paths:
                     format: uuid
                   uploadUrl:
                     type: string
+        "400":
+          description: Empty file or invalid request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "413":
+          description: File exceeds the 500 MB limit.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "415":
+          description: File extension is not supported.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
 
   /api/v1/files/{id}:
     get:
       operationId: getFileDownloadUrl
       summary: Get a file download URL
-      description: Returns a presigned download URL for an uploaded file.
+      description: >-
+        Returns a presigned GET on `awap-files` only when the file is PROMOTED. INFECTED returns
+        403, SCAN_FAILED returns 503, and files still quarantined/scanning return 409.
       tags: [Files]
       parameters:
         - name: id
@@ -1326,6 +1351,30 @@ paths:
                 properties:
                   downloadUrl:
                     type: string
+        "403":
+          description: The file was rejected by antivirus scanning.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "404":
+          description: File not found for this tenant.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "409":
+          description: The file is still quarantined or being scanned.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+        "503":
+          description: The antivirus scan failed; promotion has not happened.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
 
   /api/v1/workflow-instances/{id}/recover:
     post:

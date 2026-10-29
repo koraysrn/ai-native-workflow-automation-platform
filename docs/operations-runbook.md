@@ -349,3 +349,53 @@ the writer so future logs are complete.
 Replay is additive: revert the API/consumer and stop calling the endpoint. `replay_runs` is
 append-only and can stay in place (it has no foreign keys into the engine tables); drop it only
 through a new Flyway migration, never by hand.
+
+## O10 — Quarantine uploads, promotion and infected files (#118)
+
+Uploads never land in `awap-files` directly. The API issues a presigned PUT to `awap-quarantine`
+only, with a maximum TTL of 5 minutes. `FileScanScheduler` streams the object to ClamAV with an
+8 KB buffer and walks the `FileRecord` state machine:
+
+```text
+QUARANTINED -> SCANNING -> CLEAN -> PROMOTED
+                     \-> INFECTED (terminal)
+                     \-> SCAN_FAILED -> SCANNING (retry)
+```
+
+Download is a presigned GET on `awap-files` **only** for `PROMOTED`. INFECTED returns 403,
+`SCAN_FAILED` returns 503, and `QUARANTINED`/`SCANNING`/`CLEAN` return 409.
+
+### Infected file handling
+
+1. Confirm the alert `AwapFileInfected` in Prometheus or inspect
+   `awap_file_infected_total` / the `file_scan_audit` table (`event = 'INFECTED'`).
+2. The default policy (`FILE_INFECTED_POLICY=DELETE`) deletes the quarantine object. If the policy
+   is `RETAIN`, the object stays in `awap-quarantine` under `tenantId/fileId/name` for forensics;
+   never copy it to `awap-files`.
+3. The file record is terminal `INFECTED`; it is never promoted, and a new upload of the same
+   content is scanned again and rejected consistently.
+4. To purge a retained sample manually (object-lock governance mode):
+   `mc rm --bypass-governance --recursive awap/awap-quarantine/<tenantId>/<fileId>/`
+5. Record the incident and do not disable scanning (`CLAMAV_ENABLED`) to "unblock" a file.
+
+### Promotion failure recovery
+
+- `AwapFilePromoteFailures` fires when `awap_file_promote_fail_total` increases.
+- A failed copy leaves the record `CLEAN` and the quarantine source intact; the scheduler retries
+  on the next tick. A copy that succeeded but whose source delete failed is also retried: the
+  deterministic destination key `tenantId/fileId/name` makes the repeated copy idempotent and
+  exactly one promoted object exists.
+- If the source disappeared but the promoted object exists, the scheduler repairs the record
+  (`recovered promotion` audit row) instead of losing it.
+- Verify MinIO health (`/minio/health/live`), then inspect:
+  `SELECT id, status, scan_attempts, last_scan_error FROM file_records WHERE status IN ('CLEAN','SCAN_FAILED');`
+- If a `SCAN_FAILED` record reached `FILE_MAX_SCAN_ATTEMPTS`, fix clamd and re-upload the file;
+  the record stays fail-closed (download 503) rather than being served unscanned.
+
+### Bucket configuration
+
+`MinioFileObjectStore` provisions `awap-quarantine` with object lock (governance retention),
+versioning and a lifecycle rule (expire quarantine objects after
+`FILE_QUARANTINE_RETENTION_DAYS`, abort incomplete multipart uploads after one day). `awap-files`
+is versioned with `FILE_PROMOTED_RETENTION_DAYS`. Existing buckets are not recreated; object lock
+cannot be enabled in place, so a pre-existing quarantine bucket must be recreated by ops.

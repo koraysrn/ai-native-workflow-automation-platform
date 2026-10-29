@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 
 import com.awap.file.domain.FileScanStatus;
+import java.io.ByteArrayInputStream;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.ApplicationArguments;
 
@@ -14,7 +15,8 @@ class ClamAvSecurityTest {
   @Test
   void disabledScannerMarksFilesClean() {
     DisabledClamAvScanner scanner = new DisabledClamAvScanner();
-    assertThat(scanner.scan("bucket", "object")).isEqualTo(FileScanStatus.CLEAN);
+    assertThat(scanner.scan(new ByteArrayInputStream(new byte[] {1})))
+        .isEqualTo(FileScanStatus.CLEAN);
   }
 
   @Test

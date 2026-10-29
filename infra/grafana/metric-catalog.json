@@ -90,6 +90,18 @@
       "source": "ReplayMetrics (awap.replay.duration timer)"
     },
     {
+      "name": "awap_file_infected_total",
+      "source": "FileScanMetrics (awap.file.infected counter)"
+    },
+    {
+      "name": "awap_file_promote_fail_total",
+      "source": "FileScanMetrics (awap.file.promote.fail counter)"
+    },
+    {
+      "name": "awap_file_scan_duration_seconds",
+      "source": "FileScanMetrics (awap.file.scan.duration timer)"
+    },
+    {
       "name": "http_server_requests_seconds_count",
       "source": "Spring Boot HTTP server observations"
     },

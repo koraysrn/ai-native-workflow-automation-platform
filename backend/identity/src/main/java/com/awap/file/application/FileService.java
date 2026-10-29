@@ -4,53 +4,56 @@ import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
 import com.awap.file.domain.FileRecord;
 import com.awap.file.domain.FileScanStatus;
+import com.awap.file.domain.FileStorageException;
 import com.awap.file.infrastructure.FileRecordRepository;
-import io.minio.BucketExistsArgs;
-import io.minio.GetPresignedObjectUrlArgs;
-import io.minio.MakeBucketArgs;
-import io.minio.MinioClient;
-import io.minio.SetBucketVersioningArgs;
-import io.minio.http.Method;
-import io.minio.messages.VersioningConfiguration;
+import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** File use cases: create an upload slot (presigned PUT) and obtain a download URL. */
+/**
+ * File use cases: create a quarantine upload slot (presigned PUT) and obtain a download URL for a
+ * file that has been scanned and promoted.
+ */
 @Service
 public class FileService {
 
-  private static final String BUCKET = "awap-files";
-  private static final long MAX_FILE_SIZE_BYTES = 500L * 1024 * 1024;
-  private static final Set<String> ALLOWED_EXTENSIONS =
-      Set.of("pdf", "docx", "xlsx", "pptx", "png", "jpg", "jpeg", "txt");
-
   private final FileRecordRepository repository;
-  private final MinioClient minioClient;
-  private final ClamAvScanner clamAvScanner;
+  private final FileObjectStore objectStore;
+  private final FileStorageProperties properties;
 
   public FileService(
-      FileRecordRepository repository, MinioClient minioClient, ClamAvScanner clamAvScanner) {
+      FileRecordRepository repository,
+      FileObjectStore objectStore,
+      FileStorageProperties properties) {
     this.repository = repository;
-    this.minioClient = minioClient;
-    this.clamAvScanner = clamAvScanner;
+    this.objectStore = objectStore;
+    this.properties = properties;
   }
 
+  /** Creates a presigned PUT slot that can only target the quarantine bucket. */
   @Transactional
   public UploadSlot createUpload(UUID tenantId, String name, String contentType, long size) {
-    ensureBucket();
+    validateName(name);
     validateSize(size);
     validateFormat(name);
-    String objectKey = tenantId + "/" + UUID.randomUUID() + "-" + sanitize(name);
-    FileRecord record = new FileRecord(tenantId, name, contentType, size, BUCKET, objectKey);
+    ensureBuckets();
+
+    UUID fileId = UUID.randomUUID();
+    String objectKey = objectKey(tenantId, fileId, name);
+    FileRecord record =
+        new FileRecord(
+            fileId, tenantId, name, contentType, size, properties.quarantineBucket(), objectKey);
     repository.save(record);
-    String uploadUrl = presignedUrl(objectKey, Method.PUT);
+    String uploadUrl =
+        objectStore.presignedPut(properties.quarantineBucket(), objectKey, properties.presignTtl());
     return new UploadSlot(record.getId(), uploadUrl);
   }
 
+  /** Issues a presigned GET only when the file reached PROMOTED. */
+  @Transactional(readOnly = true)
   public String downloadUrl(UUID tenantId, UUID id) {
     FileRecord record =
         repository
@@ -58,30 +61,46 @@ public class FileService {
             .orElseThrow(
                 () ->
                     new AwapException(
-                        ErrorCode.RESOURCE_NOT_FOUND, HttpStatus.NOT_FOUND, "File not found."));
+                        ErrorCode.FILE_NOT_FOUND, HttpStatus.NOT_FOUND, "File not found."));
 
-    if (record.getStatus() == FileScanStatus.PENDING) {
-      FileScanStatus result = clamAvScanner.scan(record.getBucket(), record.getObjectKey());
-      record.markScanResult(result);
-    }
-    if (record.getStatus() == FileScanStatus.INFECTED) {
+    FileScanStatus status = record.getStatus();
+    if (status == FileScanStatus.INFECTED) {
       throw new AwapException(
-          ErrorCode.FORBIDDEN, HttpStatus.FORBIDDEN, "File was rejected by antivirus scanning.");
+          ErrorCode.FILE_SCAN_REJECTED,
+          HttpStatus.FORBIDDEN,
+          "File was rejected by antivirus scanning.");
     }
-    return presignedUrl(record.getObjectKey(), Method.GET);
+    if (status == FileScanStatus.SCAN_FAILED) {
+      throw new AwapException(
+          ErrorCode.FILE_SCAN_FAILED,
+          HttpStatus.SERVICE_UNAVAILABLE,
+          "The antivirus scan failed; the file is not available.");
+    }
+    if (status != FileScanStatus.PROMOTED) {
+      throw new AwapException(
+          ErrorCode.FILE_SCAN_PENDING,
+          HttpStatus.CONFLICT,
+          "The file is still being scanned and cannot be downloaded.");
+    }
+
+    String bucket =
+        record.getPromotedBucket() == null
+            ? properties.promotedBucket()
+            : record.getPromotedBucket();
+    String key =
+        record.getPromotedObjectKey() == null
+            ? record.getObjectKey()
+            : record.getPromotedObjectKey();
+    return objectStore.presignedGet(bucket, key, properties.presignTtl());
   }
 
-  private void ensureBucket() {
+  private void ensureBuckets() {
     try {
-      if (!minioClient.bucketExists(BucketExistsArgs.builder().bucket(BUCKET).build())) {
-        minioClient.makeBucket(MakeBucketArgs.builder().bucket(BUCKET).build());
-      }
-      minioClient.setBucketVersioning(
-          SetBucketVersioningArgs.builder()
-              .bucket(BUCKET)
-              .config(new VersioningConfiguration(VersioningConfiguration.Status.ENABLED, null))
-              .build());
-    } catch (Exception ex) {
+      objectStore.ensureBucket(
+          properties.quarantineBucket(), true, properties.objectLockRetentionDays());
+      objectStore.ensureBucket(
+          properties.promotedBucket(), false, properties.promotedRetentionDays());
+    } catch (FileStorageException ex) {
       throw new AwapException(
           ErrorCode.GENERIC_INTERNAL_ERROR,
           HttpStatus.INTERNAL_SERVER_ERROR,
@@ -89,32 +108,26 @@ public class FileService {
     }
   }
 
-  private String presignedUrl(String objectKey, Method method) {
-    try {
-      return minioClient.getPresignedObjectUrl(
-          GetPresignedObjectUrlArgs.builder()
-              .method(method)
-              .bucket(BUCKET)
-              .object(objectKey)
-              .expiry(15, TimeUnit.MINUTES)
-              .build());
-    } catch (Exception ex) {
+  private void validateName(String name) {
+    if (name == null || name.isBlank()) {
       throw new AwapException(
-          ErrorCode.GENERIC_INTERNAL_ERROR,
-          HttpStatus.INTERNAL_SERVER_ERROR,
-          "Could not generate presigned URL.");
+          ErrorCode.VALIDATION_FAILED, HttpStatus.BAD_REQUEST, "File name is required.");
     }
   }
 
   private void validateSize(long size) {
-    if (size > MAX_FILE_SIZE_BYTES) {
+    if (size <= 0) {
+      throw new AwapException(
+          ErrorCode.FILE_EMPTY, HttpStatus.BAD_REQUEST, "File must not be empty.");
+    }
+    if (size > properties.maxSizeBytes()) {
       throw new AwapException(
           ErrorCode.FILE_TOO_LARGE, HttpStatus.PAYLOAD_TOO_LARGE, "File exceeds the 500 MB limit.");
     }
   }
 
   private void validateFormat(String name) {
-    if (!ALLOWED_EXTENSIONS.contains(extensionOf(name))) {
+    if (!properties.allowedExtensions().contains(extensionOf(name))) {
       throw new AwapException(
           ErrorCode.FILE_FORMAT_UNSUPPORTED,
           HttpStatus.UNSUPPORTED_MEDIA_TYPE,
@@ -127,11 +140,30 @@ public class FileService {
       return "";
     }
     int dot = name.lastIndexOf('.');
-    return dot >= 0 && dot < name.length() - 1 ? name.substring(dot + 1).toLowerCase() : "";
+    return dot >= 0 && dot < name.length() - 1
+        ? name.substring(dot + 1).toLowerCase(Locale.ROOT)
+        : "";
   }
 
-  private String sanitize(String name) {
-    return name == null ? "file" : name.replaceAll("[^a-zA-Z0-9._-]", "_");
+  static String objectKey(UUID tenantId, UUID fileId, String name) {
+    return tenantId + "/" + fileId + "/" + sanitize(name);
+  }
+
+  /** Produces a single path segment: no separators, no {@code ..} traversal sequences. */
+  static String sanitize(String name) {
+    if (name == null || name.isBlank()) {
+      return "file";
+    }
+    String normalized = name.replace('\\', '/');
+    String base = normalized.substring(normalized.lastIndexOf('/') + 1);
+    base = base.replaceAll("[^A-Za-z0-9._-]", "_");
+    base = base.replaceAll("\\.{2,}", "_");
+    base = base.replaceAll("^[._]+", "_");
+    return base.isBlank() ? "file" : base;
+  }
+
+  static Set<String> defaultAllowedExtensions() {
+    return Set.of("pdf", "docx", "xlsx", "pptx", "png", "jpg", "jpeg", "txt");
   }
 
   /** Presigned upload slot returned to the client. */
