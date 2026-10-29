@@ -2,13 +2,16 @@ package com.awap.engine.interfaces.api;
 
 import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
+import com.awap.engine.application.ReplayService;
 import com.awap.engine.application.WorkflowEngineService;
 import com.awap.engine.interfaces.dto.ExecutionLogResponse;
+import com.awap.engine.interfaces.dto.ReplayReport;
 import com.awap.engine.interfaces.dto.StartWorkflowRequest;
 import com.awap.engine.interfaces.dto.WorkflowInstanceResponse;
 import com.awap.identity.infrastructure.security.TenantContext;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -26,9 +29,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class WorkflowInstanceController {
 
   private final WorkflowEngineService engineService;
+  private final ReplayService replayService;
 
-  public WorkflowInstanceController(WorkflowEngineService engineService) {
+  public WorkflowInstanceController(
+      WorkflowEngineService engineService, ReplayService replayService) {
     this.engineService = engineService;
+    this.replayService = replayService;
   }
 
   @PostMapping
@@ -80,10 +86,20 @@ public class WorkflowInstanceController {
     return ResponseEntity.ok(engineService.retry(currentTenantId(), id));
   }
 
+  /**
+   * Deterministic replay. {@code dryRun=true} returns the projection report and writes nothing but
+   * the audit row; without {@code dryRun} the reference replay runs after the projection matched.
+   */
+  @PostMapping(value = "/{id}/replay", params = "dryRun=true")
+  @PreAuthorize("hasAuthority('INSTANCE_MANAGE')")
+  public ResponseEntity<ReplayReport> replayDryRun(@PathVariable UUID id) {
+    return ResponseEntity.ok(replayService.dryRun(currentTenantId(), id, currentUserId()));
+  }
+
   @PostMapping("/{id}/replay")
   @PreAuthorize("hasAuthority('INSTANCE_MANAGE')")
   public ResponseEntity<WorkflowInstanceResponse> replay(@PathVariable UUID id) {
-    return ResponseEntity.ok(engineService.replay(currentTenantId(), id));
+    return ResponseEntity.ok(replayService.replay(currentTenantId(), id, currentUserId()));
   }
 
   @PostMapping("/{id}/recover")
@@ -128,5 +144,9 @@ public class WorkflowInstanceController {
                     ErrorCode.UNAUTHORIZED,
                     HttpStatus.UNAUTHORIZED,
                     "Authentication is required."));
+  }
+
+  private Optional<UUID> currentUserId() {
+    return TenantContext.current().map(TenantContext.Context::userId);
   }
 }

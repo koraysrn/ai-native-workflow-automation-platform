@@ -1,12 +1,14 @@
 package com.awap.engine.infrastructure;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.kafka.core.ConsumerFactory;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.ConcurrentMessageListenerContainer;
 import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.MessageListener;
@@ -59,5 +61,18 @@ class KafkaConsumerConfigTest {
       container.stop();
     }
     assertThat(container.isRunning()).isFalse();
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void commitsTheOffsetOnlyPerRecordAfterTheListenerReturns() {
+    KafkaConsumerConfig config = new KafkaConsumerConfig();
+
+    var factory =
+        config.kafkaListenerContainerFactory(
+            mock(ConsumerFactory.class), mock(KafkaTemplate.class));
+
+    assertThat(factory.getContainerProperties().getAckMode())
+        .isEqualTo(ContainerProperties.AckMode.RECORD);
   }
 }
