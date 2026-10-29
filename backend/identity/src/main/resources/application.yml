@@ -50,6 +50,22 @@ spring:
 awap:
   kafka:
     enabled: ${KAFKA_ENABLED:false}
+    # Issue #123: dual-consume the legacy awap.dlq topic for one release. Older deployments may
+    # still publish there; set KAFKA_LEGACY_DLQ_ENABLED=false only after the deprecation window
+    # (see docs/operations-runbook.md O7).
+    legacy-dlq-enabled: ${KAFKA_LEGACY_DLQ_ENABLED:true}
+    legacy-dlq-topic: ${KAFKA_LEGACY_DLQ_TOPIC:awap.dlq}
+    # Anchored pattern: per-topic *.dlq only. The legacy topic is appended by the flag above, so
+    # disabling the flag really stops consuming awap.dlq. Unrelated topics such as
+    # not-a-dlq-topic never match.
+    dlq-topic-pattern: '${KAFKA_DLQ_TOPIC_PATTERN:^(?!awap\.dlq$)[A-Za-z0-9._-]+\.dlq$}'
+    dlq-group-id: ${KAFKA_DLQ_GROUP_ID:awap-dlq}
+    # Bounded metric tag values. Topics not listed here are folded into "other" so a malicious
+    # producer cannot create unbounded Prometheus series.
+    dlq-known-topics: ${KAFKA_DLQ_KNOWN_TOPICS:workflow.task.events,workflow.instance.events,workflow.subprocess.events,analytics.events,document.events,notification.send,notification.requested.events}
+    dlq-quarantine-path: ${DLQ_QUARANTINE_PATH:target/dlq-quarantine/legacy-dlq-quarantine.jsonl}
+    # Bounded poll: a large DLQ backlog is drained in chunks instead of blocking the listener.
+    max-poll-records: ${KAFKA_MAX_POLL_RECORDS:50}
   outbox:
     retention-days: ${OUTBOX_RETENTION_DAYS:7}
     archive-path: ${OUTBOX_ARCHIVE_PATH:target/outbox-archive/outbox.jsonl}
