@@ -1,7 +1,10 @@
 package com.awap.engine.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.awap.common.api.AwapException;
+import com.awap.common.api.ErrorCode;
 import com.awap.workflow.domain.NodeDefinition;
 import com.awap.workflow.domain.NodeType;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -9,6 +12,7 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 
 class NodeConfigReaderTest {
 
@@ -96,6 +100,36 @@ class NodeConfigReaderTest {
         .isEqualTo("00000000-0000-0000-0000-000000000001");
     assertThat(reader.readSubProcessVersion(configured)).contains(2);
     assertThat(reader.readExpression(configured)).contains("#amount > 10");
+  }
+
+  @Test
+  void readSubProcessVersionRejectsNonPositiveValues() {
+    assertInvalidVersion("{\"version\":0}", "0");
+    assertInvalidVersion("{\"version\":-1}", "-1");
+  }
+
+  @Test
+  void readSubProcessVersionRejectsNonNumericValues() {
+    assertInvalidVersion("{\"version\":\"latest\"}", "latest");
+    assertInvalidVersion("{\"version\":1.5}", "1.5");
+    assertInvalidVersion("{\"version\":\"\"}", "");
+    assertInvalidVersion("{\"version\":{}}", "{}");
+  }
+
+  @Test
+  void readSubProcessVersionAcceptsNumericStrings() {
+    assertThat(reader.readSubProcessVersion(node("{\"version\":\"3\"}"))).contains(3);
+  }
+
+  private void assertInvalidVersion(String configJson, String rawValue) {
+    assertThatThrownBy(() -> reader.readSubProcessVersion(node(configJson)))
+        .isInstanceOfSatisfying(
+            AwapException.class,
+            ex -> {
+              assertThat(ex.errorCode()).isEqualTo(ErrorCode.WORKFLOW_VERSION_INVALID);
+              assertThat(ex.status()).isEqualTo(HttpStatus.BAD_REQUEST);
+              assertThat(ex.getMessage()).contains(rawValue);
+            });
   }
 
   @Test
