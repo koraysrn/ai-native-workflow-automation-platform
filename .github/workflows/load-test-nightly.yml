@@ -4,14 +4,43 @@ on:
   schedule:
     - cron: "0 3 * * *"
   workflow_dispatch:
+  # Low-VU smoke on PRs that change the load suite (issue #129).
+  pull_request:
+    paths:
+      - "load-test/**"
+      - ".github/workflows/load-test-nightly.yml"
 
 permissions:
   contents: read
 
 jobs:
-  load-test:
-    name: Multi-tenant concurrency load test
+  static:
+    name: Load-test static checks
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Scenario and retry-model unit tests
+        run: node --test "load-test/test/*.test.mjs"
+      - name: Validate the k6 script bundles
+        run: >-
+          npx --yes esbuild@0.25.0 load-test/k6/awap-load-test.js
+          --bundle --external:k6 --external:k6/*
+          --outfile=load-test/k6/dist/awap-load-test.bundle.js
+      - name: Remove the bundle
+        if: always()
+        run: rm -rf load-test/k6/dist
+
+  load-test:
+    name: k6 ${{ github.event_name == 'pull_request' && 'smoke' || 'full' }} run
+    needs: static
+    # The PR smoke run boots the full Compose stack; it is opt-in until the stack boot is stable
+    # in CI (set the LOAD_TEST_SMOKE_ENABLED repository variable). Static checks always run.
+    if: github.event_name != 'pull_request' || vars.LOAD_TEST_SMOKE_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
 
@@ -29,25 +58,76 @@ jobs:
           done
           echo "Backend did not become healthy" && exit 1
 
-      - name: Seed tenants
+      - name: Start the fake webhook target
+        run: |
+          FAILURE_RATE=0.3 FAILURE_STATUS=500 LATENCY_MS=25 PORT=9099 \
+            node load-test/fake-webhook.mjs > load-test/fake-webhook.log 2>&1 &
+          for i in $(seq 1 20); do
+            if curl -fsS http://localhost:9099/health; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat load-test/fake-webhook.log
+          exit 1
+
+      - name: Seed tenants and export k6 variables
         run: node load-test/seed.mjs
         env:
           API_BASE: http://localhost:8080
+          LOAD_TEST_SUFFIX: ${{ github.run_id }}-${{ github.run_attempt }}
 
-      - name: Run k6 load test
+      - name: Smoke run (PRs only, low VUs)
+        if: github.event_name == 'pull_request'
         uses: grafana/k6-action@v0.3.1
         with:
-          path: load-test/k6/awap-load-test.js
+          filename: load-test/k6/awap-load-test.js
           cloud: false
+          flags: --summary-export=load-test/results/smoke-summary.json
         env:
           API_BASE: http://localhost:8080
+          WEBHOOK_TARGET: http://localhost:9099/webhook
+          K6_SMOKE: "1"
+          TENANT_ID: ${{ env.TENANT_ID }}
+          ACCESS_TOKEN: ${{ env.ACCESS_TOKEN }}
+          WORKFLOW_DEFINITION_ID: ${{ env.WORKFLOW_DEFINITION_ID }}
+
+      - name: Full run (nightly and manual)
+        if: github.event_name != 'pull_request'
+        uses: grafana/k6-action@v0.3.1
+        with:
+          filename: load-test/k6/awap-load-test.js
+          cloud: false
+          flags: --summary-export=load-test/results/full-summary.json
+        env:
+          API_BASE: http://localhost:8080
+          WEBHOOK_TARGET: http://localhost:9099/webhook
+          TENANT_ID: ${{ env.TENANT_ID }}
+          ACCESS_TOKEN: ${{ env.ACCESS_TOKEN }}
+          WORKFLOW_DEFINITION_ID: ${{ env.WORKFLOW_DEFINITION_ID }}
 
       - name: Verify outbox partition pruning (EXPLAIN)
+        if: github.event_name != 'pull_request'
         run: |
-          PLAN=$(docker compose exec -T postgres psql -U awap -d awap -f /dev/stdin < ../load-test/k6/explain-outbox-partition.sql 2>&1)
+          PLAN=$(docker compose -f infra/docker-compose.yml exec -T postgres \
+            psql -U awap -d awap -f /dev/stdin < load-test/k6/explain-outbox-partition.sql 2>&1)
           printf '%s\n' "$PLAN"
           printf '%s\n' "$PLAN" | grep -q 'Scan' || {
             echo "EXPLAIN produced no scan plan; partition check failed" >&2
             exit 1
           }
-        working-directory: infra
+
+      - name: Upload k6 summary and webhook log
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: load-test-results
+          path: |
+            load-test/results
+            load-test/seed.json
+            load-test/fake-webhook.log
+          retention-days: 14
+
+      - name: Stop the stack
+        if: always()
+        run: docker compose -f infra/docker-compose.yml down -v

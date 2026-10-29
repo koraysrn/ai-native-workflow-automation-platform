@@ -179,15 +179,17 @@ class NotificationReadStateITest {
   @Test
   void largeUnreadCountUsesThePartialIndex() throws Exception {
     UUID tenant = UUID.randomUUID();
+    ensureTenant(tenant);
     try (Connection admin = adminConnection();
         Statement stmt = admin.createStatement()) {
       stmt.execute(
           "INSERT INTO notification_deliveries"
               + " (id, tenant_id, dedupe_key, channel, recipient, template_key, status, attempts,"
-              + " created_at, updated_at)"
+              + " created_at, updated_at, dedupe_expires_at)"
               + " SELECT gen_random_uuid(), '"
               + tenant
-              + "', 'bulk-' || g, 'WEB', 'bulk@example.com', 'welcome', 'SENT', 1, now(), now()"
+              + "', 'bulk-' || g, 'WEB', 'bulk@example.com', 'welcome', 'SENT', 1,"
+              + " now(), now(), now() + INTERVAL '1 hour'"
               + " FROM generate_series(1, 2000) AS g");
     }
 
@@ -276,14 +278,15 @@ class NotificationReadStateITest {
 
   private static UUID insertDelivery(UUID tenant, Instant createdAt, Instant readAt)
       throws Exception {
+    ensureTenant(tenant);
     UUID id = UUID.randomUUID();
     try (Connection admin = adminConnection();
         PreparedStatement statement =
             admin.prepareStatement(
                 "INSERT INTO notification_deliveries"
                     + " (id, tenant_id, dedupe_key, channel, recipient, template_key, status,"
-                    + " attempts, created_at, updated_at, read_at)"
-                    + " VALUES (?, ?, ?, 'WEB', 'user@example.com', 'welcome', 'SENT', 1, ?, ?, ?)")) {
+                    + " attempts, created_at, updated_at, read_at, dedupe_expires_at)"
+                    + " VALUES (?, ?, ?, 'WEB', 'user@example.com', 'welcome', 'SENT', 1, ?, ?, ?, ?)")) {
       statement.setObject(1, id);
       statement.setObject(2, tenant);
       statement.setString(3, "dedupe-" + id);
@@ -291,9 +294,26 @@ class NotificationReadStateITest {
       statement.setObject(5, OffsetDateTime.ofInstant(createdAt, ZoneOffset.UTC));
       statement.setObject(
           6, readAt == null ? null : OffsetDateTime.ofInstant(readAt, ZoneOffset.UTC));
+      statement.setObject(
+          7, OffsetDateTime.ofInstant(createdAt.plusSeconds(3_600L), ZoneOffset.UTC));
       statement.executeUpdate();
     }
     return id;
+  }
+
+  /** The de-duplication trigger rejects deliveries for a tenant that does not exist. */
+  private static void ensureTenant(UUID tenant) throws Exception {
+    try (Connection admin = adminConnection();
+        PreparedStatement statement =
+            admin.prepareStatement(
+                "INSERT INTO tenants (id, slug, name, plan, max_users, max_workflows,"
+                    + " max_ai_calls_per_month, active, created_at, updated_at, deleted)"
+                    + " VALUES (?, ?, 'IT', 'FREE', 10, 10, 100, true, now(), now(), false)"
+                    + " ON CONFLICT (id) DO NOTHING")) {
+      statement.setObject(1, tenant);
+      statement.setString(2, "it-" + tenant);
+      statement.executeUpdate();
+    }
   }
 
   private static Connection adminConnection() throws Exception {

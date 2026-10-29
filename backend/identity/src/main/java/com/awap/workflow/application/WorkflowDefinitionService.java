@@ -101,6 +101,75 @@ public class WorkflowDefinitionService {
     return definition;
   }
 
+  /**
+   * Resolves a specifically requested version snapshot. Only PUBLISHED, non-archived versions owned
+   * by the tenant are selectable, which lets long-running SUB_PROCESS parents pin an older version
+   * even after the definition is republished.
+   *
+   * @throws AwapException 400 for a non-positive version, 404 when the definition or version is
+   *     missing for the tenant, 409 when the version is unpublished or archived
+   */
+  @Transactional(readOnly = true)
+  public WorkflowVersion getPublishedVersion(UUID tenantId, UUID definitionId, int version) {
+    if (version <= 0) {
+      throw invalidVersion(version);
+    }
+    find(tenantId, definitionId);
+    return requirePublishedVersion(tenantId, definitionId, version);
+  }
+
+  /**
+   * Resolves the version the definition currently points at. Fails with 409 when the definition was
+   * never published, so SUB_PROCESS never starts a child against an unpublished definition.
+   */
+  @Transactional(readOnly = true)
+  public WorkflowVersion getCurrentPublishedVersion(UUID tenantId, UUID definitionId) {
+    WorkflowDefinition definition = find(tenantId, definitionId);
+    if (definition.getStatus() != WorkflowStatus.PUBLISHED || definition.getCurrentVersion() <= 0) {
+      throw new AwapException(
+          ErrorCode.WORKFLOW_VERSION_NOT_PUBLISHED,
+          HttpStatus.CONFLICT,
+          "Workflow definition '" + definitionId + "' has no published version.");
+    }
+    return requirePublishedVersion(tenantId, definitionId, definition.getCurrentVersion());
+  }
+
+  private WorkflowVersion requirePublishedVersion(UUID tenantId, UUID definitionId, int version) {
+    WorkflowVersion target =
+        versionRepository
+            .findByWorkflowIdAndVersionAndTenantId(definitionId, version, tenantId)
+            .orElseThrow(
+                () ->
+                    new AwapException(
+                        ErrorCode.WORKFLOW_VERSION_NOT_FOUND,
+                        HttpStatus.NOT_FOUND,
+                        "Workflow version "
+                            + version
+                            + " was not found for definition '"
+                            + definitionId
+                            + "'."));
+    if (target.isDeleted()) {
+      throw new AwapException(
+          ErrorCode.WORKFLOW_VERSION_ARCHIVED,
+          HttpStatus.CONFLICT,
+          "Workflow version " + version + " is archived and cannot be selected.");
+    }
+    if (target.getStatus() != WorkflowStatus.PUBLISHED) {
+      throw new AwapException(
+          ErrorCode.WORKFLOW_VERSION_NOT_PUBLISHED,
+          HttpStatus.CONFLICT,
+          "Workflow version " + version + " is not published.");
+    }
+    return target;
+  }
+
+  private AwapException invalidVersion(int version) {
+    return new AwapException(
+        ErrorCode.WORKFLOW_VERSION_INVALID,
+        HttpStatus.BAD_REQUEST,
+        "Workflow version must be a positive integer, but was " + version + ".");
+  }
+
   @Transactional
   public WorkflowDefinitionResponse publish(UUID tenantId, UUID id) {
     WorkflowDefinition definition = find(tenantId, id);
@@ -136,9 +205,10 @@ public class WorkflowDefinitionService {
   }
 
   public List<WorkflowVersionResponse> versions(UUID tenantId, UUID id) {
-    find(tenantId, id);
+    WorkflowDefinition definition = find(tenantId, id);
+    int currentVersion = definition.getCurrentVersion();
     return versionRepository.findByWorkflowIdOrderByVersionDesc(id).stream()
-        .map(workflowMapper::toResponse)
+        .map(version -> workflowMapper.toVersionResponse(version, currentVersion))
         .toList();
   }
 

@@ -65,6 +65,11 @@ public class NotificationTemplateRenderer {
   private final MeterRegistry meterRegistry;
   private final Map<CacheKey, Optional<TemplateSnapshot>> cache = new ConcurrentHashMap<>();
 
+  /** Template keys known to this renderer; used to validate per-template configuration. */
+  public java.util.Set<String> knownTemplateKeys() {
+    return TEMPLATES.keySet();
+  }
+
   /** Legacy/test constructor: database templates are unavailable. */
   public NotificationTemplateRenderer(ObjectMapper objectMapper) {
     this(objectMapper, null, null);

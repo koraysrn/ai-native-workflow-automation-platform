@@ -341,6 +341,26 @@ jobs:
         run: |
           python3 -c "import yaml,sys; yaml.safe_load_all(open('infra/docker-compose.cdc.yml')); list(yaml.safe_load_all(open('infra/k8s/debezium-connect.yaml'))); print('manifests OK')"
 
+  load-test-static:
+    name: Load-test checks (node --test)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Scenario, retry-model and CDC trigger tests
+        run: >-
+          node --test "load-test/test/*.test.mjs"
+      - name: Validate the k6 script bundles
+        run: >-
+          npx --yes esbuild@0.25.0 load-test/k6/awap-load-test.js
+          --bundle --external:k6 --external:k6/*
+          --outfile=load-test/k6/dist/awap-load-test.bundle.js
+      - name: Remove the bundle
+        if: always()
+        run: rm -rf load-test/k6/dist
+
   pact-gate:
     name: Pact broker can-i-deploy
     runs-on: ubuntu-latest

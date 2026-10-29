@@ -1,6 +1,7 @@
 package com.awap.file.application;
 
 import com.awap.file.domain.FileScanStatus;
+import java.io.InputStream;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Component;
@@ -15,7 +16,7 @@ import org.springframework.stereotype.Component;
 public class DisabledClamAvScanner implements ClamAvScanner {
 
   @Override
-  public FileScanStatus scan(String bucket, String objectKey) {
+  public FileScanStatus scan(InputStream content) {
     return FileScanStatus.CLEAN;
   }
 }

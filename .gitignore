@@ -43,3 +43,9 @@ infra/k8s/secrets.plain.yaml
 
 # ===== Logs =====
 *.log
+
+# Load-test artifacts
+load-test/seed.json
+load-test/results/
+load-test/fake-webhook.log
+load-test/k6/dist/
