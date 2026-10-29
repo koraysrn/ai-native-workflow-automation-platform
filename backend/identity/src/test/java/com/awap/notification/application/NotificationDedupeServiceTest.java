@@ -195,7 +195,7 @@ class NotificationDedupeServiceTest {
         NotificationChannel.EMAIL,
         "welcome",
         "en",
-        null,
+        "{\"name\":\"Ada\"}",
         null,
         "task-1",
         "TASK_COMPLETED");
@@ -206,7 +206,7 @@ class NotificationDedupeServiceTest {
         NotificationChannel.EMAIL,
         "welcome",
         "en",
-        null,
+        "{\"name\":\"Ada\"}",
         null,
         "task-1",
         "TASK_COMPLETED");
@@ -229,7 +229,7 @@ class NotificationDedupeServiceTest {
             channel,
             templateKey,
             "en",
-            null,
+            "{\"name\":\"Ada\"}",
             explicitKey,
             businessKey,
             eventType);

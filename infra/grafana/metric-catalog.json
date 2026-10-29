@@ -1,0 +1,133 @@
+{
+  "description": "Prometheus metric names referenced by the AWAP dashboard and alerts. Every entry maps to a Micrometer meter emitted by backend/identity.",
+  "metrics": [
+    {
+      "name": "awap_workflow_success_total",
+      "source": "AnalyticsService#recordProcessCompleted (awap.workflow.success)"
+    },
+    {
+      "name": "awap_workflow_failure_total",
+      "source": "AnalyticsService#recordProcessFailed (awap.workflow.failure)"
+    },
+    {
+      "name": "awap_task_completed_total",
+      "source": "AnalyticsService#recordTaskCompleted (awap.task.completed)"
+    },
+    {
+      "name": "awap_task_decisions_total",
+      "source": "TaskService#decide (awap.task.decisions)"
+    },
+    {
+      "name": "awap_process_duration_seconds",
+      "source": "AnalyticsService (awap.process.duration timer)"
+    },
+    {
+      "name": "awap_sla_breaches_total",
+      "source": "AnalyticsService (awap.sla.breaches counter)"
+    },
+    {
+      "name": "awap_dlq_messages_total",
+      "source": "DlqConsumer (awap.dlq.messages counter)"
+    },
+    {
+      "name": "awap_notification_deliveries_total",
+      "source": "NotificationService (awap.notification.deliveries counter)"
+    },
+    {
+      "name": "awap_notification_attempts_total",
+      "source": "NotificationService (awap.notification.attempts counter)"
+    },
+    {
+      "name": "awap_notification_dispatch_latency_seconds",
+      "source": "NotificationService (awap.notification.dispatch.latency timer)"
+    },
+    {
+      "name": "awap_notification_retry_lag_seconds",
+      "source": "NotificationService (awap.notification.retry.lag timer)"
+    },
+    {
+      "name": "awap_outbox_pending",
+      "source": "OutboxRelayService (awap.outbox.pending gauge)"
+    },
+    {
+      "name": "awap_outbox_events_total",
+      "source": "OutboxRelayService (awap.outbox.events counter)"
+    },
+    {
+      "name": "awap_node_timeout_total",
+      "source": "NodeTimeoutMetrics (awap.node.timeout counter)"
+    },
+    {
+      "name": "awap_node_duration_seconds",
+      "source": "NodeTimeoutMetrics (awap.node.duration timer)"
+    },
+    {
+      "name": "awap_node_timeout_failures_total",
+      "source": "NodeTimeoutHandler (awap.node.timeout.failures counter)"
+    },
+    {
+      "name": "awap_node_timeout_rejected_total",
+      "source": "NodeTimeoutExecutor (awap.node.timeout.rejected counter)"
+    },
+    {
+      "name": "awap_node_timeout_abandoned",
+      "source": "NodeExecutionWatchdog (awap.node.timeout.abandoned gauge)"
+    },
+    {
+      "name": "awap_replay_divergences_total",
+      "source": "ReplayMetrics (awap.replay.divergences counter)"
+    },
+    {
+      "name": "awap_replay_limits_total",
+      "source": "ReplayMetrics (awap.replay.limits counter)"
+    },
+    {
+      "name": "awap_replay_runs_total",
+      "source": "ReplayMetrics (awap.replay.runs counter)"
+    },
+    {
+      "name": "awap_replay_duration_seconds",
+      "source": "ReplayMetrics (awap.replay.duration timer)"
+    },
+    {
+      "name": "awap_file_infected_total",
+      "source": "FileScanMetrics (awap.file.infected counter)"
+    },
+    {
+      "name": "awap_file_promote_fail_total",
+      "source": "FileScanMetrics (awap.file.promote.fail counter)"
+    },
+    {
+      "name": "awap_file_scan_duration_seconds",
+      "source": "FileScanMetrics (awap.file.scan.duration timer)"
+    },
+    {
+      "name": "awap_notification_retry_claims_total",
+      "source": "NotificationRetryScheduler (awap.notification.retry.claims counter)"
+    },
+    {
+      "name": "awap_notification_retry_dlq_total",
+      "source": "NotificationRetryWorker (awap.notification.retry.dlq counter)"
+    },
+    {
+      "name": "awap_notification_retry_lease_conflicts_total",
+      "source": "JdbcNotificationRetryClaimRepository (awap.notification.retry.lease.conflicts counter)"
+    },
+    {
+      "name": "awap_notification_retention_purged_total",
+      "source": "NotificationDeliveryPurgeScheduler (awap.notification.retention.purged counter)"
+    },
+    {
+      "name": "awap_notification_dedupe_suppressed_total",
+      "source": "NotificationService (awap.notification.dedupe.suppressed counter)"
+    },
+    {
+      "name": "http_server_requests_seconds_count",
+      "source": "Spring Boot HTTP server observations"
+    },
+    {
+      "name": "up",
+      "source": "Prometheus scrape health"
+    }
+  ]
+}
