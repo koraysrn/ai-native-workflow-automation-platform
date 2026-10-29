@@ -665,7 +665,9 @@ paths:
     get:
       operationId: listWorkflowVersions
       summary: List workflow versions
-      description: Lists version snapshots of a workflow definition.
+      description: >-
+        Lists version snapshots of a workflow definition, including the publish status, whether the
+        version is archived and whether it is the version the definition currently resolves to.
       tags: [Workflow Definitions]
       parameters:
         - $ref: "#/components/parameters/WorkflowDefinitionId"
@@ -678,6 +680,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/WorkflowVersionResponse"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /api/v1/workflow-definitions/{id}/versions/{version}/archive:
     post:
@@ -2267,16 +2271,26 @@ components:
 
     WorkflowVersionResponse:
       type: object
+      description: >-
+        A workflow version snapshot. `status` is the publish state (DRAFT or PUBLISHED), `archived`
+        marks soft-deleted snapshots that cannot be selected by SUB_PROCESS, and `current` marks the
+        version the definition currently resolves to.
       properties:
         id:
           type: string
           format: uuid
         version:
           type: integer
+          minimum: 1
         definitionJson:
           type: string
         status:
           type: string
+          enum: [DRAFT, PUBLISHED]
+        archived:
+          type: boolean
+        current:
+          type: boolean
         createdAt:
           type: string
           format: date-time

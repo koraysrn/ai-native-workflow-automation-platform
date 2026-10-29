@@ -23,13 +23,17 @@ import com.awap.workflow.application.SpelExpressionService;
 import com.awap.workflow.application.WorkflowDefinitionService;
 import com.awap.workflow.domain.NodeDefinition;
 import com.awap.workflow.domain.WorkflowDefinition;
+import com.awap.workflow.domain.WorkflowVersion;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.event.EventListener;
@@ -213,25 +217,70 @@ public class WorkflowEngineService implements WorkflowEnginePort {
           HttpStatus.BAD_REQUEST,
           "SUB_PROCESS workflowDefinitionId is not a UUID: " + definitionId);
     }
-    WorkflowDefinition definition =
-        workflowDefinitionService.getPublished(parent.getTenantId(), definitionUuid);
+    Optional<Integer> configuredVersion = configReader.readSubProcessVersion(node);
+    WorkflowVersion pinned =
+        configuredVersion.isPresent()
+            ? workflowDefinitionService.getPublishedVersion(
+                parent.getTenantId(), definitionUuid, configuredVersion.get())
+            : workflowDefinitionService.getCurrentPublishedVersion(
+                parent.getTenantId(), definitionUuid);
+    String childContextJson = recordChildDefinitionVersion(parent, pinned.getVersion());
     WorkflowInstance child =
         new WorkflowInstance(
             parent.getTenantId(),
-            definition.getId(),
-            definition.getCurrentVersion(),
+            pinned.getWorkflowId(),
+            pinned.getVersion(),
             WorkflowState.CREATED,
             null,
-            parent.getContextJson(),
+            childContextJson,
             parent.getId(),
             node.getNodeId());
     instanceRepository.save(child);
     executionContextRepository.save(
-        new ExecutionContext(parent.getTenantId(), child.getId(), parent.getContextJson()));
+        new ExecutionContext(parent.getTenantId(), child.getId(), childContextJson));
     child.transitionTo(WorkflowState.STARTED);
     log(child, null, null, "INSTANCE_STARTED", "Sub-process instance started.");
     publishAnalytics(child, "WORKFLOW_STARTED", null, 0L);
     nodeExecutor.executeStartNode(child);
+  }
+
+  /**
+   * Pins the selected child definition version into the parent execution context so the parent
+   * instance (and its API representation) shows exactly which child snapshot was started.
+   */
+  private String recordChildDefinitionVersion(WorkflowInstance parent, int version) {
+    Map<String, Object> variables =
+        new LinkedHashMap<>(transitionResolver.readVariables(parent.getId()));
+    if (variables.isEmpty()
+        && parent.getContextJson() != null
+        && !parent.getContextJson().isBlank()) {
+      try {
+        variables.putAll(
+            objectMapper.readValue(
+                parent.getContextJson(), new TypeReference<Map<String, Object>>() {}));
+      } catch (JsonProcessingException ignored) {
+        // An unparseable initial context is left untouched; the child version is still recorded.
+      }
+    }
+    variables.put("childDefinitionVersion", version);
+    String contextJson;
+    try {
+      contextJson = objectMapper.writeValueAsString(variables);
+    } catch (JsonProcessingException ex) {
+      throw new AwapException(
+          ErrorCode.GENERIC_INTERNAL_ERROR,
+          HttpStatus.INTERNAL_SERVER_ERROR,
+          "Could not record the SUB_PROCESS definition version.");
+    }
+    Optional<ExecutionContext> stored =
+        executionContextRepository.findByWorkflowInstanceId(parent.getId());
+    stored.ifPresent(
+        context -> {
+          context.setVariablesJson(contextJson);
+          executionContextRepository.save(context);
+        });
+    parent.updateContextJson(contextJson);
+    return contextJson;
   }
 
   /** Resumes the parent node when a sub-process instance reaches a terminal state. */

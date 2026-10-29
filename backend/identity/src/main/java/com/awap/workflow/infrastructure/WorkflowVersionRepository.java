@@ -13,5 +13,8 @@ public interface WorkflowVersionRepository extends JpaRepository<WorkflowVersion
 
   Optional<WorkflowVersion> findByWorkflowIdAndVersion(UUID workflowId, int version);
 
+  Optional<WorkflowVersion> findByWorkflowIdAndVersionAndTenantId(
+      UUID workflowId, int version, UUID tenantId);
+
   List<WorkflowVersion> findByWorkflowIdOrderByVersionDesc(UUID workflowId);
 }
