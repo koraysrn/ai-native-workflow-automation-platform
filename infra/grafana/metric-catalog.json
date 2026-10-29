@@ -54,6 +54,26 @@
       "source": "OutboxRelayService (awap.outbox.events counter)"
     },
     {
+      "name": "awap_node_timeout_total",
+      "source": "NodeTimeoutMetrics (awap.node.timeout counter)"
+    },
+    {
+      "name": "awap_node_duration_seconds",
+      "source": "NodeTimeoutMetrics (awap.node.duration timer)"
+    },
+    {
+      "name": "awap_node_timeout_failures_total",
+      "source": "NodeTimeoutHandler (awap.node.timeout.failures counter)"
+    },
+    {
+      "name": "awap_node_timeout_rejected_total",
+      "source": "NodeTimeoutExecutor (awap.node.timeout.rejected counter)"
+    },
+    {
+      "name": "awap_node_timeout_abandoned",
+      "source": "NodeExecutionWatchdog (awap.node.timeout.abandoned gauge)"
+    },
+    {
       "name": "http_server_requests_seconds_count",
       "source": "Spring Boot HTTP server observations"
     },

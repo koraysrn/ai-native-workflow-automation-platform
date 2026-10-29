@@ -58,6 +58,7 @@ public class WorkflowEngineService implements WorkflowEnginePort {
   private final NodeConfigReader configReader;
   private final TransitionResolver transitionResolver;
   private final NodeExecutor nodeExecutor;
+  private final NodeTimeoutGuard timeoutGuard;
   private final WebhookDeliveryService webhookDeliveryService;
 
   /** Test/backward-compatible constructor without external adapters (nodes fail closed). */
@@ -88,6 +89,9 @@ public class WorkflowEngineService implements WorkflowEnginePort {
         null,
         null,
         null,
+        null,
+        null,
+        null,
         null);
   }
 
@@ -107,7 +111,10 @@ public class WorkflowEngineService implements WorkflowEnginePort {
       WebhookInvoker webhookInvoker,
       WebhookDeliveryService webhookDeliveryService,
       com.awap.ai.application.AiNodeService aiNodeService,
-      com.awap.script.application.ScriptNodeService scriptNodeService) {
+      com.awap.script.application.ScriptNodeService scriptNodeService,
+      NodeTimeoutSettings nodeTimeoutSettings,
+      NodeExecutionWatchdog nodeExecutionWatchdog,
+      NodeTimeoutMetrics nodeTimeoutMetrics) {
     this.instanceRepository = instanceRepository;
     this.executionLogRepository = executionLogRepository;
     this.workflowDefinitionService = workflowDefinitionService;
@@ -126,6 +133,17 @@ public class WorkflowEngineService implements WorkflowEnginePort {
             spelExpressionService,
             objectMapper,
             this);
+    this.timeoutGuard =
+        nodeExecutionWatchdog == null
+            ? null
+            : new NodeTimeoutGuard(
+                nodeTimeoutSettings == null ? NodeTimeoutSettings.defaults() : nodeTimeoutSettings,
+                nodeExecutionWatchdog,
+                nodeTimeoutMetrics,
+                nodeExecutionRepository,
+                configReader,
+                this,
+                objectMapper);
     this.webhookDeliveryService = webhookDeliveryService;
     this.nodeExecutor =
         new NodeExecutor(
@@ -136,6 +154,7 @@ public class WorkflowEngineService implements WorkflowEnginePort {
             userRepository,
             this,
             webhookInvoker,
+            timeoutGuard,
             webhookDeliveryService,
             aiNodeService,
             scriptNodeService);
@@ -232,7 +251,7 @@ public class WorkflowEngineService implements WorkflowEnginePort {
             .orElse(null);
     if (execution == null
         || execution.getStatus() == NodeExecutionStatus.COMPLETED
-        || execution.getStatus() == NodeExecutionStatus.FAILED) {
+        || execution.getStatus().isFailed()) {
       return;
     }
     if (event.success()) {
@@ -428,7 +447,7 @@ public class WorkflowEngineService implements WorkflowEnginePort {
       transitionResolver.advanceFrom(instance, nodeId);
       return engineMapper.toResponse(instance);
     }
-    if (execution.getStatus() == NodeExecutionStatus.FAILED) {
+    if (execution.getStatus().isFailed()) {
       execution.resetForRetry();
       nodeExecutionRepository.save(execution);
       if (instance.getState() == WorkflowState.FAILED) {

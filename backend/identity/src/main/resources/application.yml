@@ -42,6 +42,16 @@ awap:
     datasource:
       enabled: ${OUTBOX_SEPARATE_POOL:true}
       maximum-pool-size: ${OUTBOX_POOL_SIZE:4}
+  engine:
+    node-timeout:
+      # Budget applied to nodes that do not configure timeoutSeconds (minimum 1s).
+      default-seconds: ${NODE_TIMEOUT_DEFAULT_SECONDS:30}
+      # Upper bound accepted for a node timeoutSeconds value; longer budgets belong to the async
+      # job model described in docs/adr/0004-node-timeout-enforcement.md.
+      max-seconds: ${NODE_TIMEOUT_MAX_SECONDS:3600}
+      # Bounded executor used only for interrupt-safe (external) node work.
+      worker-threads: ${NODE_TIMEOUT_WORKER_THREADS:8}
+      queue-capacity: ${NODE_TIMEOUT_QUEUE_CAPACITY:64}
   notification:
     # Deprecated single-window value kept for compatibility; the purge scheduler now uses the two
     # explicit windows below so read acknowledgements can age out without deleting unread rows.

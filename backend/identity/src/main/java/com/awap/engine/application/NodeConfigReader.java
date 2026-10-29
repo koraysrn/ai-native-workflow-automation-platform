@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalLong;
 
 /**
  * Pure parser for a workflow node's {@code config_json}. Malformed or missing configuration falls
@@ -63,6 +64,21 @@ final class NodeConfigReader {
 
   long readTimeoutSeconds(NodeDefinition node) {
     return readLong(node, "timeoutSeconds", 10);
+  }
+
+  /**
+   * Raw {@code timeoutSeconds} value exactly as configured, without clamping.
+   *
+   * <p>Used by the timeout resolver, which must reject zero, negative and absurd values instead of
+   * silently correcting them.
+   */
+  OptionalLong readConfiguredTimeoutSeconds(NodeDefinition node) {
+    JsonNode config = readConfig(node);
+    JsonNode value = config.get("timeoutSeconds");
+    if (value == null || !value.isNumber()) {
+      return OptionalLong.empty();
+    }
+    return OptionalLong.of(value.asLong());
   }
 
   int readMaxAttempts(NodeDefinition node) {

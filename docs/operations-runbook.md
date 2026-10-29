@@ -46,6 +46,10 @@ carries `severity`, `summary`, `description` and a `runbook_url` pointing back t
 | `AwapNotificationRetryLagHigh` | notification retry-lag p95 > 10s for 10m | warning | Check provider status and the delivery attempts in the inbox |
 | `AwapWebhookDeadGrowth` | > 10 DLQ messages in 15m | critical | Verify the webhook target allowlist/credentials; inspect dead letters |
 | `AwapOutboxBacklogStuck` | `awap_outbox_pending` > 1000 for 15m | critical | Check Kafka reachability and the relay logs; outbox writes are not draining |
+| `AwapNodeTimeouts` | node timeout count > 10 in 10m | warning | Inspect `NODE_TIMED_OUT` execution logs to find the node type before re-driving |
+| `AwapNodeTimeoutFailures` | terminal timeout failures > 3 in 10m | critical | Check the enforcement mode, fix the slow node, then re-drive failed instances |
+| `AwapNodeTimeoutAbandonedWorkers` | abandoned timeout workers > 0 | critical | A node is swallowing interrupts; find the type in the warnings and restart |
+| `AwapNodeTimeoutExecutorRejections` | executor rejections > 0 in 5m | warning | Raise `NODE_TIMEOUT_WORKER_THREADS` / `NODE_TIMEOUT_QUEUE_CAPACITY` |
 
 Dashboard: `AWAP platform overview` (`infra/grafana/provisioning/dashboards/awap.json`) with
 `tenant` and `channel` template variables. Panel/metric mapping:
@@ -54,6 +58,34 @@ Dashboard: `AWAP platform overview` (`infra/grafana/provisioning/dashboards/awap
 Dashboard and alert definitions are validated in CI: the JSON is parsed and every referenced metric
 must exist in [`infra/grafana/metric-catalog.json`](../infra/grafana/metric-catalog.json), and
 `promtool check rules` validates the alert file.
+
+## O3.1 — Node timeouts
+
+Which node types have a hard cancellation guarantee and which are only measured is documented in
+[`node-timeouts.md`](../docs/node-timeouts.md); the rationale is
+[ADR 0004](../docs/adr/0004-node-timeout-enforcement.md).
+
+Operating procedure for `AwapNodeTimeouts` / `AwapNodeTimeoutFailures`:
+
+1. Identify the node type: `topk(5, sum by (type) (increase(awap_node_timeout_total[10m])))`.
+2. Compare with the budget and the real latency:
+   `histogram_quantile(0.99, sum by (le, type) (rate(awap_node_duration_seconds_bucket[10m])))`.
+3. Inspect affected instances: `execution_logs` rows with `action = 'NODE_TIMED_OUT'` carry
+   `enforcement`, `timeoutSeconds`, `elapsedMs`, `attempt`, `maxAttempts` and `retryScheduled`.
+   Only `enforcement = 'ENFORCED'` means the work was actually cancelled; `BEST_EFFORT` means the
+   work completed and was then classified as a timeout.
+4. If `awap_node_timeout_rejected_total` grows, raise
+   `NODE_TIMEOUT_WORKER_THREADS` / `NODE_TIMEOUT_QUEUE_CAPACITY` (bounded — the pool is a
+   safety valve, not a throughput tool).
+5. If `awap_node_timeout_abandoned` stays above zero, a node is swallowing interrupts. Find the
+   node type from the warnings ("Node timeout worker did not stop immediately after cancel"),
+   fix the code to honour `InterruptedException`, and restart the instance if the thread never
+   exits.
+6. Re-drive failures with the workflow retry/recover endpoints once the cause is fixed; both
+   `FAILED` and `TIMED_OUT` executions are re-drivable.
+
+Daemon workers idle out after 30s and the executor is drained on shutdown, so a normal restart
+does not leave `awap-node-timeout-*` threads behind.
 
 ## O4 — Backup & disaster recovery
 
