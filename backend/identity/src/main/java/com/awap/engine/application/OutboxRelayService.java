@@ -20,16 +20,18 @@ import org.springframework.stereotype.Service;
 /**
  * Relays unprocessed outbox events to Kafka.
  *
- * <p>The relay no longer flips {@code published} while claiming. It takes a lease (claim token +
- * {@code claimed_at}) and only marks the row published after the broker acknowledged the send. A
- * crash between claim and publish therefore leaves an unpublished row with a stale lease that
- * {@link OutboxReconciliationScheduler} re-queues instead of silently losing the event.
+ * <p>Claiming never flips {@code published}: the relay takes a lease ({@link OutboxClaimStore}) and
+ * only marks the row published after the broker acknowledged the send. A crash between claim and
+ * publish therefore leaves an unpublished row with a stale lease that {@link
+ * OutboxReconciliationScheduler} re-queues instead of silently losing the event.
  *
  * <p>The Kafka producer is idempotent ({@code enable.idempotence=true}, {@code acks=all}) and the
  * record key is the aggregate id, so a republish after a crash is deduplicated per aggregate.
  *
  * <p>The legacy {@code awap.outbox.pending} gauge and {@code awap.outbox.events} counters are kept
- * because the outbox panels and the {@code AwapOutboxBacklogStuck} alert use them.
+ * because the outbox panels and the {@code AwapOutboxBacklogStuck} alert use them. Every run also
+ * records its outcome in {@link OutboxRelayStatus} so the {@code outboxRelay} health indicator
+ * turns {@code DOWN} instead of the failure being visible only in the logs (issue #122).
  */
 @Service
 public class OutboxRelayService {
@@ -41,11 +43,13 @@ public class OutboxRelayService {
 
   static final String PENDING_GAUGE = "awap.outbox.pending";
   static final String EVENTS_COUNTER = "awap.outbox.events";
+  static final String REASON_CLAIM_FAILED = "claim_failed";
 
   private final ObjectProvider<KafkaTemplate<String, String>> kafkaTemplateProvider;
   private final OutboxClaimStore claimStore;
   private final ObjectMapper objectMapper;
   private final OutboxMetrics metrics;
+  private final OutboxRelayStatus status;
   private final int batchSize;
   private final Duration claimLease;
   private final int maxPublishAttempts;
@@ -58,6 +62,7 @@ public class OutboxRelayService {
       ObjectProvider<KafkaTemplate<String, String>> kafkaTemplateProvider,
       OutboxClaimStore claimStore,
       ObjectMapper objectMapper,
+      OutboxRelayStatus status,
       MeterRegistry meterRegistry,
       ObjectProvider<OutboxEventRepository> outboxRepositoryProvider,
       @Value("${awap.outbox.batch-size:100}") int batchSize,
@@ -68,6 +73,7 @@ public class OutboxRelayService {
         claimStore,
         objectMapper,
         new OutboxMetrics(meterRegistry),
+        status,
         batchSize,
         claimLease,
         maxPublishAttempts,
@@ -89,6 +95,7 @@ public class OutboxRelayService {
         claimStore,
         objectMapper,
         metrics,
+        new OutboxRelayStatus(),
         batchSize,
         claimLease,
         maxPublishAttempts,
@@ -101,6 +108,7 @@ public class OutboxRelayService {
       OutboxClaimStore claimStore,
       ObjectMapper objectMapper,
       OutboxMetrics metrics,
+      OutboxRelayStatus status,
       int batchSize,
       Duration claimLease,
       int maxPublishAttempts,
@@ -118,6 +126,7 @@ public class OutboxRelayService {
     this.claimStore = claimStore;
     this.objectMapper = objectMapper;
     this.metrics = metrics;
+    this.status = status;
     this.batchSize = Math.max(1, batchSize);
     this.claimLease = claimLease;
     this.maxPublishAttempts = Math.max(1, maxPublishAttempts);
@@ -143,16 +152,29 @@ public class OutboxRelayService {
     try {
       claimed = claimStore.claimBatch(batchSize, claimLease, maxPublishAttempts);
     } catch (RuntimeException ex) {
+      metrics.publishFailure(REASON_CLAIM_FAILED);
+      status.recordFailure(REASON_CLAIM_FAILED, 0);
       log.error("Failed to claim an outbox batch; the next run will retry", ex);
       return;
     }
+    int published = 0;
+    boolean failed = false;
     for (OutboxClaimStore.ClaimedOutboxEvent event : claimed) {
-      relayOne(kafkaTemplate, event);
+      if (relayOne(kafkaTemplate, event)) {
+        published++;
+      } else {
+        failed = true;
+      }
+    }
+    if (failed) {
+      status.recordFailure(OutboxMetrics.REASON_SEND_FAILED, published);
+    } else {
+      status.recordSuccess(published);
     }
     updatePendingGauge();
   }
 
-  private void relayOne(
+  private boolean relayOne(
       KafkaTemplate<String, String> kafkaTemplate, OutboxClaimStore.ClaimedOutboxEvent event) {
     if (!hasValidPayload(event.payloadJson())) {
       // A poison payload would fail forever; releasing counts the attempt and the claim function
@@ -163,7 +185,7 @@ public class OutboxRelayService {
       log.error(
           "Outbox event {} has a corrupted payload and was released without publishing",
           event.id());
-      return;
+      return false;
     }
     if (send(kafkaTemplate, event)) {
       if (!claimStore.markPublished(event.id(), event.claimToken())) {
@@ -171,15 +193,16 @@ public class OutboxRelayService {
         metrics.publishFailure(OutboxMetrics.REASON_CLAIM_LOST);
         log.warn(
             "Lost the outbox claim for event {} before it could be marked published", event.id());
-        return;
+        return false;
       }
       countEvent("relayed");
-      return;
+      return true;
     }
     metrics.publishFailure(OutboxMetrics.REASON_SEND_FAILED);
     countEvent("failed");
     claimStore.release(event.id(), event.claimToken());
     log.warn("Kafka send failed for outbox event {}; the claim was released", event.id());
+    return false;
   }
 
   private void countEvent(String result) {

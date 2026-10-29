@@ -571,3 +571,80 @@ ignores them. Releasing every lease before shutting down avoids waiting for the 
 ```sql
 UPDATE outbox_events SET claimed_at = NULL, claim_token = NULL WHERE published = false;
 ```
+
+## O14 — Outbox relay mode and the JPA fallback (#122)
+
+> O7 is reserved for outbox claim reconciliation; this section is referenced as "runbook O14" from
+> the code (`OutboxRelayConfigurationGuard`, `JpaOutboxRelaySource`, the health indicator and
+> `application.yml`).
+
+The relay has exactly two paths, selected by `awap.outbox.datasource.enabled`
+(`OUTBOX_SEPARATE_POOL`):
+
+| Mode | Selection | How it reads the outbox | Safe in production |
+|---|---|---|---|
+| `jdbc` | `OUTBOX_SEPARATE_POOL=true` (**default**) | Dedicated Hikari pool (`awap.outbox.datasource.name`, default `awap-outbox-relay`) calling the V37 `SECURITY DEFINER` claim/release functions. They run as the migration owner with a pinned `search_path`, so the relay sees every tenant even though `awap_app` is bound by `FORCE ROW LEVEL SECURITY`. | **Yes** |
+| `jpa` | `OUTBOX_SEPARATE_POOL=false` | The shared request-serving pool through Spring Data JPA. The relay has **no tenant context**, so `current_setting('awap.tenant_id', true)` is null and the RLS policies filter every `outbox_events` row out. | **No — dev/test only** |
+
+Both paths run through the same `OutboxRelaySource` contract and the same publish loop, so the
+failure accounting and the observability below are identical.
+
+### Fallback restriction
+
+`OUTBOX_SEPARATE_POOL=false` used to be a silent trap: on PostgreSQL with RLS the claim query
+returned nothing and event delivery simply stopped, with no error and no metric.
+
+- **prod / staging:** the application refuses to start. `OutboxRelayConfigurationGuard` throws a
+  bean-creation error naming the property, the profiles and the RLS cause. There is no override; the
+  dedicated pool is the only supported production configuration.
+- **dev / test / no profile:** the fallback is allowed (single-connection databases without RLS
+  policies are the normal case) and a `WARN` line states the restriction. The `outboxRelay` health
+  component also reports `rlsSafe=false`.
+- A malformed value (`OUTBOX_SEPARATE_POOL=yes`) or an invalid pool name
+  (`awap.outbox.datasource.name` must match `[a-z][a-z0-9-]{0,62}`) fails startup in every profile,
+  so a typo cannot select an unexpected path.
+
+If you need the fallback on a PostgreSQL database that has RLS enabled (for example a shared dev
+environment), scope the connection to a tenant or, better, leave the dedicated pool on: it is a
+separate two-to-four connection pool and does not steal capacity from requests.
+
+### Observability
+
+- `GET /actuator/health` → component `outboxRelay`:
+  - `UNKNOWN` until the relay completed its first run (a fresh instance has not proven anything),
+  - `UP` while the last run published without a failure,
+  - `DOWN` as soon as a claim or a Kafka send fails; the next clean run clears it.
+  Details: `mode` (`jdbc`/`jpa`), `relayDatasource`, `rlsSafe`, `lastSuccessfulPublish`
+  (`none` before the first publish), `lastRun`, `publishedEvents`, `consecutiveFailures`,
+  `lastFailureReason`, `failure` timestamp and, for the fallback, a `warning`.
+- `awap_outbox_relay_mode{mode="jdbc"|"jpa"}` — 1/0 gauge, both series always present. A dashboard
+  or alert can use `awap_outbox_relay_mode{mode="jpa"} == 1`; in prod that expression must never
+  match.
+- `awap_outbox_publish_failures_total{mode,reason}` — `reason="send_failed"` (Kafka rejected or timed
+  out, the claim was released for a retry) or `reason="claim_failed"` (the claim query itself failed,
+  for example the pool or the database is down).
+
+### Triage: `outboxRelay` is DOWN
+
+1. Read the details: `mode`, `lastFailureReason` and `lastSuccessfulPublish`. A stale
+   `lastSuccessfulPublish` with `mode="jpa"` in a PostgreSQL environment means RLS is hiding the rows.
+2. `reason="send_failed"`: check the broker (`KAFKA_BOOTSTRAP_SERVERS`, topic health) and
+   `awap_outbox_publish_failures_total{mode,reason="send_failed"}`. The rows stay unpublished and are
+   retried on the next tick, so no event is lost while the broker is unreachable.
+3. `reason="claim_failed"`: check the outbox pool saturation (`hikaricp_connections` for
+   `awap-outbox-relay`) and database availability.
+4. If the health component reports `rlsSafe=false` in a production environment, the deployment is
+   misconfigured even if the pod started: set `OUTBOX_SEPARATE_POOL=true`, restart and confirm
+   `awap_outbox_relay_mode{mode="jdbc"} == 1`.
+5. Confirm the fix by checking that `lastSuccessfulPublish` advances and the component returns `UP`.
+
+### Rollback
+
+This change adds no migration and no schema element. Rolling back is a redeploy of the previous
+image (`kubectl rollout undo`); the previous release ignores `awap.outbox.datasource.name`,
+`awap.outbox.relay-interval-ms` and `awap.outbox.relay-initial-delay-ms` and falls back to the
+hardcoded pool name and five second cadence. The relay mode metric and the health component simply
+disappear from the actuator output.
+
+When rolling back a production incident caused by the fallback, keep the guard in place and fix the
+configuration instead: `OUTBOX_SEPARATE_POOL=true` is the documented, RLS-safe path.

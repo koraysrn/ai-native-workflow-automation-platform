@@ -27,6 +27,10 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.support.SendResult;
 
+/**
+ * Verifies the relay loop: one shared path for both modes, with honest failure accounting for the
+ * health indicator and the {@code awap.outbox.relay.mode} metric (issue #122).
+ */
 @ExtendWith(MockitoExtension.class)
 class OutboxRelayServiceTest {
 

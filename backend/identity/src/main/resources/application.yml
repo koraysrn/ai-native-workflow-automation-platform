@@ -65,7 +65,15 @@ awap:
       interval-ms: ${OUTBOX_RECONCILIATION_INTERVAL_MS:60000}
       batch-size: ${OUTBOX_RECONCILIATION_BATCH_SIZE:1000}
     datasource:
+      # Issue #122: the dedicated pool is the only RLS-safe relay path, because the SECURITY DEFINER
+      # claim/release functions can see every tenant. Setting this to false selects the JPA fallback,
+      # which runs without a tenant context: PostgreSQL RLS then hides every outbox row and events
+      # stop being published silently. The fallback is dev/test only; prod/staging refuse to start
+      # with it (OutboxRelayConfigurationGuard). See runbook O14.
       enabled: ${OUTBOX_SEPARATE_POOL:true}
+      # Hikari pool name of the dedicated relay pool, also reported by the outboxRelay health
+      # indicator so operators can recognise it in pool metrics/logs.
+      name: ${OUTBOX_POOL_NAME:awap-outbox-relay}
       maximum-pool-size: ${OUTBOX_POOL_SIZE:4}
   engine:
     node-timeout:
