@@ -1,0 +1,65 @@
+{
+  "description": "Prometheus metric names referenced by the AWAP dashboard and alerts. Every entry maps to a Micrometer meter emitted by backend/identity.",
+  "metrics": [
+    {
+      "name": "awap_workflow_success_total",
+      "source": "AnalyticsService#recordProcessCompleted (awap.workflow.success)"
+    },
+    {
+      "name": "awap_workflow_failure_total",
+      "source": "AnalyticsService#recordProcessFailed (awap.workflow.failure)"
+    },
+    {
+      "name": "awap_task_completed_total",
+      "source": "AnalyticsService#recordTaskCompleted (awap.task.completed)"
+    },
+    {
+      "name": "awap_task_decisions_total",
+      "source": "TaskService#decide (awap.task.decisions)"
+    },
+    {
+      "name": "awap_process_duration_seconds",
+      "source": "AnalyticsService (awap.process.duration timer)"
+    },
+    {
+      "name": "awap_sla_breaches_total",
+      "source": "AnalyticsService (awap.sla.breaches counter)"
+    },
+    {
+      "name": "awap_dlq_messages_total",
+      "source": "DlqConsumer (awap.dlq.messages counter)"
+    },
+    {
+      "name": "awap_notification_deliveries_total",
+      "source": "NotificationService (awap.notification.deliveries counter)"
+    },
+    {
+      "name": "awap_notification_attempts_total",
+      "source": "NotificationService (awap.notification.attempts counter)"
+    },
+    {
+      "name": "awap_notification_dispatch_latency_seconds",
+      "source": "NotificationService (awap.notification.dispatch.latency timer)"
+    },
+    {
+      "name": "awap_notification_retry_lag_seconds",
+      "source": "NotificationService (awap.notification.retry.lag timer)"
+    },
+    {
+      "name": "awap_outbox_pending",
+      "source": "OutboxRelayService (awap.outbox.pending gauge)"
+    },
+    {
+      "name": "awap_outbox_events_total",
+      "source": "OutboxRelayService (awap.outbox.events counter)"
+    },
+    {
+      "name": "http_server_requests_seconds_count",
+      "source": "Spring Boot HTTP server observations"
+    },
+    {
+      "name": "up",
+      "source": "Prometheus scrape health"
+    }
+  ]
+}

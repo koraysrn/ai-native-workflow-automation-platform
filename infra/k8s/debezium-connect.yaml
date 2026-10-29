@@ -1,0 +1,143 @@
+# Debezium Kafka Connect for the outbox CDC cutover (issue #131).
+# Apply after the backend/database stack is running; the connector itself is registered by
+# infra/debezium/register-connector.sh (or the optional job at the bottom).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: awap-connect-config
+  namespace: awap
+  labels:
+    app.kubernetes.io/name: awap-connect
+    app.kubernetes.io/part-of: awap
+data:
+  connect.properties: |
+    bootstrap.servers=kafka:9092
+    group.id=awap-connect
+    key.converter=org.apache.kafka.connect.storage.StringConverter
+    value.converter=org.apache.kafka.connect.json.JsonConverter
+    value.converter.schemas.enable=false
+    config.storage.topic=awap.connect.configs
+    offset.storage.topic=awap.connect.offsets
+    status.storage.topic=awap.connect.status
+    config.storage.replication.factor=3
+    offset.storage.replication.factor=3
+    status.storage.replication.factor=3
+    plugin.path=/usr/share/java
+    rest.host.name=0.0.0.0
+    rest.port=8083
+    producer.override.enable.idempotence=true
+    producer.override.acks=all
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: awap-connect-db
+  namespace: awap
+  labels:
+    app.kubernetes.io/name: awap-connect
+type: Opaque
+stringData:
+  # Placeholder only: production values are injected by SealedSecrets/Vault (see runbook O5).
+  DB_USER: replace-me
+  DB_PASSWORD: replace-me
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: awap-connect
+  namespace: awap
+  labels:
+    app.kubernetes.io/name: awap-connect
+    app.kubernetes.io/part-of: awap
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: awap-connect
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: awap-connect
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8083"
+    spec:
+      containers:
+        - name: connect
+          image: quay.io/debezium/connect:3.0
+          ports:
+            - name: rest
+              containerPort: 8083
+          env:
+            - name: BOOTSTRAP_SERVERS
+              value: kafka:9092
+            - name: CONNECT_REST_ADVERTISED_HOST_NAME
+              value: awap-connect
+            - name: CONNECT_CONFIG_STORAGE_TOPIC
+              value: awap.connect.configs
+            - name: CONNECT_OFFSET_STORAGE_TOPIC
+              value: awap.connect.offsets
+            - name: CONNECT_STATUS_STORAGE_TOPIC
+              value: awap.connect.status
+            - name: CONNECT_GROUP_ID
+              value: awap-connect
+            - name: CONNECT_PLUGIN_PATH
+              value: /usr/share/java
+            - name: DB_HOST
+              value: postgres
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_NAME
+              value: awap
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: awap-connect-db
+                  key: DB_USER
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: awap-connect-db
+                  key: DB_PASSWORD
+          volumeMounts:
+            - name: connect-config
+              mountPath: /kafka/config/connect.properties
+              subPath: connect.properties
+          readinessProbe:
+            httpGet:
+              path: /connectors
+              port: rest
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /
+              port: rest
+            initialDelaySeconds: 60
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+      volumes:
+        - name: connect-config
+          configMap:
+            name: awap-connect-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: awap-connect
+  namespace: awap
+  labels:
+    app.kubernetes.io/name: awap-connect
+spec:
+  selector:
+    app.kubernetes.io/name: awap-connect
+  ports:
+    - name: rest
+      port: 8083
+      targetPort: rest

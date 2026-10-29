@@ -1,5 +1,6 @@
 package com.awap.engine.application;
 
+import com.awap.ai.application.AiNodeService;
 import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
 import com.awap.engine.domain.NodeExecution;
@@ -10,6 +11,7 @@ import com.awap.engine.infrastructure.NodeExecutionRepository;
 import com.awap.identity.domain.Role;
 import com.awap.identity.domain.User;
 import com.awap.identity.infrastructure.UserRepository;
+import com.awap.script.application.ScriptNodeService;
 import com.awap.task.application.TaskService;
 import com.awap.task.interfaces.dto.TaskRequest;
 import com.awap.webhook.application.WebhookAttemptResult;
@@ -39,8 +41,10 @@ final class NodeExecutor {
   private final WorkflowEnginePort port;
   private final WebhookInvoker webhookInvoker;
   private final WebhookDeliveryService webhookDeliveryService;
+  private final AiNodeService aiNodeService;
+  private final ScriptNodeService scriptNodeService;
 
-  /** Test/backward-compatible constructor: WEBHOOK nodes fail closed when no invoker is wired. */
+  /** Test/backward-compatible constructor: WEBHOOK/AI/SCRIPT nodes fail closed without adapters. */
   NodeExecutor(
       NodeExecutionRepository nodeExecutionRepository,
       WorkflowDefinitionService workflowDefinitionService,
@@ -55,6 +59,8 @@ final class NodeExecutor {
         taskService,
         userRepository,
         port,
+        null,
+        null,
         null,
         null);
   }
@@ -75,6 +81,8 @@ final class NodeExecutor {
         userRepository,
         port,
         webhookInvoker,
+        null,
+        null,
         null);
   }
 
@@ -87,6 +95,30 @@ final class NodeExecutor {
       WorkflowEnginePort port,
       WebhookInvoker webhookInvoker,
       WebhookDeliveryService webhookDeliveryService) {
+    this(
+        nodeExecutionRepository,
+        workflowDefinitionService,
+        configReader,
+        taskService,
+        userRepository,
+        port,
+        webhookInvoker,
+        webhookDeliveryService,
+        null,
+        null);
+  }
+
+  NodeExecutor(
+      NodeExecutionRepository nodeExecutionRepository,
+      WorkflowDefinitionService workflowDefinitionService,
+      NodeConfigReader configReader,
+      TaskService taskService,
+      UserRepository userRepository,
+      WorkflowEnginePort port,
+      WebhookInvoker webhookInvoker,
+      WebhookDeliveryService webhookDeliveryService,
+      AiNodeService aiNodeService,
+      ScriptNodeService scriptNodeService) {
     this.nodeExecutionRepository = nodeExecutionRepository;
     this.workflowDefinitionService = workflowDefinitionService;
     this.configReader = configReader;
@@ -95,6 +127,8 @@ final class NodeExecutor {
     this.port = port;
     this.webhookInvoker = webhookInvoker;
     this.webhookDeliveryService = webhookDeliveryService;
+    this.aiNodeService = aiNodeService;
+    this.scriptNodeService = scriptNodeService;
   }
 
   /** Locates the START node and executes it, kicking off the workflow. */
@@ -245,11 +279,73 @@ final class NodeExecutor {
           taskService.create(instance.getTenantId(), taskRequest);
           waitForExternal(instance, node, execution, "NODE_WAITING");
         }
-        case AI ->
+        case AI -> {
+          if (aiNodeService == null) {
             throw new AwapException(
                 ErrorCode.GENERIC_INTERNAL_ERROR,
                 HttpStatus.NOT_IMPLEMENTED,
                 "AI node execution is not enabled in this deployment.");
+          }
+          AiNodeService.AiAction action;
+          try {
+            action = AiNodeService.AiAction.valueOf(configReader.readAiAction(node));
+          } catch (IllegalArgumentException ex) {
+            throw new AwapException(
+                ErrorCode.WORKFLOW_INVALID_DEFINITION,
+                HttpStatus.BAD_REQUEST,
+                "AI node '" + node.getNodeId() + "' has an unsupported action.");
+          }
+          String prompt = configReader.readAiPrompt(node).orElse("");
+          AiNodeService.AiNodeResult result =
+              aiNodeService.evaluate(
+                  instance.getTenantId(), instance.getId(), node.getNodeId(), action, prompt);
+          if (result.requiresHumanApproval()) {
+            waitForExternal(instance, node, execution, "AI_HITL_REQUIRED");
+            return;
+          }
+          execution.complete(result.output());
+          nodeExecutionRepository.save(execution);
+          port.log(
+              instance,
+              node.getNodeId(),
+              node.getNodeType().name(),
+              "NODE_COMPLETED",
+              result.output());
+          port.advanceFrom(instance, node.getNodeId());
+        }
+        case SCRIPT -> {
+          if (scriptNodeService == null) {
+            throw new AwapException(
+                ErrorCode.GENERIC_INTERNAL_ERROR,
+                HttpStatus.NOT_IMPLEMENTED,
+                "SCRIPT node execution is not enabled in this deployment.");
+          }
+          String script =
+              configReader
+                  .readScript(node)
+                  .orElseThrow(
+                      () ->
+                          new AwapException(
+                              ErrorCode.WORKFLOW_INVALID_DEFINITION,
+                              HttpStatus.BAD_REQUEST,
+                              "SCRIPT node '" + node.getNodeId() + "' requires a script."));
+          ScriptNodeService.ScriptResult result =
+              scriptNodeService.execute(
+                  instance.getTenantId(),
+                  instance.getId(),
+                  node.getNodeId(),
+                  script,
+                  configReader.readContextJson(node));
+          execution.complete(result.output());
+          nodeExecutionRepository.save(execution);
+          port.log(
+              instance,
+              node.getNodeId(),
+              node.getNodeType().name(),
+              "NODE_COMPLETED",
+              result.output());
+          port.advanceFrom(instance, node.getNodeId());
+        }
       }
     } catch (RuntimeException ex) {
       handleFailure(instance, node, execution, ex, replayMode);
