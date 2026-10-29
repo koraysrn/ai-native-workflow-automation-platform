@@ -11,9 +11,9 @@ import java.util.Map;
  * node type that only exists in a newer workflow definition (or was removed) can never silently
  * inherit a hard guarantee. Unknown types are {@link NodeTimeoutEnforcement#UNSUPPORTED}.
  *
- * <p>{@code SCRIPT} is intentionally listed although {@link NodeType} does not contain it yet: the
- * sandboxed script executor is required by the constitution to be time-boxed, so the policy is
- * ready before the node type lands.
+ * <p>{@code SCRIPT} is listed even before the sandboxed script executor existed: the constitution
+ * requires that executor to be time-boxed, so the policy was ready before the node type landed. The
+ * name constant is kept so the table stays keyed by name rather than by the enum.
  */
 public final class NodeTimeoutPolicy {
 

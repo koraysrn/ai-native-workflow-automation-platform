@@ -85,6 +85,7 @@ groups:
         annotations:
           summary: "Workflow node timeouts are elevated"
           description: "{{ $value }} node timeouts in 10 minutes; check awap.node.duration{type=...} and the node timeout budgets."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o31--node-timeouts"
 
       - alert: AwapNodeTimeoutFailures
         expr: sum(increase(awap_node_timeout_failures_total[10m])) > 3
@@ -94,6 +95,7 @@ groups:
         annotations:
           summary: "Workflow nodes are failing terminally on timeouts"
           description: "{{ $value }} node executions exhausted their retry budget after a timeout."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o31--node-timeouts"
 
       # A worker that swallows the interrupt keeps a thread alive past its budget; this is the
       # thread-leak alert for the node timeout executor.
@@ -105,6 +107,7 @@ groups:
         annotations:
           summary: "Node timeout workers are leaking"
           description: "{{ $value }} timeout worker(s) ignored the interrupt for more than 5 minutes."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o31--node-timeouts"
 
       - alert: AwapNodeTimeoutExecutorRejections
         expr: sum(increase(awap_node_timeout_rejected_total[5m])) > 0
@@ -114,6 +117,7 @@ groups:
         annotations:
           summary: "Node timeout executor is saturated"
           description: "{{ $value }} node executions were rejected by the bounded timeout executor."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o31--node-timeouts"
 
   - name: awap-slo
     rules:

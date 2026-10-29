@@ -61,9 +61,10 @@ class NodeTimeoutPolicyTest {
           .as("policy must list %s", type)
           .containsKey(type.name());
     }
-    assertThat(NodeTimeoutPolicy.enforcementTable()).hasSize(NodeType.values().length + 1);
+    assertThat(NodeTimeoutPolicy.enforcementTable()).hasSize(NodeType.values().length);
     assertThat(NodeTimeoutPolicy.enforcementTable())
-        .containsKey(NodeTimeoutPolicy.SCRIPT_NODE_TYPE);
+        .containsKey(NodeTimeoutPolicy.SCRIPT_NODE_TYPE)
+        .containsKey(NodeType.SCRIPT.name());
   }
 
   @Test
