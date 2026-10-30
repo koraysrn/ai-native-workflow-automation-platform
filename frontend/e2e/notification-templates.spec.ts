@@ -7,6 +7,20 @@ import { expect, test, type Page } from "@playwright/test";
  */
 const API = "**/api/v1/**";
 
+async function mockTemplateList(page: Page, templates: unknown[] = []): Promise<void> {
+  await page.route(`${API}notification-templates`, async (route) => {
+    if (route.request().method() === "GET") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(templates),
+      });
+      return;
+    }
+    await route.fallback();
+  });
+}
+
 async function openEditor(page: Page): Promise<void> {
   await page.context().addCookies([
     { name: "awap_session", value: "1", url: "http://localhost:3000" },
@@ -28,6 +42,7 @@ async function fillEditor(
 
 test("previews a tenant template with escaped variables", async ({ page }) => {
   const bodies: string[] = [];
+  await mockTemplateList(page);
   await page.route(`${API}notification-templates/preview`, async (route) => {
     bodies.push(String(route.request().postData()));
     await route.fulfill({
@@ -55,6 +70,7 @@ test("previews a tenant template with escaped variables", async ({ page }) => {
 
 test("blocks a malformed placeholder before calling the API", async ({ page }) => {
   let called = false;
+  await mockTemplateList(page);
   await page.route(`${API}notification-templates/preview`, async (route) => {
     called = true;
     await route.fulfill({ status: 200, contentType: "application/json", body: "{}" });
@@ -104,4 +120,43 @@ test("saves the template and shows the confirmation", async ({ page }) => {
 
   expect(created.length).toBeGreaterThan(0);
   expect(created.some((body) => body.includes('"subject":"Welcome"'))).toBe(true);
+});
+
+test("edits an existing template with its optimistic version", async ({ page }) => {
+  const existing = {
+    id: "t1",
+    templateKey: "welcome",
+    locale: "en",
+    subject: "Welcome",
+    body: "Hello {{name}}",
+    version: 3,
+    active: true,
+    createdAt: "2026-01-01T00:00:00Z",
+    updatedAt: "2026-01-01T00:00:00Z",
+  };
+  const updates: string[] = [];
+  await mockTemplateList(page, [existing]);
+  await page.route(`${API}notification-templates/t1`, async (route) => {
+    if (route.request().method() === "PUT") {
+      updates.push(String(route.request().postData()));
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ ...existing, body: "Updated {{name}}", version: 4 }),
+      });
+      return;
+    }
+    await route.fallback();
+  });
+
+  await openEditor(page);
+  await expect(async () => {
+    await page.getByRole("button", { name: /welcome · en · v3 · active/ }).click();
+    await page.locator("#template-body").fill("Updated {{name}}");
+    await page.getByRole("button", { name: "Save template" }).click();
+    await expect(page.getByRole("status")).toContainText("Template saved.");
+  }).toPass({ timeout: 15_000 });
+
+  expect(updates.some((body) => body.includes('"expectedVersion":3'))).toBe(true);
+  expect(updates.some((body) => body.includes('"body":"Updated {{name}}"'))).toBe(true);
 });

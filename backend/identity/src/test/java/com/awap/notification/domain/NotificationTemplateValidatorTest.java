@@ -22,6 +22,16 @@ class NotificationTemplateValidatorTest {
   }
 
   @Test
+  void treatsNullTextAsHavingNoPlaceholders() {
+    assertThat(NotificationTemplateValidator.placeholders(null)).isEmpty();
+  }
+
+  @Test
+  void acceptsANullBodyInTheSizeCheck() {
+    NotificationTemplateValidator.validateBodySize(null);
+  }
+
+  @Test
   void rejectsUnbalancedPlaceholders() {
     assertThatThrownBy(() -> NotificationTemplateValidator.placeholders("Hello {{name"))
         .isInstanceOf(InvalidNotificationTemplateException.class)

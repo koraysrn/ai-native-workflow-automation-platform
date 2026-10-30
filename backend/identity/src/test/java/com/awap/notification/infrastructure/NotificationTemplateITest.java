@@ -183,6 +183,16 @@ class NotificationTemplateITest {
         .hasMessageContaining("ck_notification_templates_body_bytes");
   }
 
+  @Test
+  void canonicalRegionalLocaleSatisfiesTheCheckConstraint() throws Exception {
+    UUID templateId = insertTemplate(TENANT_A, "regional-locale", "en-US", 0);
+
+    assertThat(templateId).isNotNull();
+    assertThatThrownBy(() -> insertTemplate(TENANT_A, "bad-region", "en-us", 0))
+        .isInstanceOf(SQLException.class)
+        .hasMessageContaining("ck_notification_templates_locale");
+  }
+
   private static UUID insertTemplate(UUID tenant, String key, String locale, int bodySize)
       throws SQLException {
     UUID id = UUID.randomUUID();

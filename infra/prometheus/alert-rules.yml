@@ -200,6 +200,16 @@ groups:
           description: "{{ $value }} lease conflicts in 10 minutes; check replica count and lease duration settings."
           runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o11--notification-retries-issue-119"
 
+      - alert: AwapNotificationTemplateRenderFailures
+        expr: increase(awap_notification_template_render_failures_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Notification template rendering is failing"
+          description: "{{ $value }} render failure(s) in the last 5 minutes; a tenant template has a malformed or unknown placeholder."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#notification-templates-cache-and-rendering-metrics"
+
   - name: awap-outbox
     rules:
       # A stale claim means a relay died between claiming and publishing (#121). Reconciliation

@@ -19,6 +19,7 @@ import com.awap.identity.IdentityApplication;
 import com.awap.identity.infrastructure.security.TenantContext;
 import com.awap.notification.application.NotificationTemplateService;
 import com.awap.notification.domain.NotificationTemplate;
+import com.awap.notification.domain.NotificationTemplateVersion;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -161,6 +162,102 @@ class NotificationTemplateControllerWebMvcTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.body").value(escaped))
         .andExpect(jsonPath("$.placeholders[0]").value("name"));
+  }
+
+  @Test
+  void getReturnsTheTemplateRevision() throws Exception {
+    when(service.get(tenantId, template.getId())).thenReturn(template);
+
+    mockMvc
+        .perform(
+            get("/api/v1/notification-templates/{id}", template.getId())
+                .with(user("u").authorities(new SimpleGrantedAuthority("INSTANCE_READ"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value(template.getId().toString()))
+        .andExpect(jsonPath("$.body").value("Hello {{name}}"));
+  }
+
+  @Test
+  void versionsReturnTheAuditTrail() throws Exception {
+    when(service.versions(tenantId, template.getId()))
+        .thenReturn(List.of(new NotificationTemplateVersion(template)));
+
+    mockMvc
+        .perform(
+            get("/api/v1/notification-templates/{id}/versions", template.getId())
+                .with(user("u").authorities(new SimpleGrantedAuthority("INSTANCE_READ"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].subject").value("Welcome"))
+        .andExpect(jsonPath("$[0].active").value(true));
+  }
+
+  @Test
+  void updateReturnsTheNewRevision() throws Exception {
+    when(service.update(eq(tenantId), eq(template.getId()), eq(0L), any(), any(), eq(actorId)))
+        .thenReturn(template);
+
+    mockMvc
+        .perform(
+            put("/api/v1/notification-templates/{id}", template.getId())
+                .contentType("application/json")
+                .content("{\"expectedVersion\":0,\"subject\":\"Welcome\",\"body\":\"Hi\"}")
+                .with(csrf())
+                .with(user("u").authorities(new SimpleGrantedAuthority("INSTANCE_MANAGE"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.templateKey").value("welcome"));
+  }
+
+  @Test
+  void archiveReturnsTheArchivedTemplate() throws Exception {
+    when(service.archive(tenantId, template.getId(), actorId)).thenReturn(template);
+
+    mockMvc
+        .perform(
+            post("/api/v1/notification-templates/{id}/archive", template.getId())
+                .with(csrf())
+                .with(user("u").authorities(new SimpleGrantedAuthority("INSTANCE_MANAGE"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.active").value(true));
+  }
+
+  @Test
+  void activateReturnsTheRestoredTemplate() throws Exception {
+    when(service.activate(tenantId, template.getId(), actorId)).thenReturn(template);
+
+    mockMvc
+        .perform(
+            post("/api/v1/notification-templates/{id}/activate", template.getId())
+                .with(csrf())
+                .with(user("u").authorities(new SimpleGrantedAuthority("INSTANCE_MANAGE"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.active").value(true));
+  }
+
+  @Test
+  void missingTenantContextReturns401() throws Exception {
+    TenantContext.clear();
+
+    mockMvc
+        .perform(
+            get("/api/v1/notification-templates")
+                .with(user("u").authorities(new SimpleGrantedAuthority("INSTANCE_READ"))))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void createWithoutUserContextReturns401() throws Exception {
+    TenantContext.set(tenantId, null, "MANAGER");
+
+    mockMvc
+        .perform(
+            post("/api/v1/notification-templates")
+                .contentType("application/json")
+                .content(
+                    "{\"templateKey\":\"welcome\",\"locale\":\"tr\","
+                        + "\"subject\":\"Merhaba\",\"body\":\"Merhaba {{name}}\"}")
+                .with(csrf())
+                .with(user("u").authorities(new SimpleGrantedAuthority("INSTANCE_MANAGE"))))
+        .andExpect(status().isUnauthorized());
   }
 
   @Test
