@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  activateNotificationTemplate,
   archiveNotificationTemplate,
   createNotificationTemplate,
   listNotificationTemplates,
   previewNotificationTemplate,
   updateNotificationTemplate,
   type CreateNotificationTemplatePayload,
+  type NotificationTemplateDto,
   type UpdateNotificationTemplatePayload,
 } from "../api";
 
@@ -20,7 +22,7 @@ export function useNotificationTemplates(templateKey?: string) {
 }
 
 function useTemplateMutation<TVariables>(
-  mutationFn: (variables: TVariables) => Promise<unknown>,
+  mutationFn: (variables: TVariables) => Promise<NotificationTemplateDto>,
 ) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -40,14 +42,20 @@ export function useCreateNotificationTemplate() {
 
 /** Saves a new revision of a template. */
 export function useUpdateNotificationTemplate() {
-  return useTemplateMutation((variables: { id: string; payload: UpdateNotificationTemplatePayload }) =>
-    updateNotificationTemplate(variables.id, variables.payload),
+  return useTemplateMutation(
+    (variables: { id: string; payload: UpdateNotificationTemplatePayload }) =>
+      updateNotificationTemplate(variables.id, variables.payload),
   );
 }
 
 /** Archives a template so deliveries fall back to the built-in default. */
 export function useArchiveNotificationTemplate() {
   return useTemplateMutation((id: string) => archiveNotificationTemplate(id));
+}
+
+/** Restores an archived template to the delivery path. */
+export function useActivateNotificationTemplate() {
+  return useTemplateMutation((id: string) => activateNotificationTemplate(id));
 }
 
 /** Renders a preview without sending a notification. */

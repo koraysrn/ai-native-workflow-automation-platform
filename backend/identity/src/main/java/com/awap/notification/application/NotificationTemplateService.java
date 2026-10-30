@@ -4,16 +4,18 @@ import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
 import com.awap.notification.domain.InvalidNotificationTemplateException;
 import com.awap.notification.domain.NotificationTemplate;
+import com.awap.notification.domain.NotificationTemplateLocale;
 import com.awap.notification.domain.NotificationTemplateValidator;
 import com.awap.notification.domain.NotificationTemplateVersion;
 import com.awap.notification.infrastructure.NotificationTemplateRepository;
 import com.awap.notification.infrastructure.NotificationTemplateVersionRepository;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -26,8 +28,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class NotificationTemplateService {
 
+  private static final Logger log = LoggerFactory.getLogger(NotificationTemplateService.class);
   private static final Pattern KEY_PATTERN = Pattern.compile("^[a-z0-9][a-z0-9._-]*$");
-  private static final Pattern LOCALE_PATTERN = Pattern.compile("^[a-z]{2}(-[A-Z]{2})?$");
 
   private final NotificationTemplateRepository repository;
   private final NotificationTemplateVersionRepository versionRepository;
@@ -77,6 +79,12 @@ public class NotificationTemplateService {
       repository.saveAndFlush(template);
       versionRepository.save(new NotificationTemplateVersion(template));
       renderer.invalidate(tenantId, key);
+      log.info(
+          "Created notification template tenant={} key={} locale={} version={}",
+          tenantId,
+          key,
+          normalizedLocale,
+          template.getVersion());
       return template;
     } catch (InvalidNotificationTemplateException ex) {
       throw invalid(ex);
@@ -107,6 +115,13 @@ public class NotificationTemplateService {
       repository.saveAndFlush(template);
       versionRepository.save(new NotificationTemplateVersion(template));
       renderer.invalidate(tenantId, template.getTemplateKey());
+      log.info(
+          "Revised notification template tenant={} id={} key={} locale={} version={}",
+          tenantId,
+          templateId,
+          template.getTemplateKey(),
+          template.getLocale(),
+          template.getVersion());
       return template;
     } catch (InvalidNotificationTemplateException ex) {
       throw invalid(ex);
@@ -148,15 +163,16 @@ public class NotificationTemplateService {
                           ErrorCode.RESOURCE_NOT_FOUND,
                           HttpStatus.NOT_FOUND,
                           "Template " + key + "/" + normalizedLocale + " was not found."));
-      targetSubject = stored.getSubject();
-      targetBody = stored.getBody();
+      if (targetSubject == null) {
+        targetSubject = stored.getSubject();
+      }
+      if (targetBody == null) {
+        targetBody = stored.getBody();
+      }
     }
     try {
       NotificationTemplateValidator.validate(targetSubject, targetBody);
       Map<String, String> variables = renderer.parseVariables(variablesJson);
-      Set<String> provided = variables.keySet();
-      NotificationTemplateValidator.validateVariables(targetSubject, provided);
-      NotificationTemplateValidator.validateVariables(targetBody, provided);
       Set<String> placeholders = NotificationTemplateValidator.placeholders(targetBody);
       String renderedSubject = renderer.renderText(targetSubject, variables);
       String renderedBody = renderer.renderText(targetBody, variables);
@@ -176,6 +192,14 @@ public class NotificationTemplateService {
       repository.saveAndFlush(template);
       versionRepository.save(new NotificationTemplateVersion(template));
       renderer.invalidate(tenantId, template.getTemplateKey());
+      log.info(
+          "Toggled notification template tenant={} id={} key={} locale={} active={} version={}",
+          tenantId,
+          templateId,
+          template.getTemplateKey(),
+          template.getLocale(),
+          template.isActive(),
+          template.getVersion());
       return template;
     } catch (OptimisticLockingFailureException ex) {
       throw conflict("Template " + templateId + " was modified by another request.");
@@ -202,10 +226,11 @@ public class NotificationTemplateService {
   }
 
   private static String requireLocale(String locale) {
-    if (locale == null || !LOCALE_PATTERN.matcher(locale).matches()) {
-      throw invalid("locale must look like 'en' or 'en-US'.");
+    try {
+      return NotificationTemplateLocale.canonicalize(locale);
+    } catch (InvalidNotificationTemplateException ex) {
+      throw invalid(ex);
     }
-    return locale.toLowerCase(Locale.ROOT);
   }
 
   private static AwapException invalid(String detail) {

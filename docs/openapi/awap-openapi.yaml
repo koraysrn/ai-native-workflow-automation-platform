@@ -2747,9 +2747,12 @@ components:
         templateKey:
           type: string
           maxLength: 128
+          pattern: "^[a-z0-9][a-z0-9._-]*$"
         locale:
           type: string
-          example: en
+          pattern: "^[a-z]{2}(-[A-Z]{2})?$"
+          description: Canonical locale (lowercase language, optional uppercase region).
+          example: en-US
         subject:
           type: string
         body:
@@ -2804,8 +2807,11 @@ components:
         templateKey:
           type: string
           maxLength: 128
+          pattern: "^[a-z0-9][a-z0-9._-]*$"
         locale:
           type: string
+          pattern: "^[A-Za-z]{2}([_-][A-Za-z]{2})?$"
+          description: Stored canonically as lowercase language plus uppercase region (for example en-US).
           example: tr
         subject:
           type: string
@@ -2832,12 +2838,18 @@ components:
       properties:
         templateKey:
           type: string
+          maxLength: 128
+          pattern: "^[a-z0-9][a-z0-9._-]*$"
         locale:
           type: string
+          pattern: "^[A-Za-z]{2}([_-][A-Za-z]{2})?$"
+          description: Canonicalized before the stored template lookup.
         subject:
           type: string
+          maxLength: 512
         body:
           type: string
+          description: Limited to 1 MiB; placeholders must look like {{name}}.
         variablesJson:
           type: string
-          description: JSON object supplying the placeholder values.
+          description: JSON object supplying placeholder values; scalar values are normalized to strings by the editor.

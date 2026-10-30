@@ -146,6 +146,14 @@
       "source": "NotificationService (awap.notification.dedupe.suppressed counter)"
     },
     {
+      "name": "awap_notification_template_cache_total",
+      "source": "NotificationTemplateRenderer (awap.notification.template.cache counter)"
+    },
+    {
+      "name": "awap_notification_template_render_failures_total",
+      "source": "NotificationTemplateRenderer (awap.notification.template.render.failures counter)"
+    },
+    {
       "name": "awap_dlq_legacy_messages_total",
       "source": "DlqConsumer (awap.dlq.legacy.messages counter)"
     },

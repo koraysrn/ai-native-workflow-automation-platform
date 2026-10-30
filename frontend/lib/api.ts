@@ -343,10 +343,7 @@ export function createWorkflowDefinition(
   return authPost<WorkflowDefinitionDto>("/api/v1/workflow-definitions", payload);
 }
 
-export function createFormDefinition(
-  name: string,
-  schemaJson: string,
-): Promise<FormDefinitionDto> {
+export function createFormDefinition(name: string, schemaJson: string): Promise<FormDefinitionDto> {
   return authPost<FormDefinitionDto>("/api/v1/forms", { name, schemaJson });
 }
 
@@ -442,9 +439,7 @@ export function fetchAnalyticsSummary(
     params.set("to", to);
   }
   const query = params.toString();
-  return authFetch<AnalyticsAggregateDto[]>(
-    `/api/v1/analytics/summary${query ? `?${query}` : ""}`,
-  );
+  return authFetch<AnalyticsAggregateDto[]>(`/api/v1/analytics/summary${query ? `?${query}` : ""}`);
 }
 
 export interface DocumentVersionDto {
@@ -518,7 +513,9 @@ export interface NotificationTemplatePreviewDto {
   placeholders: string[];
 }
 
-export function listNotificationTemplates(templateKey?: string): Promise<NotificationTemplateDto[]> {
+export function listNotificationTemplates(
+  templateKey?: string,
+): Promise<NotificationTemplateDto[]> {
   const query = templateKey ? `?templateKey=${encodeURIComponent(templateKey)}` : "";
   return authFetch<NotificationTemplateDto[]>(`/api/v1/notification-templates${query}`);
 }
@@ -542,6 +539,13 @@ export function updateNotificationTemplate(
 export function archiveNotificationTemplate(id: string): Promise<NotificationTemplateDto> {
   return authPost<NotificationTemplateDto>(
     `/api/v1/notification-templates/${encodeURIComponent(id)}/archive`,
+    {},
+  );
+}
+
+export function activateNotificationTemplate(id: string): Promise<NotificationTemplateDto> {
+  return authPost<NotificationTemplateDto>(
+    `/api/v1/notification-templates/${encodeURIComponent(id)}/activate`,
     {},
   );
 }

@@ -267,13 +267,22 @@ large value and restarting the scheduler.
 Tenant templates live in `notification_templates` (unique per `(tenant_id, template_key, locale)`)
 with every saved revision copied to `notification_template_versions`. The `version` column is the
 optimistic locking token: a stale `PUT` returns `409`, and concurrent edits never overwrite each
-other silently. Built-in EN/TR templates are seeded by `V47__notification_template.sql` for tenants
-that exist when the migration runs; new tenants rely on the code fallback in
-`NotificationTemplateRenderer`, so a missing row never blocks a delivery.
+other silently. Locales are canonicalized to `language` or `language-REGION` (for example `en` or
+`en-US`), so `en-us` from a client matches the stored `en-US` row. Built-in EN/TR templates are
+seeded by `V47__notification_templates.sql` for tenants that exist when the migration runs; new
+tenants rely on the code fallback in `NotificationTemplateRenderer`, so a missing row never blocks a
+delivery.
 
 Resolution order for a delivery: tenant template for the requested locale → tenant template for
 `en` → built-in code default → the raw template key. Archived templates are excluded, which makes
-archive a safe rollback to the built-in default.
+archive a safe rollback to the built-in default. Cached entries live for
+`awap.notification.template-cache-ttl-seconds` (default 60s), so a write on another replica is
+picked up without a restart; writes on the same replica invalidate the entry immediately.
+
+`awap.notification.template.render.failures` increments for malformed placeholders, unknown
+placeholders and invalid variables JSON. `AwapNotificationTemplateRenderFailures` fires when the
+5-minute increase is non-zero; the message identifies the template key and locale in the warning
+log without echoing template bodies or variables.
 
 | Metric | Type | Tags | Use |
 |---|---|---|---|

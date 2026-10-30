@@ -36,6 +36,7 @@ test("new workflow, notification, webhook and outbox alerts exist", async () => 
   for (const alert of [
     "AwapWorkflowFailureRateHigh",
     "AwapNotificationRetryLagHigh",
+    "AwapNotificationTemplateRenderFailures",
     "AwapWebhookDeadGrowth",
     "AwapOutboxBacklogStuck",
   ]) {
