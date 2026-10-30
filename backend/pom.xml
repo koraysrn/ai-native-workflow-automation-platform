@@ -253,6 +253,30 @@
                                         </limit>
                                     </limits>
                                 </rule>
+                                <!-- Issue #133: the saga orchestrator and its state machine must
+                                     stay above the stated 95% line / 90% branch gate. -->
+                                <rule>
+                                    <element>CLASS</element>
+                                    <includes>
+                                        <include>com.awap.engine.application.SagaService</include>
+                                        <include>com.awap.engine.domain.SagaInstance</include>
+                                        <include>com.awap.engine.domain.SagaStep</include>
+                                        <include>com.awap.engine.domain.SagaStatus</include>
+                                        <include>com.awap.engine.domain.SagaStepStatus</include>
+                                    </includes>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.95</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.90</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
                             </rules>
                         </configuration>
                     </execution>
