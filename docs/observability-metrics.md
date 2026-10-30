@@ -17,6 +17,9 @@ by the dashboard/alert tests in CI.
 | `awap.notification.attempts` | `awap_notification_attempts_total` | `NotificationService` | Notification deliveries and failures | – |
 | `awap.notification.dispatch.latency` | `awap_notification_dispatch_latency_seconds_*` | `NotificationService` | Notification retry lag and dispatch latency | – |
 | `awap.notification.retry.lag` | `awap_notification_retry_lag_seconds_*` | `NotificationService` | Notification retry lag and dispatch latency | `AwapNotificationRetryLagHigh` |
+| `awap.saga.steps` | `awap_saga_steps_total` | `SagaMetrics` | – (saga panel/API) | `AwapSagaCompensationFailures` |
+| `awap.saga.compensation.retries` | `awap_saga_compensation_retries_total` | `SagaMetrics` | – (saga panel/API) | `AwapSagaCompensationRetriesHigh` |
+| `awap.saga.duration` | `awap_saga_duration_seconds_*` | `SagaMetrics` | – (saga panel/API) | – |
 | `awap.outbox.pending` | `awap_outbox_pending` | `OutboxRelayService` (gauge) | Outbox backlog, relay rate and DLQ | `AwapOutboxBacklogStuck` |
 | `awap.outbox.events` | `awap_outbox_events_total` | `OutboxRelayService` | Outbox backlog, relay rate and DLQ | – |
 | `awap.dlq.messages` | `awap_dlq_messages_total` | `DlqConsumer` | Outbox backlog, relay rate and DLQ | `AwapWebhookDeadGrowth` |

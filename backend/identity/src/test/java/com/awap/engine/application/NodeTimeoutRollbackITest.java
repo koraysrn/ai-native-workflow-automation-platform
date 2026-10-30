@@ -99,6 +99,12 @@ class NodeTimeoutRollbackITest {
           WorkflowInstance parent, NodeDefinition node, NodeExecution execution) {
         throw new UnsupportedOperationException("not used by this test");
       }
+
+      @Override
+      public void recordSagaStep(
+          WorkflowInstance instance, NodeDefinition node, NodeExecution execution) {
+        throw new UnsupportedOperationException("not used by this test");
+      }
     };
   }
 

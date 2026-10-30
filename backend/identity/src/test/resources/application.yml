@@ -20,6 +20,9 @@ management:
       enabled: false
 
 awap:
+  saga:
+    # The scheduler needs the PostgreSQL claim function; tests invoke runOnce explicitly.
+    scheduler-enabled: false
   notification:
     # The scheduler needs the PostgreSQL helper function; tests invoke it explicitly instead.
     retry-scheduler-enabled: false

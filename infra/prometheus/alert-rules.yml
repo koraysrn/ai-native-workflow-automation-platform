@@ -418,3 +418,26 @@ groups:
           summary: "Nightly usage reconciliation did not run"
           description: "No reconciliation run was observed in the last 25 hours; check USAGE_RECONCILIATION_CRON and the application logs."
           runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o17--tenant-usage-metering-and-quotas-125"
+
+  - name: awap-saga
+    rules:
+      # Any failed compensation is operator-visible: the saga is FAILED and its step is in the DLQ.
+      - alert: AwapSagaCompensationFailures
+        expr: increase(awap_saga_steps_total{outcome="failed"}[10m]) > 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Saga compensation failed"
+          description: "{{ $value }} compensation attempt(s) failed in 10 minutes; inspect the saga state and the DLQ event before retrying."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o18--saga-compensation-issue-133"
+
+      - alert: AwapSagaCompensationRetriesHigh
+        expr: increase(awap_saga_compensation_retries_total[15m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Saga compensation retries are elevated"
+          description: "{{ $value }} compensation attempts were rescheduled in 15 minutes; a downstream ERP/CRM rollback endpoint is likely degraded."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o18--saga-compensation-issue-133"

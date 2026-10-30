@@ -29,6 +29,8 @@ tags:
     description: Workflow templates, versioning, draft/publish and rollback.
   - name: Workflow Instances
     description: Workflow execution, state transitions and execution logs.
+  - name: Sagas
+    description: Saga state inspection and manual compensation intervention.
   - name: Tasks
     description: Task assignment, claiming, approval and rejection.
   - name: Forms
@@ -982,6 +984,90 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/WorkflowInstanceResponse"
+
+  /api/v1/workflow-instances/{id}/saga:
+    get:
+      operationId: getWorkflowInstanceSaga
+      summary: Get the saga of an instance
+      description: >-
+        Returns the tenant-scoped saga coordinator row and every recorded step in execution order.
+        Steps include status, attempt count, next retry instant and the last compensation error.
+      tags: [Sagas]
+      parameters:
+        - $ref: "#/components/parameters/WorkflowInstanceId"
+      responses:
+        "200":
+          description: Saga state and steps.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SagaResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/workflow-instances/{id}/saga/compensate:
+    post:
+      operationId: compensateWorkflowInstanceSaga
+      summary: Manually start or resume saga compensation
+      description: >-
+        Manual intervention for an operator. Starts reverse compensation for a running saga or
+        reopens every dead-lettered step after the external system was fixed. The request is
+        idempotent: a compensated saga is returned unchanged.
+      tags: [Sagas]
+      parameters:
+        - $ref: "#/components/parameters/WorkflowInstanceId"
+      responses:
+        "200":
+          description: Saga state after the manual compensation attempt.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SagaResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/workflow-instances/{id}/saga/steps/{stepId}/retry:
+    post:
+      operationId: retryWorkflowInstanceSagaStep
+      summary: Retry one dead-lettered compensation step
+      description: >-
+        Re-arms one dead-lettered step and resumes compensation. Reverse ordering is enforced: a
+        lower step cannot be retried while a later step is still uncompensated (409).
+      tags: [Sagas]
+      parameters:
+        - $ref: "#/components/parameters/WorkflowInstanceId"
+        - name: stepId
+          in: path
+          required: true
+          description: Saga step UUID.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Saga state after the step retry.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SagaResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   /api/v1/tasks:
     get:
@@ -2457,6 +2543,91 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    SagaResponse:
+      type: object
+      description: Saga coordinator state for one workflow instance.
+      required: [id, tenantId, workflowInstanceId, sagaKey, status, createdAt, steps]
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        workflowInstanceId:
+          type: string
+          format: uuid
+        sagaKey:
+          type: string
+          example: "workflow:0d7c7f3e-8f0f-4d4c-9a2e-0e6b8e6a1b2c"
+        status:
+          type: string
+          enum: [RUNNING, COMPLETED, COMPENSATING, COMPENSATED, FAILED]
+        failureReason:
+          type: string
+          nullable: true
+        compensationStartedAt:
+          type: string
+          format: date-time
+          nullable: true
+        compensationCompletedAt:
+          type: string
+          format: date-time
+          nullable: true
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+        steps:
+          type: array
+          items:
+            $ref: "#/components/schemas/SagaStepResponse"
+
+    SagaStepResponse:
+      type: object
+      description: One successfully executed action and its compensating transaction.
+      required: [id, stepOrder, nodeId, actionType, compensationType, status, attempts, maxAttempts]
+      properties:
+        id:
+          type: string
+          format: uuid
+        stepOrder:
+          type: integer
+        nodeId:
+          type: string
+        nodeType:
+          type: string
+        actionType:
+          type: string
+        compensationType:
+          type: string
+          enum: [WEBHOOK, SUB_PROCESS]
+        status:
+          type: string
+          enum: [SUCCEEDED, COMPENSATING, COMPENSATED, DLQ]
+        attempts:
+          type: integer
+        maxAttempts:
+          type: integer
+        retryBackoffMs:
+          type: integer
+          format: int64
+        timeoutSeconds:
+          type: integer
+        nextAttemptAt:
+          type: string
+          format: date-time
+          nullable: true
+        lastError:
+          type: string
+          nullable: true
+        compensatedAt:
+          type: string
+          format: date-time
+          nullable: true
 
     WorkflowInstanceResponse:
       type: object

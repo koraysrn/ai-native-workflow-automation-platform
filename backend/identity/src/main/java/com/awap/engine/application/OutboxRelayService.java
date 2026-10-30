@@ -254,9 +254,11 @@ public class OutboxRelayService {
       case "TASK_COMPLETED", "TASK_ESCALATION_DUE" -> "workflow.task.events";
       case "FORM_SUBMITTED" -> "workflow.instance.events";
       case "WORKFLOW_INSTANCE_STATE" -> "workflow.instance.events";
+      case "SUB_PROCESS_COMPLETED" -> "workflow.subprocess.events";
       case "NOTIFICATION_REQUESTED" -> "notification.send";
       case "DOCUMENT_CHANGED" -> "document.events";
       case "ANALYTICS_EVENT" -> "analytics.events";
+      case "SAGA_COMPENSATION_DLQ" -> "workflow.saga.events.dlq";
       default -> "workflow.events";
     };
   }

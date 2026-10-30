@@ -817,3 +817,43 @@ reconciliation series above. Prometheus alerts live in `alert-rules.yml` under `
 enforcement without losing telemetry, set `USAGE_METERING_FAIL_OPEN=true`; to stop metering
 entirely, remove the hooks in a follow-up release and keep the tables (they are read-only then).
 V45 does not alter existing tables, so no data migration or down-migration is required.
+
+## O18 — Saga compensation (issue #133)
+
+**Purpose.** `saga_instances` / `saga_steps` make the workflow engine the coordinator for
+multi-step external integrations. A `WEBHOOK` node with a `compensation` block, and every
+SUB_PROCESS child that completed successfully, becomes a saga step. If a later node fails, the
+engine walks the steps in reverse `step_order` and executes their compensations.
+
+**Automatic flow.** Workflow failure moves the saga `RUNNING -> COMPENSATING`; each successful
+compensation becomes `COMPENSATED`; the saga ends `COMPENSATED`. A compensation that exhausts
+`maxAttempts` becomes `DLQ`, the saga becomes `FAILED`, and a `SAGA_COMPENSATION_DLQ` outbox event
+is published to `workflow.saga.events.dlq` (consumed by the normal per-topic DLQ listener).
+
+**Crash recovery.** The scheduler claims `COMPENSATING` sagas through
+`awap_claim_saga_compensations` (`FOR UPDATE SKIP LOCKED`, lease token, cross-tenant). A stale lease
+is taken over after `awap.saga.lease-seconds` (default 30); the first uncompensated step is resumed.
+The scheduler is disabled when `awap.saga.scheduler-enabled=false` and can then be driven by the
+manual API.
+
+**Manual intervention.**
+- Inspect: `GET /api/v1/workflow-instances/{id}/saga` (`INSTANCE_READ`).
+- Resume all dead-lettered steps: `POST /api/v1/workflow-instances/{id}/saga/compensate`
+  (`INSTANCE_MANAGE`) after the ERP/CRM endpoint is healthy.
+- Retry one step: `POST /api/v1/workflow-instances/{id}/saga/steps/{stepId}/retry`. Reverse order is
+  enforced (`409 AWAP-ENG-0015`).
+- Cross-tenant access returns `404 AWAP-ENG-0013`; a saga with no recorded step produces the same
+  404, so tenants cannot distinguish "missing" from "someone else's".
+
+**Tuning.** Per-step values live in the node's `compensation` block (`maxAttempts`, `retryBackoffMs`,
+`timeoutSeconds`). Defaults are `SAGA_MAX_ATTEMPTS` (3), `SAGA_RETRY_BACKOFF_MS` (1000) and
+`SAGA_TIMEOUT_SECONDS` (30). The scheduler uses `SAGA_SCHEDULER_INTERVAL_MS`, `SAGA_LEASE_SECONDS`
+and `SAGA_BATCH_SIZE`.
+
+**Alerts.** `AwapSagaCompensationFailures` (critical, any failed step) and
+`AwapSagaCompensationRetriesHigh` (warning, retry storm). Metrics: `awap.saga.steps{outcome}`,
+`awap.saga.compensation.retries`, `awap.saga.duration{status}`.
+
+**Rollback.** The feature is additive (V49 creates new tables, policies and one function). Keep the
+tables but set `SAGA_SCHEDULER_ENABLED=false` and stop sending `compensation` blocks; existing
+`FAILED` sagas remain inspectable and can be finished manually. No down-migration is required.
