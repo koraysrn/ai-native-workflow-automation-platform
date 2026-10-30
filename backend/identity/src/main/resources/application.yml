@@ -62,7 +62,7 @@ awap:
     dlq-group-id: ${KAFKA_DLQ_GROUP_ID:awap-dlq}
     # Bounded metric tag values. Topics not listed here are folded into "other" so a malicious
     # producer cannot create unbounded Prometheus series.
-    dlq-known-topics: ${KAFKA_DLQ_KNOWN_TOPICS:workflow.task.events,workflow.instance.events,workflow.subprocess.events,analytics.events,document.events,notification.send,notification.requested.events}
+    dlq-known-topics: ${KAFKA_DLQ_KNOWN_TOPICS:workflow.task.events,workflow.instance.events,workflow.subprocess.events,workflow.saga.events,analytics.events,document.events,notification.send,notification.requested.events}
     dlq-quarantine-path: ${DLQ_QUARANTINE_PATH:target/dlq-quarantine/legacy-dlq-quarantine.jsonl}
     # Bounded poll: a large DLQ backlog is drained in chunks instead of blocking the listener.
     max-poll-records: ${KAFKA_MAX_POLL_RECORDS:50}
@@ -91,6 +91,18 @@ awap:
       # indicator so operators can recognise it in pool metrics/logs.
       name: ${OUTBOX_POOL_NAME:awap-outbox-relay}
       maximum-pool-size: ${OUTBOX_POOL_SIZE:4}
+  saga:
+    # The scheduler claims due sagas; tests invoke runOnce explicitly against a controlled clock.
+    scheduler-enabled: ${SAGA_SCHEDULER_ENABLED:true}
+    # Retry budget is per step (overridable in the node's compensation block). These values are
+    # the defaults used when a compensation is declared without a retry policy.
+    max-attempts: ${SAGA_MAX_ATTEMPTS:3}
+    retry-backoff-ms: ${SAGA_RETRY_BACKOFF_MS:1000}
+    timeout-seconds: ${SAGA_TIMEOUT_SECONDS:30}
+    # Recovery scheduler: claims due sagas through a SECURITY DEFINER helper, one lease per replica.
+    scheduler-interval-ms: ${SAGA_SCHEDULER_INTERVAL_MS:5000}
+    lease-seconds: ${SAGA_LEASE_SECONDS:30}
+    batch-size: ${SAGA_BATCH_SIZE:25}
   engine:
     node-timeout:
       # Budget applied to nodes that do not configure timeoutSeconds (minimum 1s).

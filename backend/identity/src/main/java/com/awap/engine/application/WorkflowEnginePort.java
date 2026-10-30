@@ -22,4 +22,6 @@ interface WorkflowEnginePort {
   void advanceFrom(WorkflowInstance instance, String fromNodeId);
 
   void startSubProcess(WorkflowInstance parent, NodeDefinition node, NodeExecution execution);
+
+  void recordSagaStep(WorkflowInstance instance, NodeDefinition node, NodeExecution execution);
 }

@@ -91,6 +91,23 @@ class OutboxRelayServiceTest {
   }
 
   @Test
+  void sagaCompensationDlqEventGoesToItsPerTopicDeadLetterTopic() {
+    when(kafkaTemplateProvider.getIfAvailable()).thenReturn(kafkaTemplate);
+    UUID aggregateId = UUID.randomUUID();
+    UUID token = UUID.randomUUID();
+    OutboxClaimStore.ClaimedOutboxEvent event =
+        claimed("SAGA_COMPENSATION_DLQ", "{\"sagaId\":\"x\"}", aggregateId, token);
+    when(claimStore.claimBatch(100, LEASE, MAX_ATTEMPTS)).thenReturn(List.of(event));
+    when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenReturn(sent());
+    when(claimStore.markPublished(event.id(), token)).thenReturn(true);
+
+    service.relayEvents();
+
+    verify(kafkaTemplate)
+        .send("workflow.saga.events.dlq", aggregateId.toString(), "{\"sagaId\":\"x\"}");
+  }
+
+  @Test
   void failedSendReleasesClaimAndIncrementsAttempts() {
     when(kafkaTemplateProvider.getIfAvailable()).thenReturn(kafkaTemplate);
     OutboxClaimStore.ClaimedOutboxEvent event =

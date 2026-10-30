@@ -246,7 +246,10 @@ final class NodeExecutor {
     NodeTimeoutResolution resolution = timeoutGuard == null ? null : timeoutGuard.resolve(node);
     try {
       Optional<String> advanceTo = dispatch(instance, node, execution, resolution);
-      advanceTo.ifPresent(nodeId -> port.advanceFrom(instance, nodeId));
+      if (advanceTo.isPresent()) {
+        port.recordSagaStep(instance, node, execution);
+        port.advanceFrom(instance, advanceTo.get());
+      }
     } catch (NodeTimeoutException ex) {
       handleTimeout(
           instance, node, execution, resolution, ex.elapsed(), ex.getMessage(), replayMode);

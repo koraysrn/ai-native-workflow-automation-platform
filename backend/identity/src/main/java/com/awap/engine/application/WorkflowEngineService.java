@@ -62,6 +62,7 @@ public class WorkflowEngineService implements WorkflowEnginePort {
   private final OutboxEventPublisher outboxEventPublisher;
   private final EngineMapper engineMapper;
   private final UsageMeteringService usageMeteringService;
+  private final SagaService sagaService;
 
   private final NodeConfigReader configReader;
   private final TransitionResolver transitionResolver;
@@ -102,7 +103,46 @@ public class WorkflowEngineService implements WorkflowEnginePort {
         null,
         null,
         null,
-        usageMeteringService);
+        usageMeteringService,
+        null);
+  }
+
+  /** Test-friendly constructor that wires only the saga collaborator. */
+  WorkflowEngineService(
+      WorkflowInstanceRepository instanceRepository,
+      ExecutionLogRepository executionLogRepository,
+      WorkflowDefinitionService workflowDefinitionService,
+      NodeExecutionRepository nodeExecutionRepository,
+      ExecutionContextRepository executionContextRepository,
+      TaskService taskService,
+      SpelExpressionService spelExpressionService,
+      ObjectMapper objectMapper,
+      UserRepository userRepository,
+      OutboxEventPublisher outboxEventPublisher,
+      EngineMapper engineMapper,
+      UsageMeteringService usageMeteringService,
+      SagaService sagaService) {
+    this(
+        instanceRepository,
+        executionLogRepository,
+        workflowDefinitionService,
+        nodeExecutionRepository,
+        executionContextRepository,
+        taskService,
+        spelExpressionService,
+        objectMapper,
+        userRepository,
+        outboxEventPublisher,
+        engineMapper,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        null,
+        usageMeteringService,
+        sagaService);
   }
 
   @Autowired
@@ -125,7 +165,8 @@ public class WorkflowEngineService implements WorkflowEnginePort {
       NodeTimeoutSettings nodeTimeoutSettings,
       NodeExecutionWatchdog nodeExecutionWatchdog,
       NodeTimeoutMetrics nodeTimeoutMetrics,
-      UsageMeteringService usageMeteringService) {
+      UsageMeteringService usageMeteringService,
+      SagaService sagaService) {
     this.instanceRepository = instanceRepository;
     this.executionLogRepository = executionLogRepository;
     this.workflowDefinitionService = workflowDefinitionService;
@@ -135,6 +176,7 @@ public class WorkflowEngineService implements WorkflowEnginePort {
     this.outboxEventPublisher = outboxEventPublisher;
     this.engineMapper = engineMapper;
     this.usageMeteringService = usageMeteringService;
+    this.sagaService = sagaService;
 
     this.configReader = new NodeConfigReader(objectMapper);
     this.transitionResolver =
@@ -324,6 +366,7 @@ public class WorkflowEngineService implements WorkflowEnginePort {
               + event.childInstanceId()
               + "\",\"status\":\"COMPLETED\"}");
       nodeExecutionRepository.save(execution);
+      recordSubProcessSagaStep(parent, event.parentNodeId(), execution, event.childInstanceId());
       mergeOutputIntoContext(parent, event.parentNodeId(), execution.getOutputJson());
       log(parent, event.parentNodeId(), "SUB_PROCESS", "NODE_COMPLETED", execution.getOutputJson());
       if (parent.getState() == WorkflowState.WAITING) {
@@ -363,6 +406,7 @@ public class WorkflowEngineService implements WorkflowEnginePort {
     if (execution.getStatus() != NodeExecutionStatus.COMPLETED) {
       execution.complete(outputJson);
       nodeExecutionRepository.save(execution);
+      recordSagaStep(instance, nodeId, execution);
       mergeOutputIntoContext(instance, nodeId, outputJson);
       log(instance, nodeId, execution.getNodeType(), "NODE_COMPLETED", outputJson);
     }
@@ -538,6 +582,41 @@ public class WorkflowEngineService implements WorkflowEnginePort {
     transitionResolver.advanceFrom(instance, fromNodeId);
   }
 
+  @Override
+  public void recordSagaStep(
+      WorkflowInstance instance, NodeDefinition node, NodeExecution execution) {
+    if (sagaService != null) {
+      sagaService.recordNodeCompleted(instance, node, execution);
+    }
+  }
+
+  private void recordSagaStep(WorkflowInstance instance, String nodeId, NodeExecution execution) {
+    if (sagaService == null) {
+      return;
+    }
+    resolveNode(instance, nodeId)
+        .ifPresent(node -> sagaService.recordNodeCompleted(instance, node, execution));
+  }
+
+  private void recordSubProcessSagaStep(
+      WorkflowInstance parent, String nodeId, NodeExecution execution, UUID childInstanceId) {
+    if (sagaService == null) {
+      return;
+    }
+    resolveNode(parent, nodeId)
+        .ifPresent(
+            node ->
+                sagaService.recordSubProcessCompleted(parent, node, execution, childInstanceId));
+  }
+
+  private Optional<NodeDefinition> resolveNode(WorkflowInstance instance, String nodeId) {
+    return workflowDefinitionService
+        .nodesOf(instance.getWorkflowDefinitionId(), instance.getWorkflowVersion())
+        .stream()
+        .filter(node -> node.getNodeId().equals(nodeId))
+        .findFirst();
+  }
+
   private void mergeOutputIntoContext(WorkflowInstance instance, String nodeId, String outputJson) {
     if (outputJson == null || outputJson.isBlank()) {
       return;
@@ -590,6 +669,13 @@ public class WorkflowEngineService implements WorkflowEnginePort {
       throw new AwapException(ErrorCode.VALIDATION_FAILED, HttpStatus.CONFLICT, ex.getMessage());
     }
     log(instance, null, null, action, "State advanced to " + target);
+    if (sagaService != null) {
+      if (target == WorkflowState.FAILED) {
+        sagaService.compensateWorkflowFailure(instance, action);
+      } else if (target == WorkflowState.COMPLETED) {
+        sagaService.markWorkflowCompleted(instance);
+      }
+    }
     if (target == WorkflowState.COMPLETED || target == WorkflowState.FAILED) {
       long durationMs =
           Math.max(0L, Duration.between(instance.getCreatedAt(), Instant.now()).toMillis());

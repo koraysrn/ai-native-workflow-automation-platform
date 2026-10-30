@@ -253,6 +253,37 @@
                                         </limit>
                                     </limits>
                                 </rule>
+                                <!-- Issue #133: the saga orchestrator and its state machine must
+                                     stay above the stated 95% line / 90% branch gate. -->
+                                <rule>
+                                    <element>CLASS</element>
+                                    <includes>
+                                        <include>com.awap.engine.application.SagaService</include>
+                                        <include>com.awap.engine.application.SagaCompensationScheduler</include>
+                                        <include>com.awap.engine.application.SagaMetrics</include>
+                                        <include>com.awap.engine.application.SagaRecoveryCandidate</include>
+                                        <include>com.awap.engine.application.SagaCompensationConfig</include>
+                                        <include>com.awap.engine.domain.SagaInstance</include>
+                                        <include>com.awap.engine.domain.SagaStep</include>
+                                        <include>com.awap.engine.domain.SagaStatus</include>
+                                        <include>com.awap.engine.domain.SagaStepStatus</include>
+                                        <include>com.awap.engine.infrastructure.JdbcSagaRecoveryRepository</include>
+                                        <include>com.awap.engine.interfaces.api.SagaController</include>
+                                        <include>com.awap.engine.interfaces.dto.SagaMapper</include>
+                                    </includes>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.95</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.90</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
                             </rules>
                         </configuration>
                     </execution>
@@ -374,6 +405,55 @@
                             <failWhenNoMutations>false</failWhenNoMutations>
                             <mutationThreshold>85</mutationThreshold>
                             <coverageThreshold>90</coverageThreshold>
+                        </configuration>
+                        <dependencies>
+                            <dependency>
+                                <groupId>org.pitest</groupId>
+                                <artifactId>pitest-junit5-plugin</artifactId>
+                                <version>${pitest-junit5.version}</version>
+                            </dependency>
+                        </dependencies>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>pit-saga</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-maven</artifactId>
+                        <configuration>
+                            <!-- Issue #133: reverse ordering, state guards and idempotent
+                                 compensation are the critical mutation-tested saga paths. The
+                                 conditional/increment mutators are scoped to that behaviour. -->
+                            <targetClasses>
+                                <param>com.awap.engine.application.SagaService</param>
+                                <param>com.awap.engine.domain.SagaInstance</param>
+                                <param>com.awap.engine.domain.SagaStep</param>
+                            </targetClasses>
+                            <targetTests>
+                                <param>com.awap.engine.application.SagaServiceTest</param>
+                                <param>com.awap.engine.domain.SagaDomainTest</param>
+                            </targetTests>
+                            <mutators>
+                                <mutator>CONDITIONALS_BOUNDARY</mutator>
+                                <mutator>REMOVE_CONDITIONALS_EQUAL_IF</mutator>
+                                <mutator>REMOVE_CONDITIONALS_EQUAL_ELSE</mutator>
+                                <mutator>REMOVE_CONDITIONALS_ORDER_IF</mutator>
+                                <mutator>REMOVE_CONDITIONALS_ORDER_ELSE</mutator>
+                                <mutator>NEGATE_CONDITIONALS</mutator>
+                                <mutator>MATH</mutator>
+                                <mutator>INCREMENTS</mutator>
+                            </mutators>
+                            <outputFormats>
+                                <outputFormat>HTML</outputFormat>
+                                <outputFormat>XML</outputFormat>
+                            </outputFormats>
+                            <failWhenNoMutations>false</failWhenNoMutations>
+                            <mutationThreshold>85</mutationThreshold>
+                            <coverageThreshold>80</coverageThreshold>
                         </configuration>
                         <dependencies>
                             <dependency>

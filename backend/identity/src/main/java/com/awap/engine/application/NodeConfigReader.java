@@ -179,6 +179,43 @@ final class NodeConfigReader {
     return context == null || context.isNull() ? "{}" : context.toString();
   }
 
+  /**
+   * Reads the optional {@code compensation} block. Missing or malformed configuration yields an
+   * empty result, so a node without a declared compensating action is simply not part of a saga.
+   * Only {@code WEBHOOK} compensations are executable; future integration adapters can add types
+   * without changing the persistence model.
+   */
+  Optional<SagaCompensationConfig> readSagaCompensation(NodeDefinition node) {
+    JsonNode compensation = readConfig(node).get("compensation");
+    if (compensation == null || !compensation.isObject()) {
+      return Optional.empty();
+    }
+    String type =
+        compensation.path("type").asText("WEBHOOK").trim().toUpperCase(java.util.Locale.ROOT);
+    if (!"WEBHOOK".equals(type)) {
+      return Optional.empty();
+    }
+    String url = compensation.path("url").asText(null);
+    if (url == null || url.isBlank()) {
+      return Optional.empty();
+    }
+    String payload = compensation.path("payload").asText("{}");
+    int timeoutSeconds = clamp(compensation.path("timeoutSeconds").asInt(10), 1, 300);
+    int maxAttempts = clamp(compensation.path("maxAttempts").asInt(3), 1, 10);
+    long retryBackoffMs = clamp(compensation.path("retryBackoffMs").asLong(1000L), 1L, 600_000L);
+    return Optional.of(
+        new SagaCompensationConfig(
+            type, url, payload, timeoutSeconds, maxAttempts, retryBackoffMs));
+  }
+
+  private int clamp(int value, int minimum, int maximum) {
+    return Math.max(minimum, Math.min(value, maximum));
+  }
+
+  private long clamp(long value, long minimum, long maximum) {
+    return Math.max(minimum, Math.min(value, maximum));
+  }
+
   private Optional<String> readText(NodeDefinition node, String field) {
     JsonNode config = readConfig(node);
     JsonNode value = config.get(field);

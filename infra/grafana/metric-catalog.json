@@ -198,6 +198,18 @@
       "source": "UsageReconciliationScheduler (awap.usage.reconciliation.runs counter)"
     },
     {
+      "name": "awap_saga_steps_total",
+      "source": "SagaMetrics (awap.saga.steps counter, tagged by outcome)"
+    },
+    {
+      "name": "awap_saga_compensation_retries_total",
+      "source": "SagaMetrics (awap.saga.compensation.retries counter)"
+    },
+    {
+      "name": "awap_saga_duration_seconds",
+      "source": "SagaMetrics (awap.saga.duration timer, tagged by terminal status)"
+    },
+    {
       "name": "http_server_requests_seconds_count",
       "source": "Spring Boot HTTP server observations"
     },
