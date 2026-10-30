@@ -59,6 +59,7 @@ jobs:
         working-directory: backend
       - name: Template mutation testing (PIT >= 85%)
         run: mvn -B -Ppit-notification test-compile org.pitest:pitest-maven:mutationCoverage
+        working-directory: backend
       - name: Saga mutation testing (PIT >= 85%)
         run: mvn -B -Ppit-saga test-compile org.pitest:pitest-maven:mutationCoverage
         working-directory: backend
