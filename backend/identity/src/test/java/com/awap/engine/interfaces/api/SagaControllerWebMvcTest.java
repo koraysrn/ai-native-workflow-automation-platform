@@ -74,6 +74,17 @@ class SagaControllerWebMvcTest {
   }
 
   @Test
+  void authenticatedRequestWithoutTenantContextReturnsUnauthorized() throws Exception {
+    TenantContext.clear();
+
+    mockMvc
+        .perform(
+            get("/api/v1/workflow-instances/" + INSTANCE_ID + "/saga")
+                .with(user("u").authorities(new SimpleGrantedAuthority("INSTANCE_READ"))))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
   void manualCompensationRequiresInstanceManage() throws Exception {
     mockMvc
         .perform(

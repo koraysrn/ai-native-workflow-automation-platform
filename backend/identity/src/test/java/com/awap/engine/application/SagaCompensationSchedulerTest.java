@@ -94,4 +94,15 @@ class SagaCompensationSchedulerTest {
 
     assertThat(claimed).isZero();
   }
+
+  @Test
+  void scheduledTickProcessesAnEmptyClaimBatch() {
+    when(recoveryRepository.claimDue(any(), any(), any(), eq(25))).thenReturn(List.of());
+    SagaCompensationScheduler scheduler =
+        new SagaCompensationScheduler(recoveryRepository, sagaService, tenantContext, 30, 25);
+
+    scheduler.processDueCompensations();
+
+    verify(recoveryRepository).claimDue(any(), any(), any(), eq(25));
+  }
 }

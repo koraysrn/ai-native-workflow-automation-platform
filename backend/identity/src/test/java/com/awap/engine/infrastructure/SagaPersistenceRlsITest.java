@@ -8,7 +8,14 @@ import java.sql.DriverManager;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -111,6 +118,69 @@ class SagaPersistenceRlsITest {
         rows++;
       }
       assertThat(rows).isEqualTo(2);
+    }
+  }
+
+  @Test
+  void concurrentDuplicateSagaStartInsertsExactlyOneRow() throws Exception {
+    UUID tenantId = UUID.randomUUID();
+    String sagaKey = "concurrent:" + UUID.randomUUID();
+    ExecutorService pool = Executors.newFixedThreadPool(2);
+    CountDownLatch ready = new CountDownLatch(2);
+    CountDownLatch go = new CountDownLatch(1);
+    try {
+      List<Future<Boolean>> attempts = new ArrayList<>();
+      for (int i = 0; i < 2; i++) {
+        attempts.add(
+            pool.submit(
+                () -> {
+                  try (Connection app = appConnection();
+                      Statement stmt = app.createStatement()) {
+                    stmt.execute("SET awap.tenant_id = '" + tenantId + "'");
+                    ready.countDown();
+                    go.await(10, TimeUnit.SECONDS);
+                    try {
+                      stmt.executeUpdate(insertSaga(UUID.randomUUID(), tenantId, sagaKey));
+                      return true;
+                    } catch (SQLException ex) {
+                      return false;
+                    }
+                  }
+                }));
+      }
+      ready.await(10, TimeUnit.SECONDS);
+      go.countDown();
+      int inserted = 0;
+      for (Future<Boolean> attempt : attempts) {
+        if (attempt.get(10, TimeUnit.SECONDS)) {
+          inserted++;
+        }
+      }
+      assertThat(inserted).isEqualTo(1);
+
+      try (Connection admin = adminConnection();
+          Statement stmt = admin.createStatement();
+          ResultSet rs =
+              stmt.executeQuery(
+                  "SELECT count(*) FROM saga_instances WHERE tenant_id = '"
+                      + tenantId
+                      + "' AND saga_key = '"
+                      + sagaKey
+                      + "'")) {
+        rs.next();
+        assertThat(rs.getLong(1)).isEqualTo(1);
+      }
+    } finally {
+      try (Connection admin = adminConnection();
+          Statement stmt = admin.createStatement()) {
+        stmt.executeUpdate(
+            "DELETE FROM saga_instances WHERE tenant_id = '"
+                + tenantId
+                + "' AND saga_key = '"
+                + sagaKey
+                + "'");
+      }
+      pool.shutdownNow();
     }
   }
 
