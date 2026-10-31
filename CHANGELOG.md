@@ -25,6 +25,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Kafka consumer tenant context so notification/analytics/document writes satisfy RLS.
 - Frontend designer support for the new node types plus Analytics and Documents screens.
 - OpenAPI contract entries for the new document, notification, analytics and recovery endpoints.
+- Live document scan status over tenant-scoped SSE, with a reconnect/polling hook, in-place row
+  updates, PROMOTED-only download gating and INFECTED/accessibility announcements.
 - Saga compensation for SUB_PROCESS and external integrations: durable `saga_instances`/
   `saga_steps`, reverse-order compensation, per-step retries/timeouts, DLQ, crash recovery,
   manual intervention API, audit rows and metrics.

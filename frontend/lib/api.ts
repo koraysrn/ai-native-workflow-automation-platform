@@ -471,6 +471,19 @@ export interface DocumentVersionDto {
   format: string | null;
   status: string;
   createdAt: string;
+  /** Display name from the quarantine record; escaped by React before rendering. */
+  name: string | null;
+  /** Antivirus lifecycle: QUARANTINED, SCANNING, CLEAN, PROMOTED, INFECTED or SCAN_FAILED. */
+  scanStatus: string | null;
+  scanError: string | null;
+  /** True only after the file reached PROMOTED and a presigned download can be issued. */
+  downloadable: boolean;
+}
+
+/** Absolute URL of the tenant-scoped document scan SSE stream. */
+export function documentScanEventsUrl(fileId?: string): string {
+  const query = fileId ? `?fileId=${encodeURIComponent(fileId)}` : "";
+  return `${apiBase()}/api/v1/documents/events${query}`;
 }
 
 export interface CreateDocumentResponseDto {

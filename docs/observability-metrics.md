@@ -24,6 +24,11 @@ by the dashboard/alert tests in CI.
 | `awap.outbox.pending` | `awap_outbox_pending` | `OutboxRelayService` (gauge) | Outbox backlog, relay rate and DLQ | `AwapOutboxBacklogStuck` |
 | `awap.outbox.events` | `awap_outbox_events_total` | `OutboxRelayService` | Outbox backlog, relay rate and DLQ | – |
 | `awap.dlq.messages` | `awap_dlq_messages_total` | `DlqConsumer` | Outbox backlog, relay rate and DLQ | `AwapWebhookDeadGrowth` |
+| `awap.document.sse.connections` | `awap_document_sse_connections` | `DocumentScanMetrics` (gauge) | Document scan stream health | `AwapDocumentSseConnectionsHigh` |
+| `awap.document.sse.connected` | `awap_document_sse_connected_total` | `DocumentScanMetrics` | Document scan stream health | – |
+| `awap.document.sse.disconnected` | `awap_document_sse_disconnected_total` | `DocumentScanMetrics` | Document scan stream health | – |
+| `awap.document.sse.events` | `awap_document_sse_events_total` | `DocumentScanMetrics` | Document scan stream health | – |
+| `awap.document.scan.status.latency` | `awap_document_scan_status_latency_seconds_*` | `DocumentScanMetrics` | Document scan status latency | – |
 | HTTP observations | `http_server_requests_seconds_count` | Spring Boot | Outbox backlog, relay rate and DLQ (5xx) | `AwapHighErrorRate`, `AwapHighLatency` |
 
 ## Notes
@@ -38,3 +43,7 @@ by the dashboard/alert tests in CI.
   every scrape, so the value tracks the latest relay tick rather than a stale number.
 - Empty metrics render as "No data" in Grafana; the panel JSON does not set `noValue` overrides, so
   an empty tenant never produces a red error panel.
+- `awap_document_sse_connections` is a gauge over an `AtomicInteger` held by
+  `DocumentScanMetrics`; it tracks open streams across all tenants on the replica. The status
+  latency timer runs from the file status transition (`occurredAt`) to the successful SSE write, so
+  it includes any in-process fan-out delay but excludes client render time.

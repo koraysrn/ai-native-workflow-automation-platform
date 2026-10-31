@@ -6,6 +6,8 @@ import com.awap.file.domain.FileRecord;
 import com.awap.file.domain.FileScanStatus;
 import com.awap.file.domain.FileStorageException;
 import com.awap.file.infrastructure.FileRecordRepository;
+import java.util.Collection;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.UUID;
@@ -23,14 +25,17 @@ public class FileService {
   private final FileRecordRepository repository;
   private final FileObjectStore objectStore;
   private final FileStorageProperties properties;
+  private final FileScanEventBus eventBus;
 
   public FileService(
       FileRecordRepository repository,
       FileObjectStore objectStore,
-      FileStorageProperties properties) {
+      FileStorageProperties properties,
+      FileScanEventBus eventBus) {
     this.repository = repository;
     this.objectStore = objectStore;
     this.properties = properties;
+    this.eventBus = eventBus;
   }
 
   /** Creates a presigned PUT slot that can only target the quarantine bucket. */
@@ -47,6 +52,7 @@ public class FileService {
         new FileRecord(
             fileId, tenantId, name, contentType, size, properties.quarantineBucket(), objectKey);
     repository.save(record);
+    eventBus.publish(FileScanStatusEvent.of(record, "Upload accepted into the quarantine bucket."));
     String uploadUrl =
         objectStore.presignedPut(properties.quarantineBucket(), objectKey, properties.presignTtl());
     return new UploadSlot(record.getId(), uploadUrl);
@@ -55,13 +61,7 @@ public class FileService {
   /** Issues a presigned GET only when the file reached PROMOTED. */
   @Transactional(readOnly = true)
   public String downloadUrl(UUID tenantId, UUID id) {
-    FileRecord record =
-        repository
-            .findByIdAndTenantId(id, tenantId)
-            .orElseThrow(
-                () ->
-                    new AwapException(
-                        ErrorCode.FILE_NOT_FOUND, HttpStatus.NOT_FOUND, "File not found."));
+    FileRecord record = findRecord(tenantId, id);
 
     FileScanStatus status = record.getStatus();
     if (status == FileScanStatus.INFECTED) {
@@ -92,6 +92,43 @@ public class FileService {
             ? record.getObjectKey()
             : record.getPromotedObjectKey();
     return objectStore.presignedGet(bucket, key, properties.presignTtl());
+  }
+
+  /** Returns the current scan projection for one tenant-owned file. */
+  @Transactional(readOnly = true)
+  public FileScanInfo scanInfo(UUID tenantId, UUID fileId) {
+    return toScanInfo(findRecord(tenantId, fileId));
+  }
+
+  /** Returns scan projections for the requested files, silently skipping foreign/missing ids. */
+  @Transactional(readOnly = true)
+  public List<FileScanInfo> scanInfo(UUID tenantId, Collection<UUID> fileIds) {
+    if (fileIds == null || fileIds.isEmpty()) {
+      return List.of();
+    }
+    return repository.findByIdInAndTenantId(fileIds, tenantId).stream()
+        .map(this::toScanInfo)
+        .toList();
+  }
+
+  /** Snapshot of all files owned by the tenant, used to seed a newly opened SSE stream. */
+  @Transactional(readOnly = true)
+  public List<FileScanInfo> tenantScanInfo(UUID tenantId) {
+    return repository.findByTenantId(tenantId).stream().map(this::toScanInfo).toList();
+  }
+
+  private FileRecord findRecord(UUID tenantId, UUID id) {
+    return repository
+        .findByIdAndTenantId(id, tenantId)
+        .orElseThrow(
+            () ->
+                new AwapException(
+                    ErrorCode.FILE_NOT_FOUND, HttpStatus.NOT_FOUND, "File not found."));
+  }
+
+  private FileScanInfo toScanInfo(FileRecord record) {
+    return new FileScanInfo(
+        record.getId(), record.getName(), record.getStatus(), record.getLastScanError());
   }
 
   private void ensureBuckets() {
@@ -168,4 +205,13 @@ public class FileService {
 
   /** Presigned upload slot returned to the client. */
   public record UploadSlot(UUID fileId, String uploadUrl) {}
+
+  /** Public scan projection for one file; {@code downloadable} is only true after promotion. */
+  public record FileScanInfo(
+      UUID fileId, String name, FileScanStatus status, String lastScanError) {
+
+    public boolean downloadable() {
+      return status == FileScanStatus.PROMOTED;
+    }
+  }
 }

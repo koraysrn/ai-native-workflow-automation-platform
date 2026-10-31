@@ -37,6 +37,7 @@ public class FileScanScheduler {
   private final FileObjectStore objectStore;
   private final FileStorageProperties properties;
   private final MeterRegistry meterRegistry;
+  private final FileScanEventBus eventBus;
 
   public FileScanScheduler(
       FileRecordRepository fileRecordRepository,
@@ -44,13 +45,15 @@ public class FileScanScheduler {
       ClamAvScanner clamAvScanner,
       FileObjectStore objectStore,
       FileStorageProperties properties,
-      MeterRegistry meterRegistry) {
+      MeterRegistry meterRegistry,
+      FileScanEventBus eventBus) {
     this.fileRecordRepository = fileRecordRepository;
     this.auditRepository = auditRepository;
     this.clamAvScanner = clamAvScanner;
     this.objectStore = objectStore;
     this.properties = properties;
     this.meterRegistry = meterRegistry;
+    this.eventBus = eventBus;
   }
 
   @Scheduled(fixedDelayString = "${awap.files.scan-interval-ms:60000}")
@@ -89,6 +92,7 @@ public class FileScanScheduler {
       return;
     }
     record.beginScan();
+    publish(record, "Antivirus scan started.");
     Timer.Sample sample = Timer.start(meterRegistry);
     FileScanStatus result;
     try (InputStream content = objectStore.open(record.getBucket(), record.getObjectKey())) {
@@ -97,6 +101,7 @@ public class FileScanScheduler {
       sample.stop(timer("failed"));
       String reason = rootMessage(ex);
       record.markScanFailed(reason);
+      publish(record, reason);
       audit(record, FileScanAuditEvent.SCAN_FAILED, reason);
       log.warn("Antivirus scan failed for {}: {}", record.getId(), reason);
       return;
@@ -105,15 +110,18 @@ public class FileScanScheduler {
 
     if (result == FileScanStatus.CLEAN) {
       record.markClean();
+      publish(record, "Antivirus scan cleared the file.");
       promote(record);
       return;
     }
     if (result == FileScanStatus.INFECTED) {
       record.markInfected();
+      publish(record, "Antivirus scanning rejected the file.");
       handleInfected(record);
       return;
     }
     record.markScanFailed("Unexpected scan result: " + result);
+    publish(record, "Unexpected scan result: " + result);
     audit(record, FileScanAuditEvent.SCAN_FAILED, "Unexpected scan result: " + result);
   }
 
@@ -151,6 +159,7 @@ public class FileScanScheduler {
     if (!objectStore.exists(record.getBucket(), record.getObjectKey())) {
       if (objectStore.exists(targetBucket, targetKey)) {
         record.markPromoted(targetBucket, targetKey);
+        publish(record, "Promotion recovered after a prior partial run.");
         audit(
             record, FileScanAuditEvent.PROMOTED, "Recovered promotion after a prior partial run.");
         return;
@@ -175,7 +184,12 @@ public class FileScanScheduler {
     }
 
     record.markPromoted(targetBucket, targetKey);
+    publish(record, "File promoted and available for download.");
     audit(record, FileScanAuditEvent.PROMOTED, "Promoted to " + targetBucket + "/" + targetKey);
+  }
+
+  private void publish(FileRecord record, String detail) {
+    eventBus.publish(FileScanStatusEvent.of(record, detail));
   }
 
   private void promoteFailed(FileRecord record, String detail) {

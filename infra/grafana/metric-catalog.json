@@ -34,6 +34,26 @@
       "source": "DlqConsumer (awap.dlq.messages counter)"
     },
     {
+      "name": "awap_document_sse_connections",
+      "source": "DocumentScanMetrics (awap.document.sse.connections gauge)"
+    },
+    {
+      "name": "awap_document_sse_connected_total",
+      "source": "DocumentScanMetrics (awap.document.sse.connected counter)"
+    },
+    {
+      "name": "awap_document_sse_disconnected_total",
+      "source": "DocumentScanMetrics (awap.document.sse.disconnected counter)"
+    },
+    {
+      "name": "awap_document_sse_events_total",
+      "source": "DocumentScanMetrics (awap.document.sse.events counter)"
+    },
+    {
+      "name": "awap_document_scan_status_latency_seconds",
+      "source": "DocumentScanMetrics (awap.document.scan.status.latency timer)"
+    },
+    {
       "name": "awap_notification_deliveries_total",
       "source": "NotificationService (awap.notification.deliveries counter)"
     },

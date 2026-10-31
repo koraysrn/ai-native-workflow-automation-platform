@@ -167,6 +167,16 @@ groups:
           description: "{{ $value }} promotion failure(s) in 5 minutes; the source object is retained for a safe retry."
           runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o10--quarantine-uploads-promotion-and-infected-files-118"
 
+      - alert: AwapDocumentSseConnectionsHigh
+        expr: max(awap_document_sse_connections) > 900
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Document scan SSE connections are near the 1,000 target"
+          description: "{{ $value }} scan-status streams are open on one replica; check for reconnect storms or clients that ignore the visibility API."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o20--live-document-scan-status-streams-issue-135"
+
       - alert: AwapFileScanFailures
         expr: increase(awap_file_scan_duration_seconds_count{result="failed"}[10m]) > 3
         for: 5m
