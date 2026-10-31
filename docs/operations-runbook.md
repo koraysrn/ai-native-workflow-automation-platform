@@ -885,9 +885,11 @@ and returns `{ valid, errors: [{ field: "expression", message }] }`; it never pe
 - Invalid conditions after a backend deploy: `awap_workflow_expression_validations_total{outcome}`
   rising for `outcome="invalid"` signals a builder/autocomplete or contract regression.
 
-**Metrics and logs.** Counter `awap.workflow.expression.validations{outcome=valid|invalid}` (see
-[`observability-metrics.md`](observability-metrics.md)). Validation failures are returned to the
-caller; there is no server-side stack trace for expected validation errors.
+**Metrics, logs and alerts.** Counter `awap.workflow.expression.validations{outcome=valid|invalid}`
+(see [`observability-metrics.md`](observability-metrics.md)). `AwapWorkflowExpressionValidationFailures`
+(warning, more than 20 invalid validations in 15 minutes for 10 minutes) signals a builder,
+autocomplete or validation-contract regression. Validation failures are returned to the caller;
+there is no server-side stack trace for expected validation errors.
 
 **Rollback.** This is additive and data-compatible: previous definitions already carry an optional
 `condition` on the transition. To disable the UI, stop linking to the designer editor; the backend
