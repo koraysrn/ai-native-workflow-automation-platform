@@ -7,7 +7,16 @@ import { expect, test, type Page } from "@playwright/test";
  */
 const API = "**/api/v1/**";
 
-async function openDocuments(page: Page, scanStatus = "QUARANTINED"): Promise<void> {
+interface UploadCalls {
+  post: number;
+  put: number;
+}
+
+async function openDocuments(
+  page: Page,
+  scanStatus = "QUARANTINED",
+): Promise<{ calls: UploadCalls }> {
+  const calls: UploadCalls = { post: 0, put: 0 };
   await page.context().addCookies([
     { name: "awap_session", value: "1", url: "http://localhost:3000" },
     { name: "awap_tenant", value: "tenant-a", url: "http://localhost:3000" },
@@ -57,7 +66,33 @@ async function openDocuments(page: Page, scanStatus = "QUARANTINED"): Promise<vo
     };
   });
   await page.route(`${API}documents`, async (route) => {
-    if (route.request().method() !== "GET") {
+    const method = route.request().method();
+    if (method === "POST") {
+      calls.post++;
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          fileId: "file-1",
+          uploadUrl: "http://localhost:3000/upload/file-1",
+          version: {
+            id: "version-1",
+            fileId: "file-1",
+            version: 1,
+            size: 2048,
+            format: "pdf",
+            status: "PENDING",
+            createdAt: "2026-01-01T00:00:00Z",
+            name: "report.pdf",
+            scanStatus: "QUARANTINED",
+            scanError: null,
+            downloadable: false,
+          },
+        }),
+      });
+      return;
+    }
+    if (method !== "GET") {
       await route.fallback();
       return;
     }
@@ -81,8 +116,17 @@ async function openDocuments(page: Page, scanStatus = "QUARANTINED"): Promise<vo
       ]),
     });
   });
+  await page.route("http://localhost:3000/upload/file-1", async (route) => {
+    calls.put++;
+    await route.fulfill({
+      status: 200,
+      contentType: "application/pdf",
+      body: "uploaded",
+    });
+  });
   await page.goto("/documents");
   await expect(page.getByRole("heading", { name: "Documents" })).toBeVisible();
+  return { calls };
 }
 
 function event(status: string, detail = "") {
@@ -116,6 +160,41 @@ test("updates a row through every scan status and gates download on PROMOTED", a
       payload,
     );
   }, event("PROMOTED"));
+  await expect(page.getByTestId("scan-status-file-1")).toHaveText("Ready to download");
+  await expect(page.getByRole("button", { name: "Download" })).toBeEnabled();
+});
+
+test("uploads a document and then follows live status to PROMOTED", async ({ page }) => {
+  const { calls } = await openDocuments(page);
+
+  // The dev server can re-hydrate right after navigation; retry the file selection until the
+  // React mutation actually runs instead of silently dropping the early input event.
+  await expect(async () => {
+    if (calls.post === 0) {
+      await page.locator('input[type="file"]').setInputFiles({
+        name: "report.pdf",
+        mimeType: "application/pdf",
+        buffer: Buffer.from("%PDF-1.4 test"),
+      });
+    }
+    expect(calls.post).toBeGreaterThanOrEqual(1);
+    expect(calls.put).toBeGreaterThanOrEqual(1);
+  }).toPass({ timeout: 15_000 });
+
+  await expect(
+    page.getByText("Uploaded. Scan status updates live as soon as the antivirus run completes."),
+  ).toBeVisible();
+  await expect(page.getByTestId("scan-status-file-1")).toHaveText("Quarantined");
+  await expect(page.getByRole("button", { name: "Download" })).toBeDisabled();
+
+  for (const status of ["SCANNING", "CLEAN", "PROMOTED"]) {
+    await page.evaluate((payload) => {
+      (window as unknown as { __emitDocumentScan: (value: unknown) => void }).__emitDocumentScan(
+        payload,
+      );
+    }, event(status));
+  }
+
   await expect(page.getByTestId("scan-status-file-1")).toHaveText("Ready to download");
   await expect(page.getByRole("button", { name: "Download" })).toBeEnabled();
 });

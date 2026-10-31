@@ -131,6 +131,88 @@ class DocumentScanSseServiceTest {
   }
 
   @Test
+  void timeoutCompletesAndReleasesTheStream() {
+    RecordingEmitter emitter =
+        (RecordingEmitter) service.open(UUID.randomUUID(), UUID.randomUUID(), null, List.of());
+
+    emitter.fireTimeout();
+
+    assertThat(emitter.completed).isTrue();
+    assertThat(service.activeConnections()).isZero();
+    assertThat(meterRegistry.get(DocumentScanMetrics.SSE_CONNECTIONS).gauge().value()).isZero();
+  }
+
+  @Test
+  void aNullSnapshotStillOpensTheStream() {
+    RecordingEmitter emitter =
+        (RecordingEmitter) service.open(UUID.randomUUID(), UUID.randomUUID(), null, null);
+
+    assertThat(emitter.sent).isEmpty();
+    assertThat(service.activeConnections()).isEqualTo(1);
+  }
+
+  @Test
+  void aFailedSnapshotSendLeavesTheClosedConnectionHarmlessForLaterEvents() {
+    UUID tenant = UUID.randomUUID();
+    UUID file = UUID.randomUUID();
+    RecordingEmitter emitter =
+        (RecordingEmitter) service.open(tenant, UUID.randomUUID(), null, List.of());
+    emitter.failNextSend = true;
+
+    // Re-open with a two-event snapshot; the first send fails and the second must observe the
+    // connection as already closed instead of throwing or leaking it.
+    service =
+        new DocumentScanSseService(
+            bus,
+            metrics,
+            new DocumentSseEmitterFactory() {
+              @Override
+              public SseEmitter create(long timeoutMillis) {
+                emitters.add(emitter);
+                return emitter;
+              }
+            },
+            2,
+            60_000L);
+    service.open(
+        tenant,
+        UUID.randomUUID(),
+        null,
+        List.of(
+            event(tenant, file, FileScanStatus.CLEAN),
+            event(tenant, file, FileScanStatus.PROMOTED)));
+
+    assertThat(service.activeConnections()).isZero();
+  }
+
+  @Test
+  void deletingAnotherFileLeavesAPerFileStreamUntouched() {
+    UUID tenant = UUID.randomUUID();
+    UUID file = UUID.randomUUID();
+    RecordingEmitter emitter =
+        (RecordingEmitter) service.open(tenant, UUID.randomUUID(), file, List.of());
+
+    service.documentDeleted(tenant, UUID.randomUUID());
+
+    assertThat(emitter.sent).isEmpty();
+    assertThat(emitter.completed).isFalse();
+    assertThat(service.activeConnections()).isEqualTo(1);
+  }
+
+  @Test
+  void aDeletionSendFailureReleasesTheTenantStream() {
+    UUID tenant = UUID.randomUUID();
+    RecordingEmitter emitter =
+        (RecordingEmitter) service.open(tenant, UUID.randomUUID(), null, List.of());
+    emitter.failSends = true;
+
+    service.documentDeleted(tenant, UUID.randomUUID());
+
+    assertThat(service.activeConnections()).isZero();
+    assertThat(bus.subscriberCount(tenant)).isZero();
+  }
+
+  @Test
   void deletingADocumentNotifiesTheTenantStreamAndCompletesPerFileStreams() {
     UUID tenant = UUID.randomUUID();
     UUID user = UUID.randomUUID();
@@ -198,6 +280,11 @@ class DocumentScanSseServiceTest {
     assertThat(service.activeConnections()).isEqualTo(1);
   }
 
+  @Test
+  void emitterFactoryCreatesARealEmitter() {
+    assertThat(new DocumentSseEmitterFactory().create(1_000L)).isNotNull();
+  }
+
   private FileScanStatusEvent event(UUID tenant, UUID file, FileScanStatus status) {
     return new FileScanStatusEvent(
         tenant, file, "report.pdf", status, "", Instant.parse("2026-01-01T00:00:00Z"));
@@ -210,11 +297,29 @@ class DocumentScanSseServiceTest {
     private Runnable timeout;
     private Consumer<Throwable> error;
     private boolean failSends;
+    private boolean failNextSend;
     private boolean completed;
+
+    void fireTimeout() {
+      if (timeout != null) {
+        timeout.run();
+      }
+    }
+
+    private boolean shouldFail() {
+      if (failSends) {
+        return true;
+      }
+      if (failNextSend) {
+        failNextSend = false;
+        return true;
+      }
+      return false;
+    }
 
     @Override
     public void send(Object object) throws IOException {
-      if (failSends) {
+      if (shouldFail()) {
         throw new IOException("client gone");
       }
       sent.add(object);
@@ -222,7 +327,7 @@ class DocumentScanSseServiceTest {
 
     @Override
     public void send(SseEventBuilder builder) throws IOException {
-      if (failSends) {
+      if (shouldFail()) {
         throw new IOException("client gone");
       }
       sent.add(builder);

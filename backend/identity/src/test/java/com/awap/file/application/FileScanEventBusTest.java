@@ -1,6 +1,7 @@
 package com.awap.file.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.awap.file.domain.FileScanStatus;
 import java.time.Instant;
@@ -76,6 +77,49 @@ class FileScanEventBusTest {
 
     assertThat(received).hasSize(1);
     assertThat(received.get(0).status()).isEqualTo(FileScanStatus.SCAN_FAILED);
+  }
+
+  @Test
+  void rejectsNullTenantAndListener() {
+    UUID tenant = UUID.randomUUID();
+    assertThatThrownBy(() -> bus.subscribe(null, null, event -> {}))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("tenantId");
+    assertThatThrownBy(() -> bus.subscribe(tenant, null, null))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("listener");
+  }
+
+  @Test
+  void nullEventsAndUnknownTenantsAreIgnored() {
+    bus.publish(null);
+    bus.publish(event(UUID.randomUUID(), UUID.randomUUID(), FileScanStatus.CLEAN));
+
+    assertThat(bus.subscriberCount(UUID.randomUUID())).isZero();
+  }
+
+  @Test
+  void rejectedDispatchIsDroppedWithoutBreakingThePublisher() {
+    FileScanEventBus rejecting =
+        new FileScanEventBus(
+            command -> {
+              throw new java.util.concurrent.RejectedExecutionException("queue full");
+            });
+    UUID tenant = UUID.randomUUID();
+    try (var ignored = rejecting.subscribe(tenant, null, event -> {})) {
+      rejecting.publish(event(tenant, UUID.randomUUID(), FileScanStatus.INFECTED));
+    }
+  }
+
+  @Test
+  void closeAllDropsEverySubscription() {
+    UUID tenant = UUID.randomUUID();
+    bus.subscribe(tenant, null, event -> {});
+    assertThat(bus.subscriberCount(tenant)).isEqualTo(1);
+
+    bus.closeAll();
+
+    assertThat(bus.subscriberCount(tenant)).isZero();
   }
 
   private FileScanStatusEvent event(UUID tenant, UUID file, FileScanStatus status) {
