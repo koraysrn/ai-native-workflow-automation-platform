@@ -32,6 +32,7 @@ class FileScanSchedulerTest {
 
   private final FileRecordRepository repository = mock(FileRecordRepository.class);
   private final FileScanAuditRepository auditRepository = mock(FileScanAuditRepository.class);
+  private final FileScanEventBus eventBus = mock(FileScanEventBus.class);
   private final InMemoryFileObjectStore objectStore = new InMemoryFileObjectStore();
   private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
   private final FileStorageProperties properties =
@@ -52,7 +53,7 @@ class FileScanSchedulerTest {
     scanner = mock(ClamAvScanner.class);
     scheduler =
         new FileScanScheduler(
-            repository, auditRepository, scanner, objectStore, properties, meterRegistry);
+            repository, auditRepository, scanner, objectStore, properties, meterRegistry, eventBus);
   }
 
   @Test
@@ -77,6 +78,11 @@ class FileScanSchedulerTest {
                 .timer()
                 .count())
         .isEqualTo(1);
+    ArgumentCaptor<FileScanStatusEvent> events = ArgumentCaptor.forClass(FileScanStatusEvent.class);
+    verify(eventBus, times(3)).publish(events.capture());
+    assertThat(events.getAllValues())
+        .extracting(FileScanStatusEvent::status)
+        .containsExactly(FileScanStatus.SCANNING, FileScanStatus.CLEAN, FileScanStatus.PROMOTED);
   }
 
   @Test
@@ -128,7 +134,7 @@ class FileScanSchedulerTest {
             false);
     scheduler =
         new FileScanScheduler(
-            repository, auditRepository, scanner, objectStore, retain, meterRegistry);
+            repository, auditRepository, scanner, objectStore, retain, meterRegistry, eventBus);
     FileRecord record = quarantinedRecord("retain.pdf");
     when(scanner.scan(any())).thenReturn(FileScanStatus.INFECTED);
 
@@ -241,7 +247,13 @@ class FileScanSchedulerTest {
             true);
     scheduler =
         new FileScanScheduler(
-            repository, auditRepository, scanner, objectStore, singleAttempt, meterRegistry);
+            repository,
+            auditRepository,
+            scanner,
+            objectStore,
+            singleAttempt,
+            meterRegistry,
+            eventBus);
     FileRecord record = quarantinedRecord("down.pdf");
     when(scanner.scan(any()))
         .thenThrow(

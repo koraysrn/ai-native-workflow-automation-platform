@@ -27,6 +27,7 @@ class FileServiceTest {
   private static final UUID TENANT = UUID.fromString("11111111-1111-1111-1111-111111111111");
 
   private final FileRecordRepository repository = mock(FileRecordRepository.class);
+  private final FileScanEventBus eventBus = mock(FileScanEventBus.class);
   private final InMemoryFileObjectStore objectStore = new InMemoryFileObjectStore();
   private final FileStorageProperties properties =
       new FileStorageProperties(
@@ -41,7 +42,7 @@ class FileServiceTest {
 
   @BeforeEach
   void setUp() {
-    service = new FileService(repository, objectStore, properties);
+    service = new FileService(repository, objectStore, properties, eventBus);
   }
 
   @Test
@@ -60,6 +61,38 @@ class FileServiceTest {
     assertThat(properties.presignTtlSeconds()).isEqualTo(300);
     assertThat(objectStore.ensuredBuckets())
         .contains("awap-quarantine:true:1", "awap-files:false:365");
+
+    ArgumentCaptor<FileScanStatusEvent> published =
+        ArgumentCaptor.forClass(FileScanStatusEvent.class);
+    verify(eventBus).publish(published.capture());
+    assertThat(published.getValue().fileId()).isEqualTo(slot.fileId());
+    assertThat(published.getValue().tenantId()).isEqualTo(TENANT);
+    assertThat(published.getValue().status()).isEqualTo(FileScanStatus.QUARANTINED);
+    assertThat(published.getValue().name()).isEqualTo("doc.pdf");
+  }
+
+  @Test
+  void scanInfoIsTenantScopedAndExposesPromotionState() {
+    FileRecord promoted = promotedRecord();
+    FileRecord scanning = recordWith(FileScanStatus.SCANNING);
+    when(repository.findByIdInAndTenantId(any(), any())).thenReturn(List.of(promoted));
+    when(repository.findByIdAndTenantId(promoted.getId(), TENANT))
+        .thenReturn(Optional.of(promoted));
+    when(repository.findByIdAndTenantId(scanning.getId(), TENANT)).thenReturn(Optional.empty());
+
+    List<FileService.FileScanInfo> infos =
+        service.scanInfo(TENANT, List.of(promoted.getId(), scanning.getId()));
+
+    assertThat(infos).hasSize(1);
+    assertThat(infos.get(0).downloadable()).isTrue();
+    assertThat(infos.get(0).name()).isEqualTo("doc.pdf");
+    assertThatThrownBy(() -> service.scanInfo(TENANT, scanning.getId()))
+        .isInstanceOfSatisfying(
+            AwapException.class,
+            ex -> {
+              assertThat(ex.errorCode()).isEqualTo(ErrorCode.FILE_NOT_FOUND);
+              assertThat(ex.status()).isEqualTo(HttpStatus.NOT_FOUND);
+            });
   }
 
   @Test

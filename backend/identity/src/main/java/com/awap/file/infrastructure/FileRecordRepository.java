@@ -14,4 +14,8 @@ public interface FileRecordRepository extends JpaRepository<FileRecord, UUID> {
   Optional<FileRecord> findByIdAndTenantId(UUID id, UUID tenantId);
 
   List<FileRecord> findByStatusIn(Collection<FileScanStatus> statuses);
+
+  List<FileRecord> findByIdInAndTenantId(Collection<UUID> ids, UUID tenantId);
+
+  List<FileRecord> findByTenantId(UUID tenantId);
 }

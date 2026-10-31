@@ -66,6 +66,13 @@ awap:
     dlq-quarantine-path: ${DLQ_QUARANTINE_PATH:target/dlq-quarantine/legacy-dlq-quarantine.jsonl}
     # Bounded poll: a large DLQ backlog is drained in chunks instead of blocking the listener.
     max-poll-records: ${KAFKA_MAX_POLL_RECORDS:50}
+  documents:
+    sse:
+      # Issue #135: live scan-status streams. Heartbeats defeat proxy buffering; the per-user cap
+      # prevents connection storms, and the client polls when the stream cannot be kept open.
+      heartbeat-interval-ms: ${DOCUMENT_SSE_HEARTBEAT_INTERVAL_MS:15000}
+      timeout-ms: ${DOCUMENT_SSE_TIMEOUT_MS:1800000}
+      max-connections-per-user: ${DOCUMENT_SSE_MAX_CONNECTIONS_PER_USER:5}
   outbox:
     retention-days: ${OUTBOX_RETENTION_DAYS:7}
     archive-path: ${OUTBOX_ARCHIVE_PATH:target/outbox-archive/outbox.jsonl}

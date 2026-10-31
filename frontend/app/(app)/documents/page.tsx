@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import DocumentScanTable from "../../../components/documents/DocumentScanTable";
 import {
   archiveDocumentVersion,
   createDocumentUpload,
@@ -9,14 +10,28 @@ import {
   listDocuments,
   type DocumentVersionDto,
 } from "../../../lib/api";
+import {
+  infectionMessage,
+  isDocumentDownloadable,
+  scanStatusAnnouncement,
+} from "../../../lib/documentScanStatus";
+import { useDocumentScanStatus } from "../../../lib/hooks/useDocumentScanStatus";
 
 export default function DocumentsPage() {
   const queryClient = useQueryClient();
   const [message, setMessage] = useState("");
+  const [dismissedInfection, setDismissedInfection] = useState<string | null>(null);
+  const { connected, transport, lastEvent } = useDocumentScanStatus();
   const { data: documents = [], isLoading } = useQuery({
     queryKey: ["documents"],
     queryFn: listDocuments,
   });
+
+  const announcement = lastEvent ? scanStatusAnnouncement(lastEvent) : "";
+  const infectedNotice =
+    lastEvent?.status === "INFECTED" && dismissedInfection !== lastEvent.occurredAt
+      ? infectionMessage(lastEvent)
+      : null;
 
   const upload = useMutation({
     mutationFn: async (file: File) => {
@@ -32,7 +47,7 @@ export default function DocumentsPage() {
       return slot;
     },
     onSuccess: () => {
-      setMessage("Uploaded. Antivirus scanning runs before the file becomes downloadable.");
+      setMessage("Uploaded. Scan status updates live as soon as the antivirus run completes.");
       queryClient.invalidateQueries({ queryKey: ["documents"] });
     },
     onError: (error) => setMessage(error instanceof Error ? error.message : "Upload failed"),
@@ -48,6 +63,9 @@ export default function DocumentsPage() {
   });
 
   async function download(document: DocumentVersionDto) {
+    if (!isDocumentDownloadable(document)) {
+      return;
+    }
     const { downloadUrl } = await getDocumentDownloadUrl(document.fileId);
     window.location.assign(downloadUrl);
   }
@@ -57,7 +75,17 @@ export default function DocumentsPage() {
       <h1 style={{ fontSize: 24, fontWeight: 700 }}>Documents</h1>
       <p style={{ color: "#6b7280" }}>
         Uploads are limited to 500 MB and PDF, DOCX, XLSX, PPTX, PNG, JPG and TXT. A file is only
-        downloadable after the antivirus scan clears it.
+        downloadable after the antivirus scan clears and promotes it.
+      </p>
+      <p
+        data-testid="document-stream-state"
+        style={{ color: "#6b7280", fontSize: 12, marginTop: 4 }}
+      >
+        {transport === "polling"
+          ? "Live updates are unavailable; refreshing status by polling."
+          : connected
+            ? "Live scan status updates are connected."
+            : "Connecting to live scan status updates…"}
       </p>
       <input
         type="file"
@@ -71,51 +99,46 @@ export default function DocumentsPage() {
         }}
       />
       {message && <p aria-live="polite">{message}</p>}
+      <p
+        aria-live="polite"
+        aria-atomic="true"
+        role="status"
+        data-testid="document-scan-announcer"
+      >
+        {announcement}
+      </p>
+      {infectedNotice && (
+        <div
+          role="alert"
+          data-testid="document-infected-alert"
+          style={{
+            marginTop: 8,
+            padding: 8,
+            border: "1px solid #fca5a5",
+            background: "#fef2f2",
+            color: "#991b1b",
+          }}
+        >
+          <strong>Infected file blocked.</strong> {infectedNotice}{" "}
+          <button
+            type="button"
+            onClick={() =>
+              setDismissedInfection(lastEvent?.occurredAt ?? null)
+            }
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {isLoading ? (
         <p>Loading documents…</p>
       ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 12 }}>
-          <thead>
-            <tr style={{ textAlign: "left", borderBottom: "1px solid #cbd5e1" }}>
-              <th style={{ padding: 8 }}>File</th>
-              <th style={{ padding: 8 }}>Version</th>
-              <th style={{ padding: 8 }}>Size</th>
-              <th style={{ padding: 8 }}>Status</th>
-              <th style={{ padding: 8 }}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {documents.map((document) => (
-              <tr key={document.id} style={{ borderBottom: "1px solid #e2e8f0" }}>
-                <td style={{ padding: 8, fontFamily: "monospace", fontSize: 12 }}>
-                  {document.fileId}
-                </td>
-                <td style={{ padding: 8 }}>v{document.version}</td>
-                <td style={{ padding: 8 }}>{Math.round(document.size / 1024)} KB</td>
-                <td style={{ padding: 8 }}>{document.status}</td>
-                <td style={{ padding: 8, display: "flex", gap: 8 }}>
-                  <button type="button" onClick={() => download(document)}>
-                    Download
-                  </button>
-                  <button
-                    type="button"
-                    disabled={archive.isPending}
-                    onClick={() => archive.mutate(document.id)}
-                  >
-                    Archive
-                  </button>
-                </td>
-              </tr>
-            ))}
-            {documents.length === 0 && (
-              <tr>
-                <td colSpan={5} style={{ padding: 8, color: "#6b7280" }}>
-                  No documents yet.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
+        <DocumentScanTable
+          documents={documents}
+          archivePending={archive.isPending}
+          onDownload={download}
+          onArchive={(document) => archive.mutate(document.id)}
+        />
       )}
     </div>
   );

@@ -894,3 +894,48 @@ there is no server-side stack trace for expected validation errors.
 **Rollback.** This is additive and data-compatible: previous definitions already carry an optional
 `condition` on the transition. To disable the UI, stop linking to the designer editor; the backend
 continues to validate transition conditions on create. No migration or down-script is required.
+
+## O20 — Live document scan status streams (issue #135)
+
+**Purpose.** The documents screen no longer waits for a manual refresh to learn whether an upload
+became downloadable. The backend publishes every `FileScanStatus` transition to an in-process,
+tenant-keyed bus; `DocumentScanSseService` fans the events out over Server-Sent Events and the
+frontend `useDocumentScanStatus` hook updates the cached rows in place.
+
+**Endpoints and event contract.**
+- `GET /api/v1/documents/events` streams every scan update for the caller's tenant.
+- `GET /api/v1/documents/{fileId}/events` performs an ownership check before opening the stream; a
+  foreign or unknown id returns 404 and never exposes the filename.
+- The stream starts with a snapshot of current statuses (`QUARANTINED`, `SCANNING`, `CLEAN`,
+  `PROMOTED`, `INFECTED`, `SCAN_FAILED`) so a reconnect cannot miss a transition. Each event is
+  named `scan-status` and carries `{ tenantId, fileId, name, status, detail, occurredAt }`.
+- `Cache-Control: no-cache, no-transform`, `X-Accel-Buffering: no` and a 15-second SSE comment
+  heartbeat keep proxies from buffering the stream. Streams close after the idle timeout
+  (`DOCUMENT_SSE_TIMEOUT_MS`, default 30 minutes) and the client reconnects with exponential
+  backoff, then falls back to polling `GET /api/v1/documents`.
+- A deleted document emits `document-deleted`; tenant-wide streams keep running and remove the row,
+  while the matching per-file stream completes cleanly after the event.
+
+**Failure triage.**
+- `401`: the JWT/session is gone; the hook's polling fallback calls an authenticated endpoint which
+  redirects to login. The stream itself is closed by the browser on the failed reconnects.
+- Repeated disconnects or an alert on `awap_document_sse_connections`: check the proxy idle timeout
+  and `X-Accel-Buffering`, then look for clients that keep many tabs open (the visibility API closes
+  streams in hidden tabs).
+- `429` on connect: the caller exceeded `DOCUMENT_SSE_MAX_CONNECTIONS_PER_USER` (default 5). Close
+  other tabs or raise the limit for trusted automation.
+- Missing rows: the client ignores events for unknown file ids (a document deleted during a scan);
+  the next list/poll reconciles the table.
+- A slow or stalled client cannot block the scan scheduler: fan-out uses a bounded executor and
+  drops deliveries when the queue is saturated; the polling fallback recovers the current state.
+
+**Metrics, logs and alerts.** `awap_document_sse_connections` (gauge), `awap_document_sse_connected_total`,
+`awap_document_sse_disconnected_total`, `awap_document_sse_events_total` and
+`awap_document_scan_status_latency_seconds` are listed in [`observability-metrics.md`](observability-metrics.md).
+`AwapDocumentSseConnectionsHigh` (warning, more than 900 open streams for 10 minutes) is the
+capacity signal. Subscriber failures and dropped fan-out events are logged with the file id.
+
+**Rollback.** The feature is additive: remove the events links/UI or stop subscribing on the
+frontend, and the existing list/download contract (now including `scanStatus`, `scanError`, `name`
+and `downloadable`) keeps working. No migration is required; the bus and streams are in-memory and
+disappear with the process.
