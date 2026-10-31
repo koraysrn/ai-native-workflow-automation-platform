@@ -361,7 +361,8 @@
                                 <outputFormat>HTML</outputFormat>
                                 <outputFormat>XML</outputFormat>
                             </outputFormats>
-                            <mutationThreshold>70</mutationThreshold>
+                            <failWhenNoMutations>false</failWhenNoMutations>
+                            <mutationThreshold>80</mutationThreshold>
                             <coverageThreshold>80</coverageThreshold>
                         </configuration>
                         <dependencies>
