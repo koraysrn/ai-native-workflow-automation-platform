@@ -16,6 +16,8 @@ class SpelExpressionServiceTest {
   void rejectsNullAndBlankQuietly() {
     service.validate(null);
     service.validate("   ");
+    assertThat(service.problems(null)).isEmpty();
+    assertThat(service.problems("   ")).isEmpty();
   }
 
   @Test
@@ -33,8 +35,42 @@ class SpelExpressionServiceTest {
   }
 
   @Test
+  void reportsEveryForbiddenPatternWithAFieldLevelMessage() {
+    assertThat(service.problems("T(java.lang.Math).random()"))
+        .containsExactly("Expression contains a forbidden pattern: T(");
+    assertThat(service.problems("T(java.lang.System).getProperty('user.dir')"))
+        .containsExactly(
+            "Expression contains a forbidden pattern: T(",
+            "Expression contains a forbidden pattern: System");
+    assertThat(service.problems("System.exit(0)"))
+        .containsExactly("Expression contains a forbidden pattern: System");
+  }
+
+  @Test
   void rejectsInvalidExpression() {
     assertThatThrownBy(() -> service.validate("1 +")).isInstanceOf(AwapException.class);
+    assertThat(service.problems("1 +")).containsExactly("Expression is invalid.");
+  }
+
+  @Test
+  void rejectsExpressionsLongerThanTheSharedLimit() {
+    String tooLong = "#amount > " + "1".repeat(SpelExpressionService.MAX_EXPRESSION_LENGTH);
+
+    assertThat(service.problems(tooLong))
+        .containsExactly(
+            "Expression exceeds the maximum length of "
+                + SpelExpressionService.MAX_EXPRESSION_LENGTH
+                + " characters.");
+    assertThatThrownBy(() -> service.validate(tooLong))
+        .isInstanceOf(AwapException.class)
+        .hasMessageContaining("maximum length");
+  }
+
+  @Test
+  void acceptsExpressionExactlyAtTheLimit() {
+    String atLimit = "a".repeat(SpelExpressionService.MAX_EXPRESSION_LENGTH);
+
+    assertThat(service.problems(atLimit)).isEmpty();
   }
 
   @Test
@@ -46,6 +82,7 @@ class SpelExpressionServiceTest {
   @Test
   void evaluatesAgainstRootObject() {
     record Payload(int amount) {}
+
     Object result = service.evaluate("amount * 2", new Payload(21));
     assertThat(result).isEqualTo(42);
   }

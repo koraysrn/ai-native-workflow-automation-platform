@@ -441,3 +441,17 @@ groups:
           summary: "Saga compensation retries are elevated"
           description: "{{ $value }} compensation attempts were rescheduled in 15 minutes; a downstream ERP/CRM rollback endpoint is likely degraded."
           runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o18--saga-compensation-issue-133"
+
+  - name: awap-workflow-expression
+    rules:
+      # A sustained invalid-validation rate points at a builder/autocomplete or contract regression,
+      # not at a single mistyped condition.
+      - alert: AwapWorkflowExpressionValidationFailures
+        expr: increase(awap_workflow_expression_validations_total{outcome="invalid"}[15m]) > 20
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Designer expression validation is failing repeatedly"
+          description: "{{ $value }} invalid conditions were rejected in 15 minutes; check the expression builder/autocomplete contract or a recent backend deploy."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o19--edge-condition-editing-and-expression-validation-issue-134"

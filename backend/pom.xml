@@ -253,6 +253,29 @@
                                         </limit>
                                     </limits>
                                 </rule>
+                                <!-- Issue #134: the designer expression contract (sandbox,
+                                     dry-run service, metrics and endpoint) must stay above the
+                                     stated 95% line / 90% branch gate. -->
+                                <rule>
+                                    <element>CLASS</element>
+                                    <includes>
+                                        <include>com.awap.workflow.application.WorkflowExpressionValidationService</include>
+                                        <include>com.awap.workflow.application.WorkflowExpressionValidationMetrics</include>
+                                        <include>com.awap.workflow.interfaces.api.WorkflowDefinitionController</include>
+                                    </includes>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.95</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.90</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
                                 <!-- Issue #133: the saga orchestrator and its state machine must
                                      stay above the stated 95% line / 90% branch gate. -->
                                 <rule>

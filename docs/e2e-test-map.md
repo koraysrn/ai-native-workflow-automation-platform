@@ -23,6 +23,9 @@ screenshots and video retained on failure.
 | No critical/serious axe violations on the shell | [`accessibility.spec.ts`](../frontend/e2e/accessibility.spec.ts) | mocked |
 | CSP, HSTS and friends on every response | [`security-headers.spec.ts`](../frontend/e2e/security-headers.spec.ts) | mocked |
 | Seeded tenant exists for live journeys | [`global-setup.ts`](../frontend/e2e/global-setup.ts) | stack |
+| A DECISION node gets two conditional edges through the inspector | [`workflow-designer-conditions.spec.ts`](../frontend/e2e/workflow-designer-conditions.spec.ts) — `branches` | mocked |
+| Save is blocked while an edge condition is invalid | `workflow-designer-conditions.spec.ts` — `guard` | mocked |
+| The legend and axe checks pass on the designer | `workflow-designer-conditions.spec.ts` — `accessibility` | mocked |
 
 ## Conventions
 

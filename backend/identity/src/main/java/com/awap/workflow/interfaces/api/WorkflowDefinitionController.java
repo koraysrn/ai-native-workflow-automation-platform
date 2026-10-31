@@ -3,7 +3,11 @@ package com.awap.workflow.interfaces.api;
 import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
 import com.awap.identity.infrastructure.security.TenantContext;
+import com.awap.workflow.application.ExpressionValidationResult;
 import com.awap.workflow.application.WorkflowDefinitionService;
+import com.awap.workflow.application.WorkflowExpressionValidationService;
+import com.awap.workflow.interfaces.dto.ExpressionValidationRequest;
+import com.awap.workflow.interfaces.dto.ExpressionValidationResponse;
 import com.awap.workflow.interfaces.dto.WorkflowDefinitionRequest;
 import com.awap.workflow.interfaces.dto.WorkflowDefinitionResponse;
 import com.awap.workflow.interfaces.dto.WorkflowVersionResponse;
@@ -20,15 +24,19 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Workflow definition endpoints: draft, publish, rollback and versions. */
+/** Workflow definition endpoints: draft, publish, rollback, versions and expression dry-runs. */
 @RestController
 @RequestMapping("/api/v1/workflow-definitions")
 public class WorkflowDefinitionController {
 
   private final WorkflowDefinitionService service;
+  private final WorkflowExpressionValidationService expressionValidationService;
 
-  public WorkflowDefinitionController(WorkflowDefinitionService service) {
+  public WorkflowDefinitionController(
+      WorkflowDefinitionService service,
+      WorkflowExpressionValidationService expressionValidationService) {
     this.service = service;
+    this.expressionValidationService = expressionValidationService;
   }
 
   @PostMapping
@@ -37,6 +45,20 @@ public class WorkflowDefinitionController {
       @Valid @RequestBody WorkflowDefinitionRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(service.create(currentTenantId(), request));
+  }
+
+  /**
+   * Validates an edge or node expression without persisting anything. A blank expression is valid
+   * because it means the transition is unconditional; every other failure is returned as a
+   * field-level error so the designer can render it inline and block saving.
+   */
+  @PostMapping("/validate-expression")
+  @PreAuthorize("hasAuthority('WORKFLOW_CREATE')")
+  public ResponseEntity<ExpressionValidationResponse> validateExpression(
+      @Valid @RequestBody ExpressionValidationRequest request) {
+    currentTenantId();
+    ExpressionValidationResult result = expressionValidationService.validate(request.expression());
+    return ResponseEntity.ok(toResponse(result));
   }
 
   @GetMapping
@@ -75,6 +97,16 @@ public class WorkflowDefinitionController {
   public ResponseEntity<Void> archiveVersion(@PathVariable UUID id, @PathVariable int version) {
     service.archiveVersion(currentTenantId(), id, version);
     return ResponseEntity.noContent().build();
+  }
+
+  private ExpressionValidationResponse toResponse(ExpressionValidationResult result) {
+    List<ExpressionValidationResponse.FieldError> errors =
+        result.errors().stream()
+            .map(
+                error ->
+                    new ExpressionValidationResponse.FieldError(error.field(), error.message()))
+            .toList();
+    return new ExpressionValidationResponse(result.valid(), errors);
   }
 
   private UUID currentTenantId() {

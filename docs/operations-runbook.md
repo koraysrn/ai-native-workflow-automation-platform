@@ -857,3 +857,40 @@ and `SAGA_BATCH_SIZE`.
 **Rollback.** The feature is additive (V49 creates new tables, policies and one function). Keep the
 tables but set `SAGA_SCHEDULER_ENABLED=false` and stop sending `compensation` blocks; existing
 `FAILED` sagas remain inspectable and can be finished manually. No down-migration is required.
+
+## O19 — Edge condition editing and expression validation (issue #134)
+
+**Purpose.** The workflow designer edits transition conditions on React Flow edges and validates
+them through `POST /api/v1/workflow-definitions/validate-expression` before a draft is saved. The
+endpoint is a dry run: it parses the SpEL expression with the same sandbox and denylist used at
+runtime (`T(...)`, `new`, `System`, `Runtime`, `ProcessBuilder`, `ClassLoader`, `reflect`, `exec`)
+and returns `{ valid, errors: [{ field: "expression", message }] }`; it never persists a definition.
+
+**Behaviour to expect.**
+- A blank or whitespace-only condition is valid and means an unconditional transition.
+- Expressions longer than `SpelExpressionService.MAX_EXPRESSION_LENGTH` (2000) are rejected before
+  parsing with a dedicated message, so the designer cannot freeze the browser or the parser.
+- Forbidden patterns and parse errors produce one field-level error that the edge inspector renders
+  inline (`role="alert"`); the Save button stays blocked while any edge is invalid and the save path
+  re-validates every condition with the backend before calling `createWorkflowDefinition`.
+- Edge `data.condition` is serialized verbatim to the transition `condition`; reload, copy/paste and
+  round-trip serialization keep the exact text. Blank conditions are omitted from the JSON.
+
+**Failure triage.**
+- `401`/`403`: the caller is not an authenticated tenant user with `WORKFLOW_CREATE`. The designer
+  shows the generic auth error and does not save.
+- Network failure or 5xx from the validator: the inspector shows "Validation failed. Retry." and the
+  save call is refused until a successful validation, preventing an unvalidated graph from being
+  persisted.
+- Invalid conditions after a backend deploy: `awap_workflow_expression_validations_total{outcome}`
+  rising for `outcome="invalid"` signals a builder/autocomplete or contract regression.
+
+**Metrics, logs and alerts.** Counter `awap.workflow.expression.validations{outcome=valid|invalid}`
+(see [`observability-metrics.md`](observability-metrics.md)). `AwapWorkflowExpressionValidationFailures`
+(warning, more than 20 invalid validations in 15 minutes for 10 minutes) signals a builder,
+autocomplete or validation-contract regression. Validation failures are returned to the caller;
+there is no server-side stack trace for expected validation errors.
+
+**Rollback.** This is additive and data-compatible: previous definitions already carry an optional
+`condition` on the transition. To disable the UI, stop linking to the designer editor; the backend
+continues to validate transition conditions on create. No migration or down-script is required.

@@ -2,6 +2,7 @@ package com.awap.workflow.application;
 
 import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -22,6 +23,9 @@ import org.springframework.stereotype.Service;
 @Service
 public class SpelExpressionService {
 
+  /** Upper bound shared with the designer so a pathological expression cannot freeze the UI. */
+  public static final int MAX_EXPRESSION_LENGTH = 2000;
+
   private static final long EVALUATION_TIMEOUT_MILLIS = 100;
 
   private static final List<String> FORBIDDEN_PATTERNS =
@@ -41,23 +45,41 @@ public class SpelExpressionService {
 
   private final SpelExpressionParser parser = new SpelExpressionParser();
 
-  public void validate(String expression) {
+  /**
+   * Collects every reason the expression cannot be persisted.
+   *
+   * <p>A blank expression is a valid, unconditional transition and therefore yields no problems.
+   * The length guard runs before the denylist and parsing so an oversized payload is rejected with
+   * a single, clear message instead of a parser-specific failure.
+   */
+  public List<String> problems(String expression) {
+    List<String> problems = new ArrayList<>();
     if (expression == null || expression.isBlank()) {
-      return;
+      return problems;
+    }
+    if (expression.length() > MAX_EXPRESSION_LENGTH) {
+      problems.add(
+          "Expression exceeds the maximum length of " + MAX_EXPRESSION_LENGTH + " characters.");
+      return problems;
     }
     for (String pattern : FORBIDDEN_PATTERNS) {
       if (expression.contains(pattern)) {
-        throw new AwapException(
-            ErrorCode.VALIDATION_FAILED,
-            HttpStatus.BAD_REQUEST,
-            "Expression contains a forbidden pattern: " + pattern);
+        problems.add("Expression contains a forbidden pattern: " + pattern);
       }
     }
     try {
       parser.parseExpression(expression);
     } catch (ParseException ex) {
+      problems.add("Expression is invalid.");
+    }
+    return problems;
+  }
+
+  public void validate(String expression) {
+    List<String> problems = problems(expression);
+    if (!problems.isEmpty()) {
       throw new AwapException(
-          ErrorCode.VALIDATION_FAILED, HttpStatus.BAD_REQUEST, "Expression is invalid.");
+          ErrorCode.VALIDATION_FAILED, HttpStatus.BAD_REQUEST, problems.getFirst());
     }
   }
 
