@@ -122,13 +122,16 @@ test("updates a row through every scan status and gates download on PROMOTED", a
 
 test("announces an INFECTED file and keeps download disabled", async ({ page }) => {
   await openDocuments(page, "SCANNING");
+  await expect(page.getByTestId("scan-status-file-1")).toHaveText("Scanning");
   await page.evaluate((payload) => {
     (window as unknown as { __emitDocumentScan: (value: unknown) => void }).__emitDocumentScan(
       payload,
     );
   }, event("INFECTED", "Antivirus scanning rejected the file."));
 
-  await expect(page.getByRole("alert")).toContainText("Infected file blocked.");
+  await expect(page.getByTestId("document-infected-alert")).toContainText(
+    "Infected file blocked.",
+  );
   await expect(page.getByTestId("document-scan-announcer")).toContainText(
     "report.pdf: scan status changed to Infected.",
   );
