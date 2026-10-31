@@ -1582,6 +1582,65 @@ paths:
                 items:
                   $ref: "#/components/schemas/DocumentVersionResponse"
 
+  /api/v1/documents/events:
+    get:
+      operationId: streamDocumentScanEvents
+      summary: Stream tenant document scan status changes
+      description: >-
+        Server-Sent Events stream of antivirus scan transitions (QUARANTINED, SCANNING, CLEAN,
+        PROMOTED, INFECTED, SCAN_FAILED). Status changes use the `scan-status` event; a deleted
+        document emits `document-deleted` with `{ fileId }` and closes its per-file stream. The
+        stream is tenant-scoped, starts with a snapshot of current statuses, emits heartbeats to
+        defeat proxy buffering and never includes another tenant's file. Clients fall back to
+        polling `GET /api/v1/documents` when SSE is unavailable.
+      tags: [Documents]
+      parameters:
+        - name: fileId
+          in: query
+          required: false
+          description: When present, only that file's events are streamed after an ownership check.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: SSE stream; event name `scan-status` with a JSON data payload.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "429":
+          description: The caller exceeded the per-user open-stream limit.
+
+  /api/v1/documents/{fileId}/events:
+    get:
+      operationId: streamDocumentScanEventsForFile
+      summary: Stream one document's scan status changes
+      description: >-
+        Same event contract as the tenant stream, narrowed to one file. The ownership check runs
+        before the stream opens; a cross-tenant id returns 404 and never leaks the filename.
+      tags: [Documents]
+      parameters:
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: SSE stream; event name `scan-status` with a JSON data payload.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/documents/{fileId}/versions:
     get:
       operationId: listDocumentVersions
@@ -2840,6 +2899,22 @@ components:
         createdAt:
           type: string
           format: date-time
+        name:
+          type: string
+          nullable: true
+          description: Display name from the quarantine record.
+        scanStatus:
+          type: string
+          nullable: true
+          description: Live antivirus lifecycle for the underlying file.
+          enum: [QUARANTINED, SCANNING, CLEAN, PROMOTED, INFECTED, SCAN_FAILED]
+        scanError:
+          type: string
+          nullable: true
+          description: Last scan failure detail, when the status is SCAN_FAILED.
+        downloadable:
+          type: boolean
+          description: True only when scanStatus is PROMOTED.
 
     CreateDocumentResponse:
       type: object

@@ -26,6 +26,8 @@ screenshots and video retained on failure.
 | A DECISION node gets two conditional edges through the inspector | [`workflow-designer-conditions.spec.ts`](../frontend/e2e/workflow-designer-conditions.spec.ts) — `branches` | mocked |
 | Save is blocked while an edge condition is invalid | `workflow-designer-conditions.spec.ts` — `guard` | mocked |
 | The legend and axe checks pass on the designer | `workflow-designer-conditions.spec.ts` — `accessibility` | mocked |
+| Scan status updates rows without a refresh and gates download on PROMOTED | [`document-scan-live.spec.ts`](../frontend/e2e/document-scan-live.spec.ts) — `updates` | mocked |
+| INFECTED shows an alert, an aria-live announcement and keeps download disabled | `document-scan-live.spec.ts` — `announces` | mocked |
 
 ## Conventions
 
