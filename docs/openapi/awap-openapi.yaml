@@ -730,6 +730,36 @@ paths:
         "204":
           description: Version archived.
 
+  /api/v1/workflow-definitions/validate-expression:
+    post:
+      operationId: validateWorkflowExpression
+      summary: Dry-run a workflow expression
+      description: >-
+        Parses and validates a SpEL condition without persisting a definition. A blank expression is
+        valid because it denotes an unconditional transition. Validation failures are returned as
+        field-level errors on the `expression` field so the designer can render them inline and
+        block saving an invalid graph.
+      tags: [Workflow Definitions]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExpressionValidationRequest"
+      responses:
+        "200":
+          description: Validation result.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpressionValidationResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   /api/v1/workflow-instances:
     get:
       operationId: listWorkflowInstances
@@ -2543,6 +2573,43 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    ExpressionValidationRequest:
+      type: object
+      description: >-
+        Dry-run condition validation request. The expression may be blank, which means the
+        transition is unconditional.
+      required: [expression]
+      properties:
+        expression:
+          type: string
+          maxLength: 2000
+          example: "#amount > 100"
+
+    ExpressionValidationResponse:
+      type: object
+      description: >-
+        Dry-run result. `valid` is false when `errors` contains a field-level problem such as a
+        malformed expression, a forbidden pattern or an oversized condition.
+      required: [valid, errors]
+      properties:
+        valid:
+          type: boolean
+        errors:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExpressionFieldError"
+
+    ExpressionFieldError:
+      type: object
+      required: [field, message]
+      properties:
+        field:
+          type: string
+          enum: [expression]
+        message:
+          type: string
+          example: "Expression contains a forbidden pattern: T("
 
     SagaResponse:
       type: object

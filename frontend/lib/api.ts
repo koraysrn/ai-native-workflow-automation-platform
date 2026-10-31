@@ -343,6 +343,27 @@ export function createWorkflowDefinition(
   return authPost<WorkflowDefinitionDto>("/api/v1/workflow-definitions", payload);
 }
 
+export interface ExpressionFieldErrorDto {
+  field: string;
+  message: string;
+}
+
+export interface ExpressionValidationDto {
+  valid: boolean;
+  errors: ExpressionFieldErrorDto[];
+}
+
+/**
+ * Dry-runs an edge or node condition. A blank expression is valid and means the transition is
+ * unconditional; field-level errors are returned for inline rendering in the designer.
+ */
+export function validateWorkflowExpression(expression: string): Promise<ExpressionValidationDto> {
+  return authPost<ExpressionValidationDto>(
+    "/api/v1/workflow-definitions/validate-expression",
+    { expression },
+  );
+}
+
 export function createFormDefinition(name: string, schemaJson: string): Promise<FormDefinitionDto> {
   return authPost<FormDefinitionDto>("/api/v1/forms", { name, schemaJson });
 }

@@ -20,6 +20,7 @@ by the dashboard/alert tests in CI.
 | `awap.saga.steps` | `awap_saga_steps_total` | `SagaMetrics` | – (saga panel/API) | `AwapSagaCompensationFailures` |
 | `awap.saga.compensation.retries` | `awap_saga_compensation_retries_total` | `SagaMetrics` | – (saga panel/API) | `AwapSagaCompensationRetriesHigh` |
 | `awap.saga.duration` | `awap_saga_duration_seconds_*` | `SagaMetrics` | – (saga panel/API) | – |
+| `awap.workflow.expression.validations` | `awap_workflow_expression_validations_total` | `WorkflowExpressionValidationService` | – (designer inline feedback) | – |
 | `awap.outbox.pending` | `awap_outbox_pending` | `OutboxRelayService` (gauge) | Outbox backlog, relay rate and DLQ | `AwapOutboxBacklogStuck` |
 | `awap.outbox.events` | `awap_outbox_events_total` | `OutboxRelayService` | Outbox backlog, relay rate and DLQ | – |
 | `awap.dlq.messages` | `awap_dlq_messages_total` | `DlqConsumer` | Outbox backlog, relay rate and DLQ | `AwapWebhookDeadGrowth` |

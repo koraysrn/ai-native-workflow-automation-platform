@@ -13,6 +13,8 @@
 # testing
 /coverage
 /pacts
+/playwright-report
+/test-results
 
 # next.js
 /.next/

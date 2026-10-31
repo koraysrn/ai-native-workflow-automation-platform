@@ -333,11 +333,22 @@ Workflow JSON Format
   "edges": [
     { "from": "n1", "to": "n2" },
     { "from": "n2", "to": "n3" },
-    { "from": "n3", "to": "n4" }
+    {
+      "from": "n3",
+      "to": "n4",
+      "condition": "#amount >= 100"
+    }
   ],
   "variables": []
 }
 ```
+
+Edge conditions: the designer stores each branch condition on the React Flow edge `data.condition`
+and serializes it as the transition `condition` property (the `edges`/`transitions` key is accepted).
+A blank condition means the transition is unconditional. The designer validates conditions through
+`POST /api/v1/workflow-definitions/validate-expression`, renders field-level errors inline and
+blocks saving while any edge is invalid. Reloads, copy/paste and serialization round-trips keep the
+exact condition text.
 
 Node timeouts: `timeoutSeconds` must be between 1 and `awap.engine.node-timeout.max-seconds`
 (default 3600); zero, negative and longer values are rejected by node config validation. Which node

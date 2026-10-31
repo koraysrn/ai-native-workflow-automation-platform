@@ -2,6 +2,10 @@
   "description": "Prometheus metric names referenced by the AWAP dashboard and alerts. Every entry maps to a Micrometer meter emitted by backend/identity.",
   "metrics": [
     {
+      "name": "awap_workflow_expression_validations_total",
+      "source": "WorkflowExpressionValidationService (awap.workflow.expression.validations counter)"
+    },
+    {
       "name": "awap_workflow_success_total",
       "source": "AnalyticsService#recordProcessCompleted (awap.workflow.success)"
     },

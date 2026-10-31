@@ -91,4 +91,26 @@ class WorkflowDefinitionServiceNegativeTest {
             + "\"transitions\":[{\"from\":\"a\",\"to\":\"b\","
             + "\"condition\":\"new java.lang.ProcessBuilder()\"}]}");
   }
+
+  @Test
+  void rejectsAnOversizedTransitionCondition() {
+    String oversized = "1".repeat(SpelExpressionService.MAX_EXPRESSION_LENGTH + 1);
+
+    assertInvalid(
+        "{\"nodes\":[{\"id\":\"a\",\"type\":\"START\"},{\"id\":\"b\",\"type\":\"END\"}],"
+            + "\"transitions\":[{\"from\":\"a\",\"to\":\"b\",\"condition\":\""
+            + oversized
+            + "\"}]}");
+  }
+
+  @Test
+  void acceptsABlankTransitionConditionAsUnconditional() {
+    service.create(
+        tenantId,
+        new WorkflowDefinitionRequest(
+            "W",
+            null,
+            "{\"nodes\":[{\"id\":\"a\",\"type\":\"START\"},{\"id\":\"b\",\"type\":\"END\"}],"
+                + "\"transitions\":[{\"from\":\"a\",\"to\":\"b\",\"condition\":\"   \"}]}"));
+  }
 }
