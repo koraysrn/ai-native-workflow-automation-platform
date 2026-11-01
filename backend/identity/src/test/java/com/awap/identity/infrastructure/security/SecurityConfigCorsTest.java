@@ -7,6 +7,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.security.web.csrf.CsrfToken;
+import org.springframework.security.web.csrf.CsrfTokenRequestHandler;
+import org.springframework.security.web.csrf.DefaultCsrfToken;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 
@@ -35,5 +38,15 @@ class SecurityConfigCorsTest {
         .contains(
             "Authorization", "Content-Type", "Idempotency-Key", "X-Tenant-Id", "X-XSRF-TOKEN");
     assertThat(cors.checkOrigin("http://localhost:3000")).isEqualTo("http://localhost:3000");
+  }
+
+  @Test
+  void csrfRequestHandlerAcceptsTheRawCookieTokenSentByTheSpa() {
+    CsrfTokenRequestHandler handler = SecurityConfig.csrfTokenRequestHandler();
+    CsrfToken token = new DefaultCsrfToken("X-XSRF-TOKEN", "_csrf", "raw-token");
+    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/v1/tasks");
+    request.addHeader("X-XSRF-TOKEN", "raw-token");
+
+    assertThat(handler.resolveCsrfTokenValue(request, token)).isEqualTo("raw-token");
   }
 }

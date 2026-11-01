@@ -21,6 +21,8 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.csrf.CsrfTokenRequestHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -66,6 +68,10 @@ public class SecurityConfig {
     http.csrf(
             csrf ->
                 csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                    // The SPA reads the raw XSRF-TOKEN cookie and echoes it in X-XSRF-TOKEN.
+                    // Spring Security 7 defaults to the XOR handler, which expects a masked
+                    // value and would reject the raw token during a live UI request.
+                    .csrfTokenRequestHandler(csrfTokenRequestHandler())
                     .ignoringRequestMatchers(
                         "/api/v1/auth/login",
                         "/api/v1/auth/refresh",
@@ -93,6 +99,11 @@ public class SecurityConfig {
     generalRateLimitFilterProvider.ifAvailable(
         filter -> http.addFilterBefore(filter, UsernamePasswordAuthenticationFilter.class));
     return http.build();
+  }
+
+  /** Resolves the raw token written by CookieCsrfTokenRepository for the browser client. */
+  static CsrfTokenRequestHandler csrfTokenRequestHandler() {
+    return new CsrfTokenRequestAttributeHandler();
   }
 
   /** CORS allowlist for the frontend origin(s). */

@@ -32,5 +32,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   manual intervention API, audit rows and metrics.
 - Live-stack Playwright journey covering the seeded tenant, dashboard, workflow start, task
   decision, document scan projection and analytics aggregates, with CORS headers for
-  `X-Tenant-Id`/`X-XSRF-TOKEN`, an opt-out for runtime bucket provisioning, and distinct Kafka
-  consumer groups for the analytics/usage listeners that share a topic.
+  `X-Tenant-Id`/`X-XSRF-TOKEN`, an SPA-compatible CSRF request handler, an opt-out for runtime
+  bucket provisioning, and distinct Kafka consumer groups for the analytics/usage listeners that
+  share a topic.
