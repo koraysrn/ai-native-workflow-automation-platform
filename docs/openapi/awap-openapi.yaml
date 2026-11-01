@@ -179,6 +179,28 @@ paths:
                 items:
                   $ref: "#/components/schemas/TenantMembershipResponse"
 
+  /api/v1/auth/csrf:
+    get:
+      operationId: issueCsrfToken
+      summary: Issue the CSRF bootstrap token
+      description: >-
+        Forces a CSRF token to be generated and returns it. The response also sets the readable
+        `XSRF-TOKEN` cookie that the browser client echoes in `X-XSRF-TOKEN`.
+      tags: [Auth]
+      responses:
+        "200":
+          description: CSRF token issued.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token]
+                properties:
+                  token:
+                    type: string
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
   /api/v1/tenants:
     post:
       operationId: createTenant

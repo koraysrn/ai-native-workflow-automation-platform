@@ -52,7 +52,7 @@ interface AnalyticsAggregateDto {
   count: number;
 }
 
-/** Reads the XSRF-TOKEN cookie that the backend sets on the first authenticated GET. */
+/** Bootstraps the XSRF-TOKEN cookie through the dedicated endpoint and returns its value. */
 async function csrfToken(context: BrowserContext): Promise<string> {
   for (let attempt = 0; attempt < 3; attempt += 1) {
     const cookies = await context.cookies();
@@ -60,7 +60,13 @@ async function csrfToken(context: BrowserContext): Promise<string> {
     if (cookie?.value) {
       return decodeURIComponent(cookie.value);
     }
-    await context.request.get(`${API_URL}/api/v1/auth/me`);
+    const response = await context.request.get(`${API_URL}/api/v1/auth/csrf`);
+    if (response.ok()) {
+      const body = (await response.json()) as { token?: string };
+      if (body.token) {
+        return body.token;
+      }
+    }
   }
   throw new Error("The backend did not issue the XSRF-TOKEN cookie.");
 }
