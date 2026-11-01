@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.junit.jupiter.api.Test;
+import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.kafka.listener.ConcurrentMessageListenerContainer;
@@ -14,6 +15,11 @@ import org.springframework.kafka.listener.ContainerProperties;
 import org.springframework.kafka.listener.MessageListener;
 
 class KafkaConsumerConfigTest {
+
+  @Test
+  void enablesKafkaListenerProcessing() {
+    assertThat(KafkaConsumerConfig.class.isAnnotationPresent(EnableKafka.class)).isTrue();
+  }
 
   @Test
   void consumerFactoryConfiguresBoundedPollingAndStartupRetries() {

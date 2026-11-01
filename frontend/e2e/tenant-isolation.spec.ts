@@ -23,7 +23,8 @@ test("tenant-scoped reads send the active tenant header", async ({ page }) => {
   await page.goto("/dashboard");
 
   await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
-  expect(seen["x-tenant-id"]).toBe("tenant-a");
+  // React Query issues the read asynchronously; poll until the intercepted request lands.
+  await expect.poll(() => seen["x-tenant-id"]).toBe("tenant-a");
 });
 
 test("a cross-tenant rejection renders no foreign rows", async ({ page }) => {
@@ -44,6 +45,6 @@ test("a cross-tenant rejection renders no foreign rows", async ({ page }) => {
   await page.goto("/tasks");
 
   await expect(page.getByRole("heading", { name: "Tasks" })).toBeVisible();
-  expect(headers["x-tenant-id"]).toBe("tenant-b");
+  await expect.poll(() => headers["x-tenant-id"]).toBe("tenant-b");
   await expect(page.locator("main ul li")).toHaveCount(0);
 });
