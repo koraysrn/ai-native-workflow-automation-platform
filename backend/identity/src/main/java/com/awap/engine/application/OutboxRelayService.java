@@ -242,8 +242,12 @@ public class OutboxRelayService {
       return true;
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();
+      log.warn("Kafka send interrupted for outbox event {}", event.id(), ex);
       return false;
     } catch (Exception ex) {
+      // Keep the exception in the log: a silently swallowed send failure only surfaced as a
+      // released claim, which made a misconfigured broker listener impossible to diagnose.
+      log.warn("Kafka send failed for outbox event {}: {}", event.id(), ex.toString(), ex);
       return false;
     }
   }
