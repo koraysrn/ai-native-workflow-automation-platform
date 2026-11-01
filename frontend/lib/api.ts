@@ -68,6 +68,23 @@ function csrfToken(): string | undefined {
   return token ? decodeURIComponent(token) : undefined;
 }
 
+/**
+ * Returns the CSRF header, bootstrapping the readable cookie first when this is the SPA's first
+ * state-changing request. A GET alone never makes Spring generate the token.
+ */
+async function csrfHeaders(): Promise<Record<string, string>> {
+  let token = csrfToken();
+  if (!token) {
+    const started = performance.now();
+    const response = await fetch(`${apiBase()}/api/v1/auth/csrf`, {
+      credentials: "include",
+    });
+    logApi("GET", "/api/v1/auth/csrf", response.status, started);
+    token = csrfToken();
+  }
+  return token ? { "X-XSRF-TOKEN": token } : {};
+}
+
 /** Reads the active tenant cookie set by the tenant switcher. */
 function activeTenantId(): string | null {
   if (typeof document === "undefined") {
@@ -234,11 +251,7 @@ async function authFetch<T>(path: string, retried = false): Promise<T> {
 }
 
 async function authPatch<T>(path: string, retried = false): Promise<T> {
-  const headers: Record<string, string> = {};
-  const token = csrfToken();
-  if (token) {
-    headers["X-XSRF-TOKEN"] = token;
-  }
+  const headers: Record<string, string> = { ...(await csrfHeaders()) };
   const tenant = activeTenantId();
   if (tenant) {
     headers["X-Tenant-Id"] = tenant;
@@ -264,11 +277,10 @@ async function authPatch<T>(path: string, retried = false): Promise<T> {
 }
 
 async function authPut<T>(path: string, body: unknown, retried = false): Promise<T> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const token = csrfToken();
-  if (token) {
-    headers["X-XSRF-TOKEN"] = token;
-  }
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(await csrfHeaders()),
+  };
   const tenant = activeTenantId();
   if (tenant) {
     headers["X-Tenant-Id"] = tenant;
@@ -295,11 +307,10 @@ async function authPut<T>(path: string, body: unknown, retried = false): Promise
 }
 
 async function authPost<T>(path: string, body: unknown, retried = false): Promise<T> {
-  const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const token = csrfToken();
-  if (token) {
-    headers["X-XSRF-TOKEN"] = token;
-  }
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(await csrfHeaders()),
+  };
   const tenant = activeTenantId();
   if (tenant) {
     headers["X-Tenant-Id"] = tenant;
@@ -358,10 +369,9 @@ export interface ExpressionValidationDto {
  * unconditional; field-level errors are returned for inline rendering in the designer.
  */
 export function validateWorkflowExpression(expression: string): Promise<ExpressionValidationDto> {
-  return authPost<ExpressionValidationDto>(
-    "/api/v1/workflow-definitions/validate-expression",
-    { expression },
-  );
+  return authPost<ExpressionValidationDto>("/api/v1/workflow-definitions/validate-expression", {
+    expression,
+  });
 }
 
 export function createFormDefinition(name: string, schemaJson: string): Promise<FormDefinitionDto> {

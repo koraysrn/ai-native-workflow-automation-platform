@@ -42,6 +42,7 @@ public class KafkaProducerConfig {
   private final int maxInFlightRequestsPerConnection;
   private final int retries;
   private final int deliveryTimeoutMs;
+  private final int requestTimeoutMs;
 
   public KafkaProducerConfig(
       @Value("${spring.kafka.bootstrap-servers:localhost:9092}") String bootstrapServers,
@@ -50,14 +51,15 @@ public class KafkaProducerConfig {
       @Value("${spring.kafka.producer.properties.max.in.flight.requests.per.connection:5}")
           int maxInFlightRequestsPerConnection,
       @Value("${spring.kafka.producer.retries:2147483647}") int retries,
-      @Value("${spring.kafka.producer.properties.delivery.timeout.ms:30000}")
-          int deliveryTimeoutMs) {
+      @Value("${spring.kafka.producer.properties.delivery.timeout.ms:10000}") int deliveryTimeoutMs,
+      @Value("${spring.kafka.producer.properties.request.timeout.ms:5000}") int requestTimeoutMs) {
     this.bootstrapServers = bootstrapServers;
     this.acks = acks;
     this.idempotence = idempotence;
     this.maxInFlightRequestsPerConnection = maxInFlightRequestsPerConnection;
     this.retries = retries;
     this.deliveryTimeoutMs = deliveryTimeoutMs;
+    this.requestTimeoutMs = requestTimeoutMs;
   }
 
   @Bean
@@ -72,6 +74,11 @@ public class KafkaProducerConfig {
     props.put(
         ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequestsPerConnection);
     props.put(ProducerConfig.RETRIES_CONFIG, retries);
+    // Kafka requires delivery.timeout.ms >= linger.ms + request.timeout.ms. The previous 30s
+    // delivery timeout with the default 5ms linger and 30s request timeout made every producer
+    // construction fail (the outbox relay then released the claim forever).
+    props.put(ProducerConfig.LINGER_MS_CONFIG, 5);
+    props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs);
     props.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, deliveryTimeoutMs);
     return new DefaultKafkaProducerFactory<>(props);
   }

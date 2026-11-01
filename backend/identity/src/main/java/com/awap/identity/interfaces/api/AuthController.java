@@ -16,12 +16,14 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.web.csrf.CsrfToken;
 import org.springframework.web.bind.annotation.CookieValue;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -103,6 +105,16 @@ public class AuthController {
     User user = authService.me(currentUserId());
     return ResponseEntity.ok(
         List.of(new TenantMembershipResponse(user.getTenantId(), user.getRole().name())));
+  }
+
+  /**
+   * Forces a CSRF token to be generated so {@link org.springframework.security.web.csrf
+   * .CookieCsrfTokenRepository} writes the readable XSRF-TOKEN cookie before the SPA's first
+   * state-changing request. A plain GET otherwise never triggers token generation.
+   */
+  @GetMapping("/csrf")
+  public ResponseEntity<Map<String, String>> csrf(CsrfToken csrfToken) {
+    return ResponseEntity.ok(Map.of("token", csrfToken.getToken()));
   }
 
   private void writeTokenCookies(HttpServletResponse response, TokenPair pair) {

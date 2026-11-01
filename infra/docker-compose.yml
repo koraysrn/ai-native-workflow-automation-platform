@@ -144,7 +144,16 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD:-awap}
       CORS_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
       SPRING_DATA_REDIS_HOST: redis
-      KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+      # Containers must use the INTERNAL listener; the PLAINTEXT listener advertises
+      # localhost:9092, which is unreachable from inside the backend container.
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      # E2E switches: the Playwright job enables Kafka so analytics aggregates are actually
+      # produced, and disables bucket provisioning because MinIO is an opt-in profile.
+      KAFKA_ENABLED: ${KAFKA_ENABLED:-false}
+      FILE_MANAGE_BUCKETS: ${FILE_MANAGE_BUCKETS:-true}
+      FILE_SCAN_INTERVAL_MS: ${FILE_SCAN_INTERVAL_MS:-60000}
+      OUTBOX_RELAY_INTERVAL_MS: ${OUTBOX_RELAY_INTERVAL_MS:-5000}
+      OUTBOX_RELAY_INITIAL_DELAY_MS: ${OUTBOX_RELAY_INITIAL_DELAY_MS:-5000}
     ports:
       - "8080:8080"
 

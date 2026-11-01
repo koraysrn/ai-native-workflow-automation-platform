@@ -26,6 +26,7 @@ public class FileStorageProperties {
   private final int quarantineRetentionDays;
   private final int promotedRetentionDays;
   private final int objectLockRetentionDays;
+  private final boolean manageBuckets;
 
   @Autowired
   public FileStorageProperties(
@@ -39,7 +40,8 @@ public class FileStorageProperties {
       @Value("${awap.files.infected-policy:DELETE}") String infectedPolicy,
       @Value("${awap.files.quarantine-retention-days:7}") int quarantineRetentionDays,
       @Value("${awap.files.promoted-retention-days:365}") int promotedRetentionDays,
-      @Value("${awap.files.object-lock-retention-days:1}") int objectLockRetentionDays) {
+      @Value("${awap.files.object-lock-retention-days:1}") int objectLockRetentionDays,
+      @Value("${awap.files.manage-buckets:true}") boolean manageBuckets) {
     this.quarantineBucket = quarantineBucket;
     this.promotedBucket = promotedBucket;
     this.maxSizeBytes = maxSizeBytes > 0 ? maxSizeBytes : DEFAULT_MAX_SIZE_BYTES;
@@ -50,6 +52,7 @@ public class FileStorageProperties {
     this.quarantineRetentionDays = Math.max(1, quarantineRetentionDays);
     this.promotedRetentionDays = Math.max(1, promotedRetentionDays);
     this.objectLockRetentionDays = Math.max(1, objectLockRetentionDays);
+    this.manageBuckets = manageBuckets;
   }
 
   /** Test/DI-friendly constructor with explicit values. */
@@ -60,7 +63,8 @@ public class FileStorageProperties {
       int presignTtlSeconds,
       Set<String> allowedExtensions,
       int maxScanAttempts,
-      boolean deleteInfectedObjects) {
+      boolean deleteInfectedObjects,
+      boolean manageBuckets) {
     this.quarantineBucket = quarantineBucket;
     this.promotedBucket = promotedBucket;
     this.maxSizeBytes = maxSizeBytes;
@@ -71,6 +75,7 @@ public class FileStorageProperties {
     this.quarantineRetentionDays = 7;
     this.promotedRetentionDays = 365;
     this.objectLockRetentionDays = 1;
+    this.manageBuckets = manageBuckets;
   }
 
   private static int clampPresign(int seconds) {
@@ -133,5 +138,14 @@ public class FileStorageProperties {
 
   public int objectLockRetentionDays() {
     return objectLockRetentionDays;
+  }
+
+  /**
+   * Whether the application creates the quarantine/promoted buckets at upload time. Disable this
+   * when the buckets are provisioned by infrastructure (for example the E2E stack, which does not
+   * run the opt-in MinIO image) so the API can still record and expose a document's scan status.
+   */
+  public boolean manageBuckets() {
+    return manageBuckets;
   }
 }

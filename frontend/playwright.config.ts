@@ -1,9 +1,13 @@
 import { defineConfig, devices } from "@playwright/test";
 
 const externalStack = process.env.E2E_EXTERNAL_STACK === "1";
+// The live product journey (issue #158) needs the Compose backend, seeded tenant and Kafka.
+// Keep it out of the dependency-free PR run unless the stack explicitly enabled it.
+const liveStack = process.env.E2E_LIVE_STACK === "1";
 
 export default defineConfig({
   testDir: "./e2e",
+  ...(liveStack ? {} : { testIgnore: ["**/live-journey.spec.ts"] }),
   fullyParallel: false,
   // One worker keeps the seeded fixtures deterministic; shard only once the suite is stable.
   workers: 1,

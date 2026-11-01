@@ -227,15 +227,18 @@ public class WorkflowEngineService implements WorkflowEnginePort {
     WorkflowDefinition definition =
         workflowDefinitionService.getPublished(tenantId, request.workflowDefinitionId());
 
+    // Reuse the managed entity returned by save(). WorkflowInstance has an assigned UUID, so
+    // Spring Data calls merge() and returns a managed copy; mutating the detached original would
+    // leave the database row in CREATED while the API response reported the advanced state.
     WorkflowInstance instance =
-        new WorkflowInstance(
-            tenantId,
-            definition.getId(),
-            definition.getCurrentVersion(),
-            WorkflowState.CREATED,
-            request.idempotencyKey(),
-            request.contextJson());
-    instanceRepository.save(instance);
+        instanceRepository.save(
+            new WorkflowInstance(
+                tenantId,
+                definition.getId(),
+                definition.getCurrentVersion(),
+                WorkflowState.CREATED,
+                request.idempotencyKey(),
+                request.contextJson()));
     if (usageMeteringService != null) {
       usageMeteringService.reserve(
           tenantId,
@@ -283,16 +286,16 @@ public class WorkflowEngineService implements WorkflowEnginePort {
                 parent.getTenantId(), definitionUuid);
     String childContextJson = recordChildDefinitionVersion(parent, pinned.getVersion());
     WorkflowInstance child =
-        new WorkflowInstance(
-            parent.getTenantId(),
-            pinned.getWorkflowId(),
-            pinned.getVersion(),
-            WorkflowState.CREATED,
-            null,
-            childContextJson,
-            parent.getId(),
-            node.getNodeId());
-    instanceRepository.save(child);
+        instanceRepository.save(
+            new WorkflowInstance(
+                parent.getTenantId(),
+                pinned.getWorkflowId(),
+                pinned.getVersion(),
+                WorkflowState.CREATED,
+                null,
+                childContextJson,
+                parent.getId(),
+                node.getNodeId()));
     executionContextRepository.save(
         new ExecutionContext(parent.getTenantId(), child.getId(), childContextJson));
     child.transitionTo(WorkflowState.STARTED);

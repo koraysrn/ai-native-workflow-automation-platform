@@ -44,7 +44,9 @@ public class FileService {
     validateName(name);
     validateSize(size);
     validateFormat(name);
-    ensureBuckets();
+    if (properties.manageBuckets()) {
+      ensureBuckets();
+    }
 
     UUID fileId = UUID.randomUUID();
     String objectKey = objectKey(tenantId, fileId, name);

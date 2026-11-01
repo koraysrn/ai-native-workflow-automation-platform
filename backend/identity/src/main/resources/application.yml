@@ -39,7 +39,9 @@ spring:
       properties:
         enable.idempotence: ${KAFKA_PRODUCER_IDEMPOTENCE:true}
         max.in.flight.requests.per.connection: ${KAFKA_PRODUCER_MAX_IN_FLIGHT:5}
-        delivery.timeout.ms: ${KAFKA_PRODUCER_DELIVERY_TIMEOUT_MS:30000}
+        # delivery.timeout.ms must be >= linger.ms (5) + request.timeout.ms.
+        request.timeout.ms: ${KAFKA_PRODUCER_REQUEST_TIMEOUT_MS:5000}
+        delivery.timeout.ms: ${KAFKA_PRODUCER_DELIVERY_TIMEOUT_MS:10000}
     consumer:
       # Offset commits happen only after the listener returns, i.e. after the delivery row is
       # durable; a DB outage must not commit the offset.
@@ -50,6 +52,11 @@ spring:
 awap:
   kafka:
     enabled: ${KAFKA_ENABLED:false}
+    # Default consumer group for listeners on distinct topics. The analytics and usage listeners
+    # share analytics.events, so they use their own groups below to both receive every record.
+    consumer-group-id: ${KAFKA_CONSUMER_GROUP_ID:awap-consumer}
+    analytics-group-id: ${KAFKA_ANALYTICS_GROUP_ID:awap-analytics}
+    usage-group-id: ${KAFKA_USAGE_GROUP_ID:awap-usage}
     # Issue #123: dual-consume the legacy awap.dlq topic for one release. Older deployments may
     # still publish there; set KAFKA_LEGACY_DLQ_ENABLED=false only after the deprecation window
     # (see docs/operations-runbook.md O7).
@@ -225,6 +232,9 @@ awap:
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
     access-key: ${MINIO_ACCESS_KEY:awapadmin}
     secret-key: ${MINIO_SECRET_KEY:awapadmin123}
+    # MinIO's default region; pinning it lets presigned URLs be generated without a bucket
+    # location request, which is required when the storage service is not reachable.
+    region: ${MINIO_REGION:us-east-1}
   files:
     quarantine-bucket: ${FILE_QUARANTINE_BUCKET:awap-quarantine}
     promoted-bucket: ${FILE_PROMOTED_BUCKET:awap-files}
@@ -232,6 +242,8 @@ awap:
     presign-ttl-seconds: ${FILE_PRESIGN_TTL_SECONDS:300}
     allowed-extensions: ${FILE_ALLOWED_EXTENSIONS:pdf,docx,xlsx,pptx,png,jpg,jpeg,txt}
     max-scan-attempts: ${FILE_MAX_SCAN_ATTEMPTS:5}
+    # Pre-provisioned bucket mode for environments that run without the opt-in MinIO profile.
+    manage-buckets: ${FILE_MANAGE_BUCKETS:true}
     infected-policy: ${FILE_INFECTED_POLICY:DELETE}
     quarantine-retention-days: ${FILE_QUARANTINE_RETENTION_DAYS:7}
     promoted-retention-days: ${FILE_PROMOTED_RETENTION_DAYS:365}

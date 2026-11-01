@@ -8,6 +8,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.kafka.annotation.EnableKafka;
 import org.springframework.kafka.config.ConcurrentKafkaListenerContainerFactory;
 import org.springframework.kafka.core.ConsumerFactory;
 import org.springframework.kafka.core.DefaultKafkaConsumerFactory;
@@ -18,6 +19,7 @@ import org.springframework.kafka.listener.DefaultErrorHandler;
 
 /** Kafka consumer configuration with retry (exponential backoff) and a DLQ recoverer. */
 @Configuration
+@EnableKafka
 @ConditionalOnProperty(name = "awap.kafka.enabled", havingValue = "true")
 public class KafkaConsumerConfig {
 
@@ -25,11 +27,15 @@ public class KafkaConsumerConfig {
   public ConsumerFactory<String, String> consumerFactory(
       @Value("${spring.kafka.bootstrap-servers:localhost:9092}") String bootstrapServers,
       @Value("${awap.kafka.schema-registry-url:http://localhost:8081}") String schemaRegistryUrl,
-      @Value("${awap.kafka.max-poll-records:50}") int maxPollRecords) {
+      @Value("${awap.kafka.max-poll-records:50}") int maxPollRecords,
+      @Value("${awap.kafka.consumer-group-id:awap-consumer}") String groupId) {
     Map<String, Object> props = new HashMap<>();
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
     props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
     props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+    // Every @KafkaListener needs a group id. Listeners on distinct topics share this default;
+    // listeners that share a topic override it so they do not compete for partitions.
+    props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
     // Schema Registry endpoint for the Avro (de)serializers; see docs/event-schema-evolution.md.
     props.put("schema.registry.url", schemaRegistryUrl);
     configureDeadLetterConsumption(props, maxPollRecords);

@@ -37,6 +37,7 @@ class FileServiceTest {
           900,
           FileService.defaultAllowedExtensions(),
           5,
+          true,
           true);
   private FileService service;
 
@@ -171,6 +172,29 @@ class FileServiceTest {
               assertThat(ex.status()).isEqualTo(HttpStatus.INTERNAL_SERVER_ERROR);
               assertThat(ex).hasMessageContaining("MinIO");
             });
+  }
+
+  @Test
+  void bucketProvisioningCanBeDisabledWhenStorageIsManagedExternally() {
+    FileStorageProperties externallyManaged =
+        new FileStorageProperties(
+            "awap-quarantine",
+            "awap-files",
+            500L * 1024 * 1024,
+            900,
+            FileService.defaultAllowedExtensions(),
+            5,
+            true,
+            false);
+    FileService externallyManagedService =
+        new FileService(repository, objectStore, externallyManaged, eventBus);
+
+    FileService.UploadSlot slot =
+        externallyManagedService.createUpload(TENANT, "e2e.pdf", "application/pdf", 10);
+
+    assertThat(slot.fileId()).isNotNull();
+    assertThat(slot.uploadUrl()).contains("awap-quarantine", "method=PUT");
+    assertThat(objectStore.ensuredBuckets()).isEmpty();
   }
 
   @Test

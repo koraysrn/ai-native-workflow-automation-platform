@@ -142,6 +142,39 @@ class WorkflowEngineServiceTest {
   }
 
   @Test
+  void startAdvancesTheManagedCopyReturnedBySave() {
+    WorkflowDefinition definition = new WorkflowDefinition(tenantId, "Approval flow", null);
+    definition.publish(1);
+    when(workflowDefinitionService.getPublished(tenantId, workflowDefinitionId))
+        .thenReturn(definition);
+    WorkflowInstance managedCopy =
+        new WorkflowInstance(tenantId, definition.getId(), 1, WorkflowState.CREATED, null, "{}");
+    when(instanceRepository.save(any(WorkflowInstance.class))).thenReturn(managedCopy);
+    when(executionContextRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+    when(workflowDefinitionService.nodesOf(definition.getId(), 1))
+        .thenReturn(
+            List.of(
+                new NodeDefinition(
+                    tenantId, UUID.randomUUID(), "start", NodeType.START, "start", null, 0)));
+    when(workflowDefinitionService.transitionsOf(definition.getId(), 1)).thenReturn(List.of());
+    when(nodeExecutionRepository.findByWorkflowInstanceIdAndNodeId(any(), anyString()))
+        .thenReturn(Optional.empty());
+    when(nodeExecutionRepository.save(any(NodeExecution.class)))
+        .thenAnswer(inv -> inv.getArgument(0));
+
+    WorkflowInstanceResponse response =
+        service.start(tenantId, new StartWorkflowRequest(workflowDefinitionId, null, "{}"));
+
+    assertThat(response.id()).isEqualTo(managedCopy.getId());
+    assertThat(managedCopy.getState()).isEqualTo(WorkflowState.RUNNING);
+    ArgumentCaptor<WorkflowInstance> saved = ArgumentCaptor.forClass(WorkflowInstance.class);
+    verify(instanceRepository).save(saved.capture());
+    // The object passed to save() is the detached original; only the returned managed copy is
+    // advanced and persisted.
+    assertThat(saved.getValue().getState()).isEqualTo(WorkflowState.CREATED);
+  }
+
+  @Test
   void startRejectsWhenQuotaIsExceeded() {
     WorkflowDefinition definition = new WorkflowDefinition(tenantId, "Approval flow", null);
     definition.publish(1);
@@ -428,6 +461,8 @@ class WorkflowEngineServiceTest {
   }
 
   private void stubChildStart(UUID childDefinitionId, int version) {
+    when(instanceRepository.save(any(WorkflowInstance.class)))
+        .thenAnswer(inv -> inv.getArgument(0));
     when(workflowDefinitionService.nodesOf(childDefinitionId, version))
         .thenReturn(
             List.of(

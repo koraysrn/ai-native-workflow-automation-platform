@@ -21,6 +21,8 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.csrf.CsrfTokenRequestHandler;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -66,6 +68,10 @@ public class SecurityConfig {
     http.csrf(
             csrf ->
                 csrf.csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                    // The SPA reads the raw XSRF-TOKEN cookie and echoes it in X-XSRF-TOKEN.
+                    // Spring Security 7 defaults to the XOR handler, which expects a masked
+                    // value and would reject the raw token during a live UI request.
+                    .csrfTokenRequestHandler(csrfTokenRequestHandler())
                     .ignoringRequestMatchers(
                         "/api/v1/auth/login",
                         "/api/v1/auth/refresh",
@@ -95,6 +101,11 @@ public class SecurityConfig {
     return http.build();
   }
 
+  /** Resolves the raw token written by CookieCsrfTokenRepository for the browser client. */
+  static CsrfTokenRequestHandler csrfTokenRequestHandler() {
+    return new CsrfTokenRequestAttributeHandler();
+  }
+
   /** CORS allowlist for the frontend origin(s). */
   @Bean
   public CorsConfigurationSource corsConfigurationSource(
@@ -104,8 +115,12 @@ public class SecurityConfig {
     configuration.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
     configuration.setAllowedMethods(
         Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+    // X-Tenant-Id and X-XSRF-TOKEN are sent by the browser client on every tenant-scoped call and
+    // on state-changing calls respectively. Without them in the preflight allow-list the live stack
+    // rejects the actual request before Spring Security can read the tenant or CSRF token.
     configuration.setAllowedHeaders(
-        Arrays.asList("Authorization", "Content-Type", "Idempotency-Key"));
+        Arrays.asList(
+            "Authorization", "Content-Type", "Idempotency-Key", "X-Tenant-Id", "X-XSRF-TOKEN"));
     configuration.setAllowCredentials(true);
     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
     source.registerCorsConfiguration("/**", configuration);

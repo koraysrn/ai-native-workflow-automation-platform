@@ -11,7 +11,11 @@ function formatDuration(ms: number): string {
 }
 
 export default function AnalyticsPage() {
-  const { data: aggregates = [], isLoading, isError } = useQuery({
+  const {
+    data: aggregates = [],
+    isLoading,
+    isError,
+  } = useQuery({
     queryKey: ["analytics-summary"],
     queryFn: () => fetchAnalyticsSummary(),
   });
@@ -32,16 +36,19 @@ export default function AnalyticsPage() {
       <h1 style={{ fontSize: 24, fontWeight: 700 }}>Analytics</h1>
       <div style={{ display: "flex", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
         <MetricCard
+          testId="analytics-completed-workflows"
           title="Completed workflows"
           value={String(workflowCompleted?.count ?? 0)}
           detail={`avg ${formatDuration(workflowCompleted?.averageDurationMs ?? 0)}`}
         />
         <MetricCard
+          testId="analytics-failed-workflows"
           title="Failed workflows"
           value={String(workflowFailed?.count ?? 0)}
           detail="needs attention"
         />
         <MetricCard
+          testId="analytics-completed-tasks"
           title="Completed tasks"
           value={String(taskCompleted?.count ?? 0)}
           detail={`avg ${formatDuration(taskCompleted?.averageDurationMs ?? 0)}`}
@@ -60,7 +67,11 @@ export default function AnalyticsPage() {
         </thead>
         <tbody>
           {aggregates.map((item) => (
-            <tr key={`${item.day}-${item.eventType}`} style={{ borderBottom: "1px solid #e2e8f0" }}>
+            <tr
+              key={`${item.day}-${item.eventType}`}
+              data-testid={`analytics-row-${item.eventType}`}
+              style={{ borderBottom: "1px solid #e2e8f0" }}
+            >
               <td style={{ padding: 8 }}>{item.day}</td>
               <td style={{ padding: 8 }}>{item.eventType}</td>
               <td style={{ padding: 8 }}>{item.count}</td>
@@ -82,16 +93,19 @@ export default function AnalyticsPage() {
 }
 
 function MetricCard({
+  testId,
   title,
   value,
   detail,
 }: {
+  testId: string;
   title: string;
   value: string;
   detail: string;
 }) {
   return (
     <div
+      data-testid={testId}
       style={{
         border: "1px solid #cbd5e1",
         borderRadius: 8,
@@ -101,7 +115,9 @@ function MetricCard({
       }}
     >
       <div style={{ color: "#475569", fontSize: 13 }}>{title}</div>
-      <div style={{ fontSize: 28, fontWeight: 700 }}>{value}</div>
+      <div data-testid={`${testId}-value`} style={{ fontSize: 28, fontWeight: 700 }}>
+        {value}
+      </div>
       <div style={{ color: "#6b7280", fontSize: 12 }}>{detail}</div>
     </div>
   );
