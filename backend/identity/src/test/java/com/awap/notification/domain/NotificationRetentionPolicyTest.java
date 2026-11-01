@@ -52,6 +52,10 @@ class NotificationRetentionPolicyTest {
             () -> new NotificationRetentionPolicy(Duration.ofDays(-1), Duration.ofDays(10)))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("negative");
+    assertThatThrownBy(
+            () -> new NotificationRetentionPolicy(Duration.ofDays(10), Duration.ofDays(-1)))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("negative");
   }
 
   @Test
@@ -63,8 +67,18 @@ class NotificationRetentionPolicyTest {
   }
 
   @Test
+  void acceptsEqualWindowsAtTheComparisonBoundary() {
+    NotificationRetentionPolicy equal =
+        new NotificationRetentionPolicy(Duration.ofDays(30), Duration.ofDays(30));
+
+    assertThat(equal.readRetention()).isEqualTo(equal.unreadRetention());
+  }
+
+  @Test
   void rejectsMissingWindows() {
     assertThatThrownBy(() -> new NotificationRetentionPolicy(null, Duration.ofDays(10)))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> new NotificationRetentionPolicy(Duration.ofDays(10), null))
         .isInstanceOf(IllegalArgumentException.class);
   }
 }

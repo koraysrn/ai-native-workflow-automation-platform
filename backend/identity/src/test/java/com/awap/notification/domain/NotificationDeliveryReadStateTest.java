@@ -81,4 +81,34 @@ class NotificationDeliveryReadStateTest {
     assertThat(delivery.getAttempts()).isZero();
     assertThat(delivery.getVersion()).isZero();
   }
+
+  @Test
+  void nullLocaleFallsBackToEnglish() {
+    NotificationDelivery delivery =
+        new NotificationDelivery(
+            UUID.randomUUID(),
+            "dedupe",
+            NotificationChannel.WEB,
+            "user@example.com",
+            "welcome",
+            null,
+            null);
+
+    assertThat(delivery.getLocale()).isEqualTo("en");
+  }
+
+  @Test
+  void blankLocaleFallsBackToEnglish() {
+    NotificationDelivery delivery =
+        new NotificationDelivery(
+            UUID.randomUUID(),
+            "dedupe",
+            NotificationChannel.WEB,
+            "user@example.com",
+            "welcome",
+            "   ",
+            null);
+
+    assertThat(delivery.getLocale()).isEqualTo("en");
+  }
 }

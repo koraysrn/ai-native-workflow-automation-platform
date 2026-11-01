@@ -45,3 +45,25 @@ over the critical domain classes (`Task`, `WorkflowInstance`, `NodeExecution`,
 The `mutationThreshold`/`coverageThreshold` gates live in the `pit` profile of
 [`backend/pom.xml`](../backend/pom.xml); the incremental-history config was removed
 because no history plugin was on the classpath.
+
+## Notification read-state PIT (issue #157)
+
+Measured with
+`./mvnw -pl identity -am -Ppit-notification-read test-compile org.pitest:pitest-maven:mutationCoverage`.
+
+| Metric | Value |
+|--------|-------|
+| Mutation score | 100% (76 killed / 76 generated) |
+| Line coverage (mutated classes) | 95% (235 / 247) |
+| Test strength | 100% |
+| Mutations with no coverage | 0 |
+| Threshold (mutation) | 85% |
+| Threshold (coverage) | 90% |
+
+The profile mutates the read/unread transitions, tenant authorization, unread
+listing/count adapter, retention policy and purge scheduler. It runs in CI as the
+`Notification read mutation testing` step and writes
+`identity/target/pit-reports-notification-read`, which is uploaded with the other
+PIT reports. The `NotificationDelivery` delivery/retry state machine is excluded
+from this profile because it has its own focused coverage; only read-state members
+are in scope.

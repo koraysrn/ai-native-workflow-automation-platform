@@ -228,6 +228,19 @@ class NotificationReadServiceTest {
     assertThat(gaugeValue(tenantB)).isEqualTo(2.0);
   }
 
+  @Test
+  void transitionsRefreshTheGaugeWithoutAnExplicitCountCall() {
+    UUID tenant = UUID.randomUUID();
+    NotificationDelivery first = store.add(delivery(tenant, "first@example.com"));
+    store.add(delivery(tenant, "second@example.com"));
+
+    service.markRead(tenant, first.getId());
+    assertThat(gaugeValue(tenant)).isEqualTo(1.0);
+
+    service.markUnread(tenant, first.getId());
+    assertThat(gaugeValue(tenant)).isEqualTo(2.0);
+  }
+
   private double gaugeValue(UUID tenant) {
     return registry
         .get(NotificationReadService.UNREAD_GAUGE)
