@@ -176,6 +176,15 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
         working-directory: frontend
       - name: Start Compose stack
+        env:
+          # The live journey asserts real analytics aggregates and a real document scan
+          # projection. Kafka must be enabled for the outbox relay to reach the analytics
+          # listener, and MinIO stays opt-in (the API records QUARANTINED without buckets).
+          KAFKA_ENABLED: "true"
+          FILE_MANAGE_BUCKETS: "false"
+          FILE_SCAN_INTERVAL_MS: "3600000"
+          OUTBOX_RELAY_INTERVAL_MS: "1000"
+          OUTBOX_RELAY_INITIAL_DELAY_MS: "1000"
         run: docker compose -f infra/docker-compose.yml up -d --build
       - name: Wait for backend health
         run: |

@@ -104,8 +104,12 @@ public class SecurityConfig {
     configuration.setAllowedOrigins(Arrays.asList(allowedOrigins.split(",")));
     configuration.setAllowedMethods(
         Arrays.asList("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
+    // X-Tenant-Id and X-XSRF-TOKEN are sent by the browser client on every tenant-scoped call and
+    // on state-changing calls respectively. Without them in the preflight allow-list the live stack
+    // rejects the actual request before Spring Security can read the tenant or CSRF token.
     configuration.setAllowedHeaders(
-        Arrays.asList("Authorization", "Content-Type", "Idempotency-Key"));
+        Arrays.asList(
+            "Authorization", "Content-Type", "Idempotency-Key", "X-Tenant-Id", "X-XSRF-TOKEN"));
     configuration.setAllowCredentials(true);
     UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
     source.registerCorsConfiguration("/**", configuration);

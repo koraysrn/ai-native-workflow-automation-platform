@@ -30,7 +30,9 @@ public class AnalyticsEventListener {
     this.tenantContext = tenantContext;
   }
 
-  @KafkaListener(topics = "analytics.events")
+  @KafkaListener(
+      topics = "analytics.events",
+      groupId = "${awap.kafka.analytics-group-id:awap-analytics}")
   public void onMessage(String payload) {
     try {
       JsonNode event = objectMapper.readTree(payload);

@@ -43,6 +43,7 @@ class FileScanSchedulerTest {
           300,
           FileService.defaultAllowedExtensions(),
           3,
+          true,
           true);
 
   private ClamAvScanner scanner;
@@ -131,7 +132,8 @@ class FileScanSchedulerTest {
             300,
             FileService.defaultAllowedExtensions(),
             3,
-            false);
+            false,
+            true);
     scheduler =
         new FileScanScheduler(
             repository, auditRepository, scanner, objectStore, retain, meterRegistry, eventBus);
@@ -244,6 +246,7 @@ class FileScanSchedulerTest {
             300,
             FileService.defaultAllowedExtensions(),
             1,
+            true,
             true);
     scheduler =
         new FileScanScheduler(

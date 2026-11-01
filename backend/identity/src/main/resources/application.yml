@@ -50,6 +50,11 @@ spring:
 awap:
   kafka:
     enabled: ${KAFKA_ENABLED:false}
+    # Default consumer group for listeners on distinct topics. The analytics and usage listeners
+    # share analytics.events, so they use their own groups below to both receive every record.
+    consumer-group-id: ${KAFKA_CONSUMER_GROUP_ID:awap-consumer}
+    analytics-group-id: ${KAFKA_ANALYTICS_GROUP_ID:awap-analytics}
+    usage-group-id: ${KAFKA_USAGE_GROUP_ID:awap-usage}
     # Issue #123: dual-consume the legacy awap.dlq topic for one release. Older deployments may
     # still publish there; set KAFKA_LEGACY_DLQ_ENABLED=false only after the deprecation window
     # (see docs/operations-runbook.md O7).
@@ -225,6 +230,9 @@ awap:
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
     access-key: ${MINIO_ACCESS_KEY:awapadmin}
     secret-key: ${MINIO_SECRET_KEY:awapadmin123}
+    # MinIO's default region; pinning it lets presigned URLs be generated without a bucket
+    # location request, which is required when the storage service is not reachable.
+    region: ${MINIO_REGION:us-east-1}
   files:
     quarantine-bucket: ${FILE_QUARANTINE_BUCKET:awap-quarantine}
     promoted-bucket: ${FILE_PROMOTED_BUCKET:awap-files}

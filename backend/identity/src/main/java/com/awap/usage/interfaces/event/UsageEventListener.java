@@ -41,7 +41,9 @@ public class UsageEventListener {
     this.tenantContext = tenantContext;
   }
 
-  @KafkaListener(topics = "analytics.events")
+  // A separate group from AnalyticsEventListener: both consume analytics.events and must each see
+  // every record, rather than splitting the topic's partitions between them.
+  @KafkaListener(topics = "analytics.events", groupId = "${awap.kafka.usage-group-id:awap-usage}")
   public void onMessage(String payload) {
     JsonNode event;
     try {
