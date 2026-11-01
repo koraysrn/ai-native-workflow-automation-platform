@@ -8,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import com.awap.notification.domain.NotificationRetentionPolicy;
 import com.awap.notification.infrastructure.NotificationDeliveryRepository;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -22,11 +23,13 @@ class NotificationDeliveryPurgeSchedulerTest {
 
   private final NotificationDeliveryRepository repository =
       mock(NotificationDeliveryRepository.class);
+  private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
   private final NotificationDeliveryPurgeScheduler scheduler =
       new NotificationDeliveryPurgeScheduler(
           repository,
           new NotificationRetentionPolicy(Duration.ofDays(30), Duration.ofDays(180)),
-          Clock.fixed(NOW, ZoneOffset.UTC));
+          Clock.fixed(NOW, ZoneOffset.UTC),
+          registry);
 
   @Test
   void purgesReadAndUnreadDeliveriesWithIndependentCutoffs() {
@@ -45,6 +48,7 @@ class NotificationDeliveryPurgeSchedulerTest {
     assertThat(readCutoff.getValue().toInstant()).isAfter(unreadCutoff.getValue().toInstant());
     assertThat(result.readNotificationsPurged()).isEqualTo(3);
     assertThat(result.unreadNotificationsPurged()).isEqualTo(1);
+    assertThat(purgedCount()).isEqualTo(4.0);
   }
 
   @Test
@@ -55,6 +59,28 @@ class NotificationDeliveryPurgeSchedulerTest {
     NotificationDeliveryPurgeScheduler.PurgeResult result = scheduler.purgeExpired();
 
     assertThat(result).isEqualTo(new NotificationDeliveryPurgeScheduler.PurgeResult(0, 0));
+    assertThat(purgedCount()).isZero();
+    assertThat(registry.find(NotificationDeliveryPurgeScheduler.PURGED_METRIC).counter()).isNull();
+  }
+
+  @Test
+  void incrementsThePurgeCounterForAReadOnlyRun() {
+    when(repository.purgeReadBefore(any())).thenReturn(2);
+    when(repository.purgeUnreadBefore(any())).thenReturn(0);
+
+    scheduler.purgeExpired();
+
+    assertThat(purgedCount()).isEqualTo(2.0);
+  }
+
+  @Test
+  void incrementsThePurgeCounterForAnUnreadOnlyRun() {
+    when(repository.purgeReadBefore(any())).thenReturn(0);
+    when(repository.purgeUnreadBefore(any())).thenReturn(5);
+
+    scheduler.purgeExpired();
+
+    assertThat(purgedCount()).isEqualTo(5.0);
   }
 
   @Test
@@ -63,7 +89,8 @@ class NotificationDeliveryPurgeSchedulerTest {
         new NotificationDeliveryPurgeScheduler(
             repository,
             new NotificationRetentionPolicy(Duration.ofHours(1), Duration.ofDays(365)),
-            Clock.fixed(NOW, ZoneOffset.UTC));
+            Clock.fixed(NOW, ZoneOffset.UTC),
+            registry);
     when(repository.purgeReadBefore(any())).thenReturn(0);
     when(repository.purgeUnreadBefore(any())).thenReturn(0);
 
@@ -75,5 +102,10 @@ class NotificationDeliveryPurgeSchedulerTest {
     verify(repository).purgeUnreadBefore(unreadCutoff.capture());
     assertThat(readCutoff.getValue().toInstant()).isEqualTo(NOW.minus(Duration.ofHours(1)));
     assertThat(unreadCutoff.getValue().toInstant()).isEqualTo(NOW.minus(Duration.ofDays(365)));
+  }
+
+  private double purgedCount() {
+    var counter = registry.find(NotificationDeliveryPurgeScheduler.PURGED_METRIC).counter();
+    return counter == null ? 0.0 : counter.count();
   }
 }

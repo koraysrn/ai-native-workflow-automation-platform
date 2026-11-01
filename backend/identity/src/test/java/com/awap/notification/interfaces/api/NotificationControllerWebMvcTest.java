@@ -99,6 +99,59 @@ class NotificationControllerWebMvcTest {
   }
 
   @Test
+  void blankUnreadOnlyFallsBackToTheFullInbox() throws Exception {
+    when(service.list(tenantId, false)).thenReturn(List.of());
+
+    mockMvc
+        .perform(
+            get("/api/v1/notifications")
+                .param("unreadOnly", "   ")
+                .with(user("u").authorities(new SimpleGrantedAuthority("INSTANCE_READ"))))
+        .andExpect(status().isOk());
+
+    verify(service).list(tenantId, false);
+  }
+
+  @Test
+  void explicitUnreadOnlyFalseIsForwarded() throws Exception {
+    when(service.list(tenantId, false)).thenReturn(List.of());
+
+    mockMvc
+        .perform(
+            get("/api/v1/notifications")
+                .param("unreadOnly", "false")
+                .with(user("u").authorities(new SimpleGrantedAuthority("INSTANCE_READ"))))
+        .andExpect(status().isOk());
+
+    verify(service).list(tenantId, false);
+  }
+
+  @Test
+  void unreadOnlyIsTrimmedAndCaseInsensitive() throws Exception {
+    when(service.list(tenantId, true)).thenReturn(List.of());
+
+    mockMvc
+        .perform(
+            get("/api/v1/notifications")
+                .param("unreadOnly", " TRUE ")
+                .with(user("u").authorities(new SimpleGrantedAuthority("INSTANCE_READ"))))
+        .andExpect(status().isOk());
+
+    verify(service).list(tenantId, true);
+  }
+
+  @Test
+  void missingTenantContextReturns401EvenWhenAuthenticated() throws Exception {
+    TenantContext.clear();
+
+    mockMvc
+        .perform(
+            get("/api/v1/notifications/unread-count")
+                .with(user("u").authorities(new SimpleGrantedAuthority("INSTANCE_READ"))))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
   void unreadCountReturnsTheTenantCount() throws Exception {
     when(service.unreadCount(tenantId)).thenReturn(7L);
 
