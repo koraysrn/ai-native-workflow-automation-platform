@@ -232,6 +232,9 @@ jobs:
           name: playwright-failures
           path: frontend/test-results
           retention-days: 14
+      - name: Dump Compose logs on failure
+        if: failure()
+        run: docker compose -f infra/docker-compose.yml logs --tail=300 backend kafka
       - name: Stop Compose stack
         if: always()
         run: docker compose -f infra/docker-compose.yml down -v
