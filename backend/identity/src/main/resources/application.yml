@@ -240,6 +240,8 @@ awap:
     presign-ttl-seconds: ${FILE_PRESIGN_TTL_SECONDS:300}
     allowed-extensions: ${FILE_ALLOWED_EXTENSIONS:pdf,docx,xlsx,pptx,png,jpg,jpeg,txt}
     max-scan-attempts: ${FILE_MAX_SCAN_ATTEMPTS:5}
+    # Pre-provisioned bucket mode for environments that run without the opt-in MinIO profile.
+    manage-buckets: ${FILE_MANAGE_BUCKETS:true}
     infected-policy: ${FILE_INFECTED_POLICY:DELETE}
     quarantine-retention-days: ${FILE_QUARANTINE_RETENTION_DAYS:7}
     promoted-retention-days: ${FILE_PROMOTED_RETENTION_DAYS:365}
