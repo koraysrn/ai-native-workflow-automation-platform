@@ -10,7 +10,7 @@
     "database.dbname": "${DB_NAME}",
     "topic.prefix": "awap",
     "schema.include.list": "public",
-    "table.include.list": "public.outbox_events",
+    "table.include.list": "public.outbox_events,public.outbox_events.*",
     "plugin.name": "pgoutput",
     "slot.name": "awap_outbox",
     "publication.name": "awap_outbox_pub",

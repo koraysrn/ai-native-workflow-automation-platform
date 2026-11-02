@@ -38,3 +38,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Workflow start now advances the managed entity returned by `save()`, so the persisted instance
   reaches `COMPLETED` instead of remaining `CREATED` while the API response reported the advanced
   state.
+- Measured polling-vs-CDC outbox benchmark from the Compose stack: published-lag samples, p50/p95/max,
+  the `evaluateCutover()` verdict, a committed baseline and CI artifacts. The CDC deployment now uses
+  `wal_level=logical`, partition-aware topic filtering, `REPLICA IDENTITY FULL` (V50) and the
+  Debezium image's environment contract.

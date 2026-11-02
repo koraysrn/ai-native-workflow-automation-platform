@@ -3,7 +3,6 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
 const CONNECTOR = new URL("../outbox-connector.json", import.meta.url);
-const WORKER = new URL("../connect.properties", import.meta.url);
 const COMPOSE = new URL("../../docker-compose.cdc.yml", import.meta.url);
 const K8S = new URL("../../k8s/debezium-connect.yaml", import.meta.url);
 const SCRIPT = new URL("../register-connector.sh", import.meta.url);
@@ -16,10 +15,11 @@ async function connectorConfig() {
   return JSON.parse(await text(CONNECTOR)).config;
 }
 
-test("connector streams only the outbox table with a dedicated slot", async () => {
+test("connector streams every outbox partition with a dedicated slot", async () => {
   const config = await connectorConfig();
   assert.equal(config["connector.class"], "io.debezium.connector.postgresql.PostgresConnector");
-  assert.equal(config["table.include.list"], "public.outbox_events");
+  // The outbox is partitioned; the parent filter alone does not match the partition relation.
+  assert.equal(config["table.include.list"], "public.outbox_events,public.outbox_events.*");
   assert.equal(config["slot.name"], "awap_outbox");
   assert.equal(config["publication.name"], "awap_outbox_pub");
   assert.equal(config["publication.autocreate.mode"], "filtered");
@@ -51,24 +51,38 @@ test("credentials come from placeholders, never literals", async () => {
   const raw = await text(CONNECTOR);
   assert.match(raw, /"\$\{DB_PASSWORD\}"/);
   assert.doesNotMatch(raw, /postgres:\/\/[^"]*:[^"]*@/);
-  const worker = await text(WORKER);
-  assert.match(worker, /bootstrap\.servers=\$\{CONNECT_BOOTSTRAP_SERVERS\}/);
-  assert.match(worker, /enable\.idempotence=true/);
 });
 
-test("compose deployment mounts the worker config and the connector", async () => {
+test("compose deployment uses the Debezium image env contract and mounts the connector", async () => {
   const compose = await text(COMPOSE);
   assert.match(compose, /quay\.io\/debezium\/connect/);
-  assert.match(compose, /connect\.properties:\/kafka\/config\/connect\.properties/);
+  assert.match(compose, /CONFIG_STORAGE_TOPIC: awap\.connect\.configs/);
+  assert.match(compose, /OFFSET_STORAGE_TOPIC: awap\.connect\.offsets/);
+  assert.match(compose, /STATUS_STORAGE_TOPIC: awap\.connect\.status/);
+  assert.match(compose, /GROUP_ID: awap-connect/);
+  assert.match(compose, /BOOTSTRAP_SERVERS: kafka:29092/);
+  assert.match(compose, /CONNECT_PLUGIN_PATH: \/kafka\/connect/);
+  assert.match(compose, /CONNECT_PRODUCER_OVERRIDE_ENABLE_IDEMPOTENCE: "true"/);
   assert.match(compose, /outbox-connector\.json:\/kafka\/connectors\/outbox-connector\.json/);
   assert.match(compose, /healthcheck:/);
   assert.match(compose, /external: true/);
 });
 
-test("kubernetes manifests define config, deployment and service with secret refs", async () => {
+test("kubernetes manifests use the Debezium env contract and secret refs", async () => {
   const manifest = await text(K8S);
-  for (const kind of ["kind: ConfigMap", "kind: Deployment", "kind: Service", "kind: Secret"]) {
+  for (const kind of ["kind: Deployment", "kind: Service", "kind: Secret"]) {
     assert.ok(manifest.includes(kind), `missing ${kind}`);
+  }
+  assert.doesNotMatch(manifest, /kind: ConfigMap/);
+  for (const name of [
+    "GROUP_ID",
+    "CONFIG_STORAGE_TOPIC",
+    "OFFSET_STORAGE_TOPIC",
+    "STATUS_STORAGE_TOPIC",
+    "CONNECT_PLUGIN_PATH",
+    "CONNECT_PRODUCER_OVERRIDE_ENABLE_IDEMPOTENCE",
+  ]) {
+    assert.ok(manifest.includes(`name: ${name}`), `missing env ${name}`);
   }
   assert.match(manifest, /secretKeyRef:\n\s+name: awap-connect-db/);
   assert.match(manifest, /readinessProbe:/);
@@ -79,8 +93,11 @@ test("registration script is idempotent and reads secrets from the environment",
   const script = await text(SCRIPT);
   assert.match(script, /set -euo pipefail/);
   assert.match(script, /envsubst/);
+  // Only the DB_* placeholders are substituted, so Debezium's ${routedByValue} survives.
+  assert.match(script, /envsubst '\$\{DB_HOST\} \$\{DB_PORT\} \$\{DB_USER\} \$\{DB_PASSWORD\} \$\{DB_NAME\}'/);
   assert.match(script, /Missing required environment variable/);
   assert.match(script, /-X PUT/);
+  assert.match(script, /config_payload/);
   assert.match(script, /\/status/);
   assert.doesNotMatch(script, /DB_PASSWORD=awap/);
 });

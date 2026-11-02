@@ -11,19 +11,23 @@ export const CDC_TRIGGERS = Object.freeze({
   consumerErrorRate: 0.01,
 });
 
-/** Topic the Debezium EventRouter router writes for each aggregate type. */
+/**
+ * Topic the Debezium EventRouter writes for each aggregate type. The router substitutes the raw
+ * `aggregate_type` column into `outbox.event.${routedByValue}`, and the platform stores uppercase
+ * constants (TASK, WORKFLOW, ...), so topic names are case-sensitive and uppercase.
+ */
 export function cdcTopicFor(aggregateType) {
-  return `outbox.event.${String(aggregateType).toLowerCase()}`;
+  return `outbox.event.${String(aggregateType)}`;
 }
 
 /** Compatibility mapping between the polling relay topics and the CDC topics. */
 export const CDC_TOPIC_MAP = Object.freeze({
-  TASK: "outbox.event.task",
-  FORM: "outbox.event.form",
-  WORKFLOW: "outbox.event.workflow",
-  NOTIFICATION: "outbox.event.notification",
-  DOCUMENT: "outbox.event.document",
-  ANALYTICS: "outbox.event.analytics",
+  TASK: "outbox.event.TASK",
+  FORM: "outbox.event.FORM",
+  WORKFLOW: "outbox.event.WORKFLOW",
+  NOTIFICATION: "outbox.event.NOTIFICATION",
+  DOCUMENT: "outbox.event.DOCUMENT",
+  ANALYTICS: "outbox.event.ANALYTICS",
 });
 
 /**

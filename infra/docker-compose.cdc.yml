@@ -10,30 +10,38 @@
 services:
   connect:
     image: quay.io/debezium/connect:${DEBEZIUM_VERSION:-3.0}
-    container_name: awap-connect
-    depends_on:
-      - kafka
+    # Kafka is defined in infra/docker-compose.yml; Compose rejects a depends_on reference to a
+    # service from another file. The runbook starts the main stack first, and Connect retries its
+    # bootstrap connection until the broker is reachable.
     ports:
       - "8083:8083"
     environment:
-      BOOTSTRAP_SERVERS: kafka:9092
-      CONNECT_BOOTSTRAP_SERVERS: kafka:9092
-      CONNECT_REST_ADVERTISED_HOST: connect
-      CONNECT_GROUP_ID: awap-connect
-      CONNECT_CONFIG_STORAGE_TOPIC: awap.connect.configs
-      CONNECT_OFFSET_STORAGE_TOPIC: awap.connect.offsets
-      CONNECT_STATUS_STORAGE_TOPIC: awap.connect.status
-      CONNECT_KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
-      CONNECT_VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      # The Debezium image maps these unprefixed names onto CONNECT_* before starting the worker.
+      # Use the INTERNAL listener: the PLAINTEXT listener advertises localhost:9092, which is not
+      # reachable from inside the Connect container.
+      BOOTSTRAP_SERVERS: kafka:29092
+      GROUP_ID: awap-connect
+      CONFIG_STORAGE_TOPIC: awap.connect.configs
+      OFFSET_STORAGE_TOPIC: awap.connect.offsets
+      STATUS_STORAGE_TOPIC: awap.connect.status
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "1"
+      KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
       CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
-      CONNECT_PLUGIN_PATH: /usr/share/java
+      # The image ships the connectors in /kafka/connect; /usr/share/java is empty.
+      CONNECT_PLUGIN_PATH: /kafka/connect
+      CONNECT_PRODUCER_OVERRIDE_ENABLE_IDEMPOTENCE: "true"
+      CONNECT_PRODUCER_OVERRIDE_ACKS: all
+      REST_HOST_NAME: 0.0.0.0
+      ADVERTISED_HOST_NAME: connect
       DB_HOST: postgres
       DB_PORT: "5432"
       DB_USER: ${DB_USER:-awap}
       DB_PASSWORD: ${DB_PASSWORD:-awap}
       DB_NAME: ${DB_NAME:-awap}
     volumes:
-      - ./debezium/connect.properties:/kafka/config/connect.properties:ro
       - ./debezium/outbox-connector.json:/kafka/connectors/outbox-connector.json:ro
     networks:
       - awap

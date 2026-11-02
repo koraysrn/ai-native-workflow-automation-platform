@@ -45,7 +45,13 @@ The cutover is now implemented behind measured triggers:
   [`adr/0004-outbox-cdc-cutover.md`](adr/0004-outbox-cdc-cutover.md).
 - Trigger logic (shared by docs, benchmark and tests):
   [`load-test/lib/cdc-triggers.mjs`](../load-test/lib/cdc-triggers.mjs);
-  benchmark: [`load-test/cdc-benchmark.mjs`](../load-test/cdc-benchmark.mjs).
+  benchmark: [`load-test/cdc-benchmark.mjs`](../load-test/cdc-benchmark.mjs);
+  Compose collector: [`load-test/collect-outbox-lag.mjs`](../load-test/collect-outbox-lag.mjs).
+- Measured polling-vs-CDC run (2026-11-02, 200 events per mode): polling p95 2453 ms vs CDC
+  p95 247 ms, verdict `cutover: false`:
+  [`benchmarks/cdc-benchmark-2026-11-02.json`](benchmarks/cdc-benchmark-2026-11-02.json).
+- Debezium prerequisites: `wal_level=logical` and `REPLICA IDENTITY FULL` on the partitioned
+  outbox (V50); the Compose stack and Flyway migrations provide both.
 - Alerts: [`infra/prometheus/cdc-alert-rules.yml`](../infra/prometheus/cdc-alert-rules.yml).
 
 Polling remains the default until one of the triggers above fires in a measured run.

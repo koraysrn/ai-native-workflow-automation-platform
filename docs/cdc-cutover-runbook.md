@@ -16,6 +16,41 @@ only when the measured triggers below fire.
 `load-test/lib/cdc-triggers.mjs` implements the same numbers; `evaluateCutover()` is what the
 benchmark prints, so operations and CI share one definition.
 
+## Measured benchmark (issue #159)
+
+The polling-vs-CDC comparison is collected from this Compose stack by
+[`collect-outbox-lag.mjs`](../load-test/collect-outbox-lag.mjs), which reads
+`published_at - created_at` from Postgres for polling and joins Debezium's Kafka records to the
+same outbox rows for CDC. [`cdc-benchmark.mjs`](../load-test/cdc-benchmark.mjs) prints the
+p50/p95/max for both modes plus the `evaluateCutover()` verdict.
+
+The first measured run (100 workflow starts -> 200 outbox events, relay interval 1s, connector
+`RUNNING`) is committed as
+[`benchmarks/cdc-benchmark-2026-11-02.json`](benchmarks/cdc-benchmark-2026-11-02.json):
+
+| Mode | Samples | p50 | p95 | max |
+|---|---|---|---|---|
+| Polling relay | 200 | 1610 ms | 2453 ms | 2487 ms |
+| Debezium CDC | 200 | 141 ms | 247 ms | 262 ms |
+
+`evaluateCutover()` verdict: **no cutover**. Polling p95 (2453 ms) is below the 5000 ms trigger.
+The collector measured publish lag only, so the backlog-sweep, slot-lag and WAL-growth inputs to
+`evaluateCutover()` defaulted to zero for this run. CDC lowered p95 by 2206 ms, so the connector is
+a viable rollback-tested alternative but is not required at the measured volume.
+
+Every run of the [Outbox CDC benchmark workflow](../.github/workflows/cdc-benchmark.yml) uploads
+`polling.json`, `cdc.json` and `cdc-benchmark.json` as the `cdc-benchmark-results` artifact
+(30-day retention). The job fails if the connector is registered but produces no samples.
+
+## Prerequisites for CDC
+
+- PostgreSQL must run with `wal_level=logical`. The Compose stack defaults to logical (override with
+  `POSTGRES_WAL_LEVEL=replica` only when CDC will never be enabled).
+- The partitioned `outbox_events` table must have a replica identity. Flyway migration V50 sets
+  `REPLICA IDENTITY FULL` on the parent, existing partitions and future monthly partitions; without
+  it the relay's claim `UPDATE` is rejected once the table is published.
+- `max_replication_slots` and `max_wal_senders` must leave room for the `awap_outbox` slot.
+
 ## Deployment
 
 ```bash
@@ -34,14 +69,14 @@ kubectl -n awap port-forward svc/awap-connect 8083:8083
 
 Connector topic routing (`EventRouter`, `route.by.field=aggregate_type`):
 
-| `aggregate_type` | CDC topic | Polling topic |
+| `aggregate_type` | CDC topic (case-sensitive) | Polling topic |
 |---|---|---|
-| `TASK` | `outbox.event.task` | `workflow.task.events` |
-| `FORM` | `outbox.event.form` | `workflow.instance.events` |
-| `WORKFLOW` | `outbox.event.workflow` | `workflow.instance.events` |
-| `NOTIFICATION` | `outbox.event.notification` | `notification.send` |
-| `DOCUMENT` | `outbox.event.document` | `document.events` |
-| `ANALYTICS` | `outbox.event.analytics` | `analytics.events` |
+| `TASK` | `outbox.event.TASK` | `workflow.task.events` |
+| `FORM` | `outbox.event.FORM` | `workflow.instance.events` |
+| `WORKFLOW` | `outbox.event.WORKFLOW` | `workflow.instance.events` |
+| `NOTIFICATION` | `outbox.event.NOTIFICATION` | `notification.send` |
+| `DOCUMENT` | `outbox.event.DOCUMENT` | `document.events` |
+| `ANALYTICS` | `outbox.event.ANALYTICS` | `analytics.events` |
 
 Consumers must therefore subscribe to both topic families during the dual-run window.
 

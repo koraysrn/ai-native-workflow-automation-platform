@@ -7,8 +7,10 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-awap}
     command:
       - postgres
+      # Debezium logical decoding requires wal_level=logical. Polling-only deployments still work
+      # with it; set POSTGRES_WAL_LEVEL=replica only if CDC will never be enabled.
       - -c
-      - wal_level=replica
+      - wal_level=${POSTGRES_WAL_LEVEL:-logical}
       - -c
       - archive_mode=on
       - -c

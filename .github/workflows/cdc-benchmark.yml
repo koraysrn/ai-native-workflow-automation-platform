@@ -1,0 +1,174 @@
+name: Outbox CDC benchmark
+
+on:
+  # Weekly measured polling-vs-CDC comparison against the real Compose stack.
+  schedule:
+    - cron: "30 4 * * 1"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "load-test/cdc-benchmark.mjs"
+      - "load-test/collect-outbox-lag.mjs"
+      - "load-test/generate-outbox-events.mjs"
+      - "load-test/lib/cdc-benchmark.mjs"
+      - "load-test/test/cdc-benchmark.test.mjs"
+      - "infra/docker-compose.cdc.yml"
+      - "infra/debezium/**"
+      - ".github/workflows/cdc-benchmark.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cdc-benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: CDC benchmark static checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Benchmark and connector tests
+        run: node --test "load-test/test/*.test.mjs" "infra/debezium/test/*.test.mjs"
+
+  benchmark:
+    name: Measured polling vs CDC
+    needs: static
+    # The full Compose + Debezium run is opt-in on PRs (repository variable), and always runs on
+    # the schedule or a manual dispatch.
+    if: github.event_name != 'pull_request' || vars.CDC_BENCHMARK_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      COMPOSE_PROJECT_NAME: awap-cdc-benchmark
+      AWAP_NETWORK: awap-cdc-benchmark_default
+      KAFKA_ENABLED: "true"
+      OUTBOX_RELAY_INTERVAL_MS: "1000"
+      OUTBOX_RELAY_INITIAL_DELAY_MS: "1000"
+      DB_HOST: postgres
+      DB_USER: awap
+      DB_PASSWORD: awap
+      DB_NAME: awap
+      API_BASE: http://localhost:8080
+      CONNECT_URL: http://localhost:8083
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Start PostgreSQL, Kafka and the backend
+        run: >-
+          docker compose -f infra/docker-compose.yml up -d --build
+          postgres redis kafka schema-registry backend
+
+      - name: Wait for backend health
+        run: |
+          for attempt in $(seq 1 120); do
+            if curl -fsS http://localhost:8080/actuator/health >/dev/null; then
+              echo "Backend healthy after $attempt attempt(s)."
+              exit 0
+            fi
+            sleep 5
+          done
+          docker compose -f infra/docker-compose.yml logs --tail=300 backend
+          exit 1
+
+      - name: Start the Debezium Connect worker
+        run: docker compose -f infra/docker-compose.cdc.yml up -d
+
+      - name: Wait for the Connect REST API
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://localhost:8083/connectors >/dev/null; then
+              echo "Kafka Connect ready after $attempt attempt(s)."
+              exit 0
+            fi
+            sleep 5
+          done
+          docker compose -f infra/docker-compose.cdc.yml logs --tail=300
+          exit 1
+
+      - name: Register the outbox connector
+        run: ./infra/debezium/register-connector.sh
+
+      - name: Wait for the connector and task to be RUNNING
+        run: |
+          node --input-type=module - <<'NODE'
+          const deadline = Date.now() + 180_000;
+          const url = "http://localhost:8083/connectors/awap-outbox-connector/status";
+          while (Date.now() < deadline) {
+            try {
+              const response = await fetch(url);
+              const body = await response.json();
+              const tasks = body.tasks ?? [];
+              const running =
+                body.connector?.state === "RUNNING" &&
+                tasks.length > 0 &&
+                tasks.every((task) => task.state === "RUNNING");
+              console.log("connector", body.connector?.state, "tasks", tasks.map((task) => task.state));
+              if (running) {
+                process.exit(0);
+              }
+            } catch (error) {
+              console.log("waiting for Connect:", error.message);
+            }
+            await new Promise((resolve) => setTimeout(resolve, 3_000));
+          }
+          console.error("Connector did not reach RUNNING before the deadline.");
+          process.exit(1);
+          NODE
+
+      - name: Seed a tenant
+        run: node load-test/seed.mjs
+        env:
+          LOAD_TEST_SUFFIX: ${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Generate deterministic outbox events
+        run: node load-test/generate-outbox-events.mjs --count 200 --concurrency 10
+
+      - name: Collect polling and CDC publish-lag samples
+        run: >-
+          node load-test/collect-outbox-lag.mjs both
+          --output-dir load-test/results
+          --wait-drain
+          --cdc-wait-ms 5000
+
+      - name: Print benchmark report
+        run: >-
+          node load-test/cdc-benchmark.mjs
+          load-test/results/polling.json
+          load-test/results/cdc.json
+          --output load-test/results/cdc-benchmark.json
+          --require-cdc
+
+      - name: Capture connector status and logs
+        if: always()
+        run: |
+          mkdir -p load-test/results
+          curl -fsS http://localhost:8083/connectors/awap-outbox-connector/status \
+            > load-test/results/connector-status.json || true
+          docker compose -f infra/docker-compose.cdc.yml logs --no-color \
+            > load-test/results/connect.log || true
+          docker compose -f infra/docker-compose.yml logs --no-color backend kafka \
+            > load-test/results/stack.log || true
+
+      - name: Upload benchmark samples and report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cdc-benchmark-results
+          path: |
+            load-test/results
+            load-test/seed.json
+          retention-days: 30
+
+      - name: Stop the stack
+        if: always()
+        run: |
+          docker compose -f infra/docker-compose.cdc.yml down -v || true
+          docker compose -f infra/docker-compose.yml down -v || true

@@ -20,13 +20,19 @@ for variable in DB_HOST DB_PORT DB_USER DB_PASSWORD DB_NAME; do
   fi
 done
 
-# Substitute ${VAR} placeholders without eval so the JSON stays under our control.
-payload="$(envsubst < "${CONNECTOR_FILE}")"
+# Substitute only the DB_* placeholders. Debezium's own `${routedByValue}` placeholder must survive;
+# a bare `envsubst` would replace it with an empty string and route every event to `outbox.event.`.
+payload="$(envsubst '${DB_HOST} ${DB_PORT} ${DB_USER} ${DB_PASSWORD} ${DB_NAME}' < "${CONNECTOR_FILE}")"
 
 if curl -fsS "${CONNECT_URL}/connectors/${CONNECTOR_NAME}" >/dev/null 2>&1; then
   echo "Updating connector ${CONNECTOR_NAME}"
+  # PUT /connectors/{name}/config expects the config object, not the create envelope.
+  config_payload="$(
+    node -e 'const fs=require("fs");const p=JSON.parse(fs.readFileSync(0,"utf8"));process.stdout.write(JSON.stringify(p.config ?? p));' \
+      <<<"${payload}"
+  )"
   curl -fsS -X PUT -H "Content-Type: application/json" \
-    --data "${payload}" "${CONNECT_URL}/connectors/${CONNECTOR_NAME}/config"
+    --data "${config_payload}" "${CONNECT_URL}/connectors/${CONNECTOR_NAME}/config"
 else
   echo "Creating connector ${CONNECTOR_NAME}"
   curl -fsS -X POST -H "Content-Type: application/json" \
@@ -35,4 +41,14 @@ fi
 
 echo
 echo "Connector status:"
-curl -fsS "${CONNECT_URL}/connectors/${CONNECTOR_NAME}/status"
+# The worker returns 404 for a short window after the create call; poll instead of failing the job.
+for attempt in $(seq 1 30); do
+  if status="$(curl -fsS "${CONNECT_URL}/connectors/${CONNECTOR_NAME}/status")"; then
+    printf '%s\n' "${status}"
+    exit 0
+  fi
+  sleep 2
+done
+
+echo "Connector status endpoint did not become ready within 60s" >&2
+exit 1
