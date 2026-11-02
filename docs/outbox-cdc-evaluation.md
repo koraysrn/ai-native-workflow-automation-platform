@@ -54,4 +54,5 @@ The cutover is now implemented behind measured triggers:
   outbox (V50); the Compose stack and Flyway migrations provide both.
 - Alerts: [`infra/prometheus/cdc-alert-rules.yml`](../infra/prometheus/cdc-alert-rules.yml).
 
-Polling remains the default until one of the triggers above fires in a measured run.
+Polling remains the default. The benchmark has now produced the first trigger-firing run; a
+production cutover still requires the same measured signal on the production workload.

@@ -10,10 +10,14 @@ on:
       - "load-test/cdc-benchmark.mjs"
       - "load-test/collect-outbox-lag.mjs"
       - "load-test/generate-outbox-events.mjs"
+      - "load-test/seed.mjs"
       - "load-test/lib/cdc-benchmark.mjs"
+      - "load-test/lib/cdc-triggers.mjs"
       - "load-test/test/cdc-benchmark.test.mjs"
+      - "infra/docker-compose.yml"
       - "infra/docker-compose.cdc.yml"
       - "infra/debezium/**"
+      - "backend/identity/src/main/resources/db/migration/**"
       - ".github/workflows/cdc-benchmark.yml"
 
 permissions:
