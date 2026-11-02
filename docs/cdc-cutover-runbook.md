@@ -24,23 +24,24 @@ The polling-vs-CDC comparison is collected from this Compose stack by
 same outbox rows for CDC. [`cdc-benchmark.mjs`](../load-test/cdc-benchmark.mjs) prints the
 p50/p95/max for both modes plus the `evaluateCutover()` verdict.
 
-The first measured run (100 workflow starts -> 200 outbox events, relay interval 1s, connector
-`RUNNING`) is committed as
+The [CI benchmark run](https://github.com/koraysrn/ai-native-workflow-automation-platform/actions/runs/41504784486)
+(200 workflow starts -> 400 outbox events, relay interval 1s, connector `RUNNING`) is committed as
 [`benchmarks/cdc-benchmark-2026-11-02.json`](benchmarks/cdc-benchmark-2026-11-02.json):
 
 | Mode | Samples | p50 | p95 | max |
 |---|---|---|---|---|
-| Polling relay | 200 | 1610 ms | 2453 ms | 2487 ms |
-| Debezium CDC | 200 | 141 ms | 247 ms | 262 ms |
+| Polling relay | 400 | 4977 ms | 6569 ms | 6786 ms |
+| Debezium CDC | 400 | 140 ms | 257 ms | 320 ms |
 
-`evaluateCutover()` verdict: **no cutover**. Polling p95 (2453 ms) is below the 5000 ms trigger.
-The collector measured publish lag only, so the backlog-sweep, slot-lag and WAL-growth inputs to
-`evaluateCutover()` defaulted to zero for this run. CDC lowered p95 by 2206 ms, so the connector is
-a viable rollback-tested alternative but is not required at the measured volume.
+`evaluateCutover()` verdict: **cutover**. Polling p95 (6569 ms) exceeds the 5000 ms trigger, so the
+measured workload is the first evidence that justifies enabling CDC. The collector measured publish
+lag only; the backlog-sweep, slot-lag and WAL-growth inputs defaulted to zero. CDC lowered p95 by
+6312 ms while the connector was `RUNNING`.
 
-Every run of the [Outbox CDC benchmark workflow](../.github/workflows/cdc-benchmark.yml) uploads
-`polling.json`, `cdc.json` and `cdc-benchmark.json` as the `cdc-benchmark-results` artifact
-(30-day retention). The job fails if the connector is registered but produces no samples.
+The `cdc-benchmark-results` artifact from that run contains `polling.json`, `cdc.json`,
+`cdc-benchmark.json`, the connector status and the stack logs. Every run of the
+[Outbox CDC benchmark workflow](../.github/workflows/cdc-benchmark.yml) uploads the same artifact
+(30-day retention) and fails if the connector is registered but produces no samples.
 
 ## Prerequisites for CDC
 

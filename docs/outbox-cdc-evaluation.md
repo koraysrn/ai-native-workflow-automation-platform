@@ -47,8 +47,8 @@ The cutover is now implemented behind measured triggers:
   [`load-test/lib/cdc-triggers.mjs`](../load-test/lib/cdc-triggers.mjs);
   benchmark: [`load-test/cdc-benchmark.mjs`](../load-test/cdc-benchmark.mjs);
   Compose collector: [`load-test/collect-outbox-lag.mjs`](../load-test/collect-outbox-lag.mjs).
-- Measured polling-vs-CDC run (2026-11-02, 200 events per mode): polling p95 2453 ms vs CDC
-  p95 247 ms, verdict `cutover: false`:
+- Measured polling-vs-CDC CI run (2026-11-02, 400 events per mode): polling p95 6569 ms vs CDC
+  p95 257 ms, verdict `cutover: true` (publish-lag trigger):
   [`benchmarks/cdc-benchmark-2026-11-02.json`](benchmarks/cdc-benchmark-2026-11-02.json).
 - Debezium prerequisites: `wal_level=logical` and `REPLICA IDENTITY FULL` on the partitioned
   outbox (V50); the Compose stack and Flyway migrations provide both.
