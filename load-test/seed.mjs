@@ -14,7 +14,32 @@ const suffix = process.env.LOAD_TEST_SUFFIX ?? `${Date.now()}-${process.pid}`;
 async function jsonRequest(path, init = {}) {
   const response = await fetch(`${base}${path}`, init);
   const body = await response.json().catch(() => ({}));
-  return { status: response.status, body };
+  return {
+    status: response.status,
+    body,
+    setCookies: response.headers.getSetCookie?.() ?? [],
+  };
+}
+
+/** Extracts and decodes one Set-Cookie value; the auth endpoints issue HttpOnly cookies. */
+function cookieValue(setCookies, name) {
+  for (const cookie of setCookies) {
+    const [pair] = cookie.split(";");
+    const separator = pair.indexOf("=");
+    if (separator > 0 && pair.slice(0, separator).trim() === name) {
+      return decodeURIComponent(pair.slice(separator + 1).trim());
+    }
+  }
+  return "";
+}
+
+/** A browser-shaped cookie header for the scripted API client. */
+function cookieHeader(token, csrfToken) {
+  const cookies = [`awap_access_token=${encodeURIComponent(token)}`, "awap_session=1"];
+  if (csrfToken) {
+    cookies.push(`XSRF-TOKEN=${encodeURIComponent(csrfToken)}`);
+  }
+  return cookies.join("; ");
 }
 
 async function seedTenant(index) {
@@ -45,9 +70,27 @@ async function seedTenant(index) {
   if (login.status !== 200) {
     throw new Error(`Login for ${slug} failed with status ${login.status}`);
   }
-  const token = login.body.accessToken ?? "";
+  const token =
+    cookieValue(login.setCookies, "awap_access_token") || login.body.accessToken || "";
+  if (!token) {
+    throw new Error(`Login for ${slug} succeeded but no access-token cookie was issued`);
+  }
 
-  const auth = { Authorization: `Bearer ${token}` };
+  // The SPA bootstraps the CSRF cookie through this endpoint before a state-changing request; a
+  // scripted client must do the same or workflow starts are rejected with 403.
+  const csrf = await jsonRequest("/api/v1/auth/csrf", {
+    headers: { Cookie: cookieHeader(token) },
+  });
+  const csrfToken = csrf.body.token || cookieValue(csrf.setCookies, "XSRF-TOKEN");
+  if (!csrfToken) {
+    throw new Error(`CSRF bootstrap for ${slug} returned no token`);
+  }
+
+  const auth = {
+    Authorization: `Bearer ${token}`,
+    Cookie: cookieHeader(token, csrfToken),
+    "X-XSRF-TOKEN": csrfToken,
+  };
   const memberships = await jsonRequest("/api/v1/auth/tenants", { headers: auth });
   const tenantId = Array.isArray(memberships.body)
     ? (memberships.body.find((item) => item?.role)?.tenantId ?? "")
@@ -66,6 +109,7 @@ async function seedTenant(index) {
     email,
     password,
     token,
+    csrfToken,
     tenantId,
     workflowDefinitionId,
     documentId,
@@ -88,6 +132,7 @@ await writeFile(
 const exports = {
   TENANT_ID: primary.tenantId,
   ACCESS_TOKEN: primary.token,
+  CSRF_TOKEN: primary.csrfToken,
   TENANT_SLUG: primary.slug,
   WORKFLOW_DEFINITION_ID: primary.workflowDefinitionId,
   DOCUMENT_ID: primary.documentId,

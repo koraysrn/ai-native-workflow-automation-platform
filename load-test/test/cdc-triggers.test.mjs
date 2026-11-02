@@ -60,11 +60,12 @@ test("rollback triggers on a dead connector, duplicates or consumer errors", () 
   );
 });
 
-test("topic routing matches the documented compatibility map", () => {
+test("topic routing matches the documented compatibility map and preserves aggregate-type case", () => {
   for (const [aggregateType, topic] of Object.entries(CDC_TOPIC_MAP)) {
     assert.equal(cdcTopicFor(aggregateType), topic);
   }
-  assert.equal(cdcTopicFor("Task"), "outbox.event.task");
+  assert.equal(cdcTopicFor("Task"), "outbox.event.Task");
+  assert.equal(cdcTopicFor("WORKFLOW"), "outbox.event.WORKFLOW");
 });
 
 test("percentile uses nearest-rank and tolerates empty samples", () => {

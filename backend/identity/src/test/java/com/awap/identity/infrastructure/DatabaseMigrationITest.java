@@ -117,6 +117,25 @@ class DatabaseMigrationITest {
 
   @Test
   @Order(4)
+  void v50OutboxPartitionsUseReplicaIdentityFullForDebezium() throws Exception {
+    try (Connection c = admin();
+        Statement stmt = c.createStatement()) {
+      // V50 sets FULL on the parent and the DEFAULT partition; the V32 helper must also set it on
+      // the monthly partition created by the previous test.
+      for (String table :
+          new String[] {"outbox_events", "outbox_events_default", "outbox_events_2026_01"}) {
+        try (ResultSet rs =
+            stmt.executeQuery(
+                "SELECT relreplident FROM pg_class WHERE oid = '" + table + "'::regclass")) {
+          assertThat(rs.next()).isTrue();
+          assertThat(rs.getString(1)).as("replica identity for %s", table).isEqualTo("f");
+        }
+      }
+    }
+  }
+
+  @Test
+  @Order(5)
   void checksumMismatchFailsFastOnValidate() throws Exception {
     try (Connection c = admin();
         Statement stmt = c.createStatement()) {
