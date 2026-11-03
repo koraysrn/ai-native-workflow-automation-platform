@@ -63,8 +63,9 @@ node load-test/cdc-e2e.mjs --output load-test/results/cdc-e2e.json
 
 The scheduled/manual [`cdc-e2e.yml`](../.github/workflows/cdc-e2e.yml) workflow runs the same
 command and uploads the `cdc-e2e-results` artifact. The committed baseline is
-[`benchmarks/cdc-e2e-2026-11-03.json`](benchmarks/cdc-e2e-2026-11-03.json) (10/10 assertions
-passed):
+[`benchmarks/cdc-e2e-2026-11-03.json`](benchmarks/cdc-e2e-2026-11-03.json); the final CI proof is
+[run 41644059701](https://github.com/koraysrn/ai-native-workflow-automation-platform/actions/runs/41644059701)
+(10/10 assertions passed in 10m20s):
 
 | Acceptance item | Assertion | Measured result |
 |---|---|---|
