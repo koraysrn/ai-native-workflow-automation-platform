@@ -43,6 +43,54 @@ The `cdc-benchmark-results` artifact from that run contains `polling.json`, `cdc
 [Outbox CDC benchmark workflow](../.github/workflows/cdc-benchmark.yml) uploads the same artifact
 (30-day retention) and fails if the connector is registered but produces no samples.
 
+## Live end-to-end verification (issue #161)
+
+The connector is now registered against a real PostgreSQL + Kafka + Debezium Connect stack, not
+only validated statically. [`cdc-e2e.mjs`](../load-test/cdc-e2e.mjs) drives the full acceptance
+list and writes a reviewable JSON artifact:
+
+```bash
+# 1. Main stack with Kafka and a 1s relay, plus the Connect worker
+KAFKA_ENABLED=true OUTBOX_RELAY_INTERVAL_MS=1000 \
+  docker compose -f infra/docker-compose.yml up -d --build \
+  postgres redis kafka schema-registry backend postgres-exporter prometheus
+docker compose -f infra/docker-compose.cdc.yml up -d
+
+# 2. Seed a tenant and run every live assertion
+node load-test/seed.mjs
+node load-test/cdc-e2e.mjs --output load-test/results/cdc-e2e.json
+```
+
+The scheduled/manual [`cdc-e2e.yml`](../.github/workflows/cdc-e2e.yml) workflow runs the same
+command and uploads the `cdc-e2e-results` artifact. The committed artifact
+[`benchmarks/cdc-e2e-2026-11-03.json`](benchmarks/cdc-e2e-2026-11-03.json) is the upload from the
+final CI proof, [run 41648558684](https://github.com/koraysrn/ai-native-workflow-automation-platform/actions/runs/41648558684)
+(10/10 assertions passed):
+
+| Acceptance item | Assertion | Measured result |
+|---|---|---|
+| Compose/K8s stack starts Connect and registers the connector | `compose-connector-registered`; K8s `awap-connect-register` Job | connector and task `RUNNING`; the Job uses the same ConfigMap/Secret, PUT/POST and status poll |
+| A new outbox row streams to `outbox.event.<aggregate>` | `outbox-row-streamed-to-aggregate-topic` | event `e7515270…` on `outbox.event.TASK`, key `7ffc2512…`, `tenantId` header present |
+| The same row is consumed during the dual run | `dual-run-polling-consumed` | same event id/key on `workflow.task.events` |
+| Duplicates are absorbed by existing dedupe keys | `duplicate-events-absorbed` | the exact CDC payload replayed twice produced **one** `notification_deliveries` row (`business_key=cdc-e2e-41648558684-1`) |
+| Slot lag / inactive-slot alerts | `connector-stop-makes-slot-inactive`, `inactive-slot-alert-fires`, `slot-lag-rule-loaded` | slot `active=false` with 15,176 bytes of retained WAL; `AwapCdcSlotInactive` reached `firing`; the 512 MiB rule is loaded and healthy |
+| Resume without loss | `connector-resumed`, `resume-without-loss`, `inactive-slot-alert-resolves` | slot active again, all 3 rows written during the stop were streamed, alert returned to `inactive` |
+
+The live run found a dead alert expression: `postgres_exporter` emits the plural series
+`pg_replication_slots_pg_wal_lsn_diff`, while [`cdc-alert-rules.yml`](../infra/prometheus/cdc-alert-rules.yml)
+used the singular `pg_replication_slot_pg_wal_lsn_diff`, so the 512 MiB alert could never fire.
+The rule, the synthetic exporter, the metric catalog and the live-query validator now use the
+plural name. [`cdc-alert-rules.test.yml`](../infra/prometheus/test/cdc-alert-rules.test.yml)
+feeds both threshold and `for:` inputs through `promtool`, so the 512 MiB case is proved without
+generating half a gigabyte of WAL on every run.
+
+The duplicate suppression counter lives on the auth-protected `/actuator/prometheus` endpoint
+(HTTP 401 in this stack), so the harness treats it as optional evidence and asserts the durable
+`notification_deliveries` row count instead. The Kubernetes path applies
+[`debezium-connect.yaml`](../infra/k8s/debezium-connect.yaml), whose `awap-connect-register` Job
+registers the connector with the same connector JSON and Secret-backed DB credentials; the live CI
+job uses Compose because that is the available stack.
+
 ## Prerequisites for CDC
 
 - PostgreSQL must run with `wal_level=logical`. The Compose stack defaults to logical (override with
@@ -63,10 +111,24 @@ docker compose -f infra/docker-compose.cdc.yml up -d
 DB_HOST=postgres DB_USER=awap DB_PASSWORD=awap DB_NAME=awap \
   ./infra/debezium/register-connector.sh
 
-# Kubernetes
+# Kubernetes (the manifest includes the connector ConfigMap and registration Job)
 kubectl apply -f infra/k8s/debezium-connect.yaml
+kubectl -n awap wait --for=condition=complete job/awap-connect-register --timeout=300s
+kubectl -n awap logs job/awap-connect-register
 kubectl -n awap port-forward svc/awap-connect 8083:8083
 ```
+
+A completed Kubernetes Job is immutable. After changing the connector ConfigMap, recreate the
+one-shot Job before applying:
+
+```bash
+kubectl -n awap delete job awap-connect-register --ignore-not-found
+kubectl apply -f infra/k8s/debezium-connect.yaml
+```
+
+The Job installs `curl`, `jq` and `gettext` from the Alpine repositories. In an air-gapped
+cluster, mirror those packages for the bootstrap Job or skip the Job and run
+`register-connector.sh` through `kubectl -n awap port-forward svc/awap-connect 8083:8083`.
 
 Connector topic routing (`EventRouter`, `route.by.field=aggregate_type`):
 

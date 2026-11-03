@@ -240,7 +240,7 @@ async function main() {
     }
     for (const expr of [
       'pg_replication_slots_active{slot_name="awap_outbox"}',
-      'pg_replication_slot_pg_wal_lsn_diff{slot_name="awap_outbox"}',
+      'pg_replication_slots_pg_wal_lsn_diff{slot_name="awap_outbox"}',
     ]) {
       const result = await query(baseUrl, expr);
       record(checks, `CDC exporter series ${expr}`, result.length > 0, `${result.length} series`);

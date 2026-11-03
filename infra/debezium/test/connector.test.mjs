@@ -70,10 +70,9 @@ test("compose deployment uses the Debezium image env contract and mounts the con
 
 test("kubernetes manifests use the Debezium env contract and secret refs", async () => {
   const manifest = await text(K8S);
-  for (const kind of ["kind: Deployment", "kind: Service", "kind: Secret"]) {
+  for (const kind of ["kind: Deployment", "kind: Service", "kind: Secret", "kind: ConfigMap", "kind: Job"]) {
     assert.ok(manifest.includes(kind), `missing ${kind}`);
   }
-  assert.doesNotMatch(manifest, /kind: ConfigMap/);
   for (const name of [
     "GROUP_ID",
     "CONFIG_STORAGE_TOPIC",
@@ -87,6 +86,38 @@ test("kubernetes manifests use the Debezium env contract and secret refs", async
   assert.match(manifest, /secretKeyRef:\n\s+name: awap-connect-db/);
   assert.match(manifest, /readinessProbe:/);
   assert.match(manifest, /prometheus\.io\/scrape: "true"/);
+});
+
+test("kubernetes ConfigMap carries exactly the canonical connector JSON", async () => {
+  const manifest = await text(K8S);
+  const canonical = JSON.parse(await text(CONNECTOR));
+  const block = manifest.match(
+    /outbox-connector\.json: \|\n([\s\S]*?)\n---\napiVersion: batch\/v1/,
+  );
+  assert.ok(block, "the connector ConfigMap is missing");
+  const embedded = JSON.parse(block[1].replace(/^    /gm, ""));
+  assert.deepEqual(embedded, canonical);
+});
+
+test("kubernetes registration Job is idempotent and reads credentials from the Secret", async () => {
+  const manifest = await text(K8S);
+  assert.match(manifest, /kind: Job/);
+  assert.match(manifest, /name: awap-connect-register/);
+  assert.match(manifest, /image: alpine:3\.20/);
+  assert.match(
+    manifest,
+    /envsubst '\$\{DB_HOST\} \$\{DB_PORT\} \$\{DB_USER\} \$\{DB_PASSWORD\} \$\{DB_NAME\}'/,
+  );
+  assert.match(manifest, /jq -c '\.config'/);
+  assert.match(manifest, /-X PUT/);
+  assert.match(manifest, /-X POST/);
+  assert.match(manifest, /connectors\/\$\{CONNECTOR_NAME\}\/status/);
+  assert.match(manifest, /\.connector\.state == "RUNNING"/);
+  assert.match(manifest, /all\(\.tasks\[\]; \.state == "RUNNING"\)/);
+  assert.match(manifest, /name: awap-connect-connector/);
+  assert.match(manifest, /secretKeyRef:\n\s+name: awap-connect-db/);
+  assert.match(manifest, /key: DB_PASSWORD/);
+  assert.doesNotMatch(manifest, /DB_PASSWORD: awap/);
 });
 
 test("registration script is idempotent and reads secrets from the environment", async () => {

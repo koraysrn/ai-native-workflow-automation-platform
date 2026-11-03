@@ -78,6 +78,33 @@ The latest measured baseline is
 CDC is optional during collection (a missing connector is recorded, not treated as an error);
 `--require-cdc` makes an absent connector or an empty sample set fail the benchmark.
 
+## Debezium outbox end-to-end (issue #161)
+
+[`cdc-e2e.mjs`](cdc-e2e.mjs) registers the connector against the real Compose stack and asserts every
+acceptance item: a new outbox row reaches `outbox.event.<aggregate>`, the polling path consumes the
+same event, replaying the CDC payload twice leaves one notification delivery, stopping the
+connector makes the slot inactive and fires `AwapCdcSlotInactive`, and all rows written during the
+stop stream after resume.
+
+```bash
+# 1. Main stack with Kafka and a 1s relay (plus Prometheus for the alert assertion)
+KAFKA_ENABLED=true OUTBOX_RELAY_INTERVAL_MS=1000 \
+  docker compose -f infra/docker-compose.yml up -d --build \
+  postgres redis kafka schema-registry backend postgres-exporter prometheus
+docker compose -f infra/docker-compose.cdc.yml up -d
+
+# 2. Seed and run
+node load-test/seed.mjs
+node load-test/cdc-e2e.mjs --output load-test/results/cdc-e2e.json
+```
+
+The harness waits up to seven minutes for the 5-minute `AwapCdcSlotInactive` window; use
+`--skip-alerts` for a fast local smoke that still checks registration, streaming, dedupe and
+resume. The committed baseline and the acceptance mapping live in
+[`docs/cdc-cutover-runbook.md`](../docs/cdc-cutover-runbook.md#live-end-to-end-verification-issue-161).
+`.github/workflows/cdc-e2e.yml` runs the same command weekly, on demand, and on CDC-related PRs
+when the `CDC_E2E_ENABLED` repository variable is `true`.
+
 ## Fake webhook target
 
 | Env var | Default | Behaviour |

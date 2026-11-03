@@ -30,6 +30,7 @@ and are injected into the cluster by the GitOps pipeline, never committed.
 | File | Purpose |
 |---|---|
 | [`namespace.yaml`](namespace.yaml) | `awap` and `awap-infra` namespaces. |
+| [`debezium-connect.yaml`](debezium-connect.yaml) | Debezium Connect Deployment/Service, connector ConfigMap and the idempotent `awap-connect-register` Job. |
 | [`backend.yaml`](backend.yaml) | Backend Deployment (2 replicas) + Service. |
 | [`frontend.yaml`](frontend.yaml) | Frontend Deployment + Service. |
 | [`hpa.yaml`](hpa.yaml) | Backend horizontal pod autoscaler (CPU 70%, 2–10). |

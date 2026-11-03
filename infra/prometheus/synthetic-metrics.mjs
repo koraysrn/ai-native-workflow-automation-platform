@@ -54,7 +54,7 @@ const BACKEND_HISTOGRAMS = [
 // Series used by `infra/prometheus/cdc-alert-rules.yml`.
 const CDC_EXPORTER_GAUGES = [
   ["pg_replication_slots_active", { slot_name: "awap_outbox" }, 1],
-  ["pg_replication_slot_pg_wal_lsn_diff", { slot_name: "awap_outbox" }, 0],
+  ["pg_replication_slots_pg_wal_lsn_diff", { slot_name: "awap_outbox" }, 0],
 ];
 
 function escapeLabel(value) {

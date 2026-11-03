@@ -1,0 +1,143 @@
+{
+  "schemaVersion": 1,
+  "issue": 161,
+  "runId": "41648558684-1",
+  "startedAt": "2026-11-03T13:57:48.095Z",
+  "generatedAt": "2026-11-03T14:04:57.109Z",
+  "environment": {
+    "composeProject": "awap-cdc-e2e",
+    "connectorName": "awap-outbox-connector",
+    "slotName": "awap_outbox",
+    "connectUrl": "http://localhost:8083",
+    "prometheusUrl": "http://localhost:9090",
+    "tenantId": "d384a249-6002-4153-832d-f2c9071cbe18",
+    "relayIntervalMs": 1000,
+    "kafkaEnabled": "true"
+  },
+  "assertions": [
+    {
+      "id": "compose-connector-registered",
+      "title": "Compose stack starts Debezium Connect and registers awap-outbox-connector",
+      "status": "passed",
+      "detail": {
+        "connectorState": "RUNNING",
+        "taskStates": [
+          "RUNNING"
+        ],
+        "registration": "{\"name\":\"awap-outbox-connector\",\"connector\":{\"state\":\"RUNNING\",\"worker_id\":\"connect:8083\"},\"tasks\":[{\"id\":0,\"state\":\"RUNNING\",\"worker_id\":\"connect:8083\"}],\"type\":\"source\"}"
+      }
+    },
+    {
+      "id": "outbox-row-streamed-to-aggregate-topic",
+      "title": "A new outbox row is streamed to outbox.event.TASK",
+      "status": "passed",
+      "detail": {
+        "eventId": "e7515270-9683-4342-8057-0a0fb4a2a313",
+        "topic": "outbox.event.TASK",
+        "key": "7ffc2512-d3dc-4dcc-a988-8392cc882cbe",
+        "tenantHeader": "d384a249-6002-4153-832d-f2c9071cbe18"
+      }
+    },
+    {
+      "id": "dual-run-polling-consumed",
+      "title": "The same event is consumed from the polling topic during the dual run",
+      "status": "passed",
+      "detail": {
+        "eventId": "e7515270-9683-4342-8057-0a0fb4a2a313",
+        "topic": "workflow.task.events",
+        "key": "7ffc2512-d3dc-4dcc-a988-8392cc882cbe"
+      }
+    },
+    {
+      "id": "duplicate-events-absorbed",
+      "title": "Duplicate events are absorbed by the existing notification dedupe key",
+      "status": "passed",
+      "detail": {
+        "cdcEventId": "810a0a7b-ed67-48d2-a4a4-9eaf87e4f27d",
+        "replayCount": 2,
+        "deliveryRows": 1,
+        "dedupeKey": "cdc-e2e-41648558684-1",
+        "businessKey": "cdc-e2e-41648558684-1"
+      }
+    },
+    {
+      "id": "connector-stop-makes-slot-inactive",
+      "title": "Stopping the connector leaves the awap_outbox slot inactive while the polling relay keeps draining",
+      "status": "passed",
+      "detail": {
+        "connectorState": "STOPPED",
+        "slotActive": false,
+        "slotLagBytes": 15176,
+        "gapEventsPublishedByPolling": 3,
+        "gapEventsStreamedByCdc": 0
+      }
+    },
+    {
+      "id": "inactive-slot-alert-fires",
+      "title": "AwapCdcSlotInactive fires while the connector is stopped",
+      "status": "passed",
+      "detail": {
+        "state": "firing",
+        "health": "ok",
+        "alertCount": 1,
+        "slotLagBytes": 15176
+      }
+    },
+    {
+      "id": "slot-lag-rule-loaded",
+      "title": "The 512 MiB slot-lag rule is loaded and healthy in Prometheus",
+      "status": "passed",
+      "detail": {
+        "state": "inactive",
+        "health": "ok",
+        "slotLagBytes": 15176,
+        "thresholdBytes": 536870912
+      }
+    },
+    {
+      "id": "connector-resumed",
+      "title": "The connector resumes and the replication slot becomes active again",
+      "status": "passed",
+      "detail": {
+        "connectorState": "RUNNING",
+        "taskStates": [
+          "RUNNING"
+        ],
+        "slotActive": true
+      }
+    },
+    {
+      "id": "resume-without-loss",
+      "title": "Every row created while the connector was stopped is streamed after resume",
+      "status": "passed",
+      "detail": {
+        "eventIds": [
+          "31213a4d-25ca-4c58-adf6-b5d95bf8aa40",
+          "2f23d5d8-de84-439c-88b7-dbe6bab63df1",
+          "c17a2b9b-6196-41e5-87b2-cd16b7e198f6"
+        ],
+        "streamedRecords": {
+          "31213a4d-25ca-4c58-adf6-b5d95bf8aa40": 1793714638249,
+          "2f23d5d8-de84-439c-88b7-dbe6bab63df1": 1793714638250,
+          "c17a2b9b-6196-41e5-87b2-cd16b7e198f6": 1793714638251
+        }
+      }
+    },
+    {
+      "id": "inactive-slot-alert-resolves",
+      "title": "AwapCdcSlotInactive resolves after resume",
+      "status": "passed",
+      "detail": {
+        "state": "inactive",
+        "health": "ok"
+      }
+    }
+  ],
+  "summary": {
+    "total": 10,
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0
+  },
+  "passed": true
+}

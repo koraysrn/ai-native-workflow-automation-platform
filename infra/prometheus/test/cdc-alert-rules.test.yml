@@ -1,0 +1,70 @@
+# promtool unit tests for the CDC alerts added with the Debezium outbox cutover (issue #131).
+#
+# Run locally and in CI with:
+#   docker run --rm -v "$PWD/infra/prometheus:/etc/prometheus" \
+#     --entrypoint promtool prom/prometheus:v2.55.0 \
+#     test rules /etc/prometheus/test/cdc-alert-rules.test.yml
+#
+# The live end-to-end harness (load-test/cdc-e2e.mjs) stops the connector and proves that
+# AwapCdcSlotInactive fires for real. These tests additionally prove the 512 MiB slot-lag threshold
+# and its `for:` window without having to generate half a gigabyte of WAL on every run.
+rule_files:
+  - ../cdc-alert-rules.yml
+evaluation_interval: 1m
+
+tests:
+  # ---------------------------------------------------------- inactive replication slot
+  # The slot has no active consumer for 6 minutes -> the 5m `for:` window is satisfied.
+  - interval: 1m
+    input_series:
+      - series: 'pg_replication_slots_active{slot_name="awap_outbox"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: AwapCdcSlotInactive
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              slot_name: awap_outbox
+            exp_annotations:
+              summary: "Outbox replication slot is inactive"
+              description: "The awap_outbox slot has had no active consumer for 5 minutes; CDC is not advancing while WAL keeps growing."
+              runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/cdc-cutover-runbook.md#monitoring"
+
+  # Four minutes of inactivity is not enough for the 5m window -> no alert yet.
+  - interval: 1m
+    input_series:
+      - series: 'pg_replication_slots_active{slot_name="awap_outbox"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 4m
+        alertname: AwapCdcSlotInactive
+        exp_alerts: []
+
+  # ------------------------------------------------------------ replication slot lag
+  # 600 MiB of retained WAL at minute 6, held for 10m -> the alert fires.
+  - interval: 1m
+    input_series:
+      - series: 'pg_replication_slots_pg_wal_lsn_diff{slot_name="awap_outbox"}'
+        values: '0+100000000x20'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: AwapCdcSlotLagHigh
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              slot_name: awap_outbox
+            exp_annotations:
+              summary: "Outbox replication slot lag above 512 MiB"
+              description: "The awap_outbox slot retains 1.6e+09 bytes of WAL; the database disk can fill up."
+              runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/cdc-cutover-runbook.md#monitoring"
+
+  # 400 MiB stays below the 512 MiB budget -> no alert.
+  - interval: 1m
+    input_series:
+      - series: 'pg_replication_slots_pg_wal_lsn_diff{slot_name="awap_outbox"}'
+        values: '0+30000000x20'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: AwapCdcSlotLagHigh
+        exp_alerts: []

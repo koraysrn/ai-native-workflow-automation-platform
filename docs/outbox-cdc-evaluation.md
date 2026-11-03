@@ -38,8 +38,9 @@ The cutover is now implemented behind measured triggers:
   (Postgres connector, `outbox_events` only, EventRouter routing by `aggregate_type`,
   dead-letter topic `awap.cdc.dead-letter`).
 - Deployments: [`infra/docker-compose.cdc.yml`](../infra/docker-compose.cdc.yml) and
-  [`infra/k8s/debezium-connect.yaml`](../infra/k8s/debezium-connect.yaml);
-  registration via [`infra/debezium/register-connector.sh`](../infra/debezium/register-connector.sh).
+  [`infra/k8s/debezium-connect.yaml`](../infra/k8s/debezium-connect.yaml); registration via
+  [`infra/debezium/register-connector.sh`](../infra/debezium/register-connector.sh) or the
+  Kubernetes `awap-connect-register` Job in the same manifest.
 - Triggers, dual-run, cutover, rollback and reconciliation:
   [`cdc-cutover-runbook.md`](cdc-cutover-runbook.md) and
   [`adr/0004-outbox-cdc-cutover.md`](adr/0004-outbox-cdc-cutover.md).
@@ -50,9 +51,17 @@ The cutover is now implemented behind measured triggers:
 - Measured polling-vs-CDC CI run (2026-11-02, 400 events per mode): polling p95 6569 ms vs CDC
   p95 257 ms, verdict `cutover: true` (publish-lag trigger):
   [`benchmarks/cdc-benchmark-2026-11-02.json`](benchmarks/cdc-benchmark-2026-11-02.json).
+- Live end-to-end registration (2026-11-03): the connector was registered against a real
+  Postgres + Kafka + Connect stack; a new outbox row streamed to `outbox.event.TASK`, the polling
+  path consumed the same event, duplicate CDC payloads collapsed to one delivery, stopping the
+  connector fired `AwapCdcSlotInactive`, and all gap rows streamed after resume. Results:
+  [`benchmarks/cdc-e2e-2026-11-03.json`](benchmarks/cdc-e2e-2026-11-03.json); procedure:
+  [`cdc-cutover-runbook.md`](cdc-cutover-runbook.md#live-end-to-end-verification-issue-161).
 - Debezium prerequisites: `wal_level=logical` and `REPLICA IDENTITY FULL` on the partitioned
   outbox (V50); the Compose stack and Flyway migrations provide both.
-- Alerts: [`infra/prometheus/cdc-alert-rules.yml`](../infra/prometheus/cdc-alert-rules.yml).
+- Alerts: [`infra/prometheus/cdc-alert-rules.yml`](../infra/prometheus/cdc-alert-rules.yml). The
+  live run found and fixed a dead slot-lag expression (`pg_replication_slots_pg_wal_lsn_diff` is
+  the series postgres_exporter actually emits).
 
 Polling remains the default. The benchmark has now produced the first trigger-firing run; a
 production cutover still requires the same measured signal on the production workload.
