@@ -112,6 +112,8 @@ test("kubernetes registration Job is idempotent and reads credentials from the S
   assert.match(manifest, /-X PUT/);
   assert.match(manifest, /-X POST/);
   assert.match(manifest, /connectors\/\$\{CONNECTOR_NAME\}\/status/);
+  assert.match(manifest, /\.connector\.state == "RUNNING"/);
+  assert.match(manifest, /all\(\.tasks\[\]; \.state == "RUNNING"\)/);
   assert.match(manifest, /name: awap-connect-connector/);
   assert.match(manifest, /secretKeyRef:\n\s+name: awap-connect-db/);
   assert.match(manifest, /key: DB_PASSWORD/);

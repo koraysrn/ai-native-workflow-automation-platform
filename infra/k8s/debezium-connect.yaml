@@ -237,11 +237,14 @@ spec:
               for attempt in $(seq 1 30); do
                 if status="$(curl -fsS "${CONNECT_URL}/connectors/${CONNECTOR_NAME}/status")"; then
                   printf '%s\n' "${status}"
-                  exit 0
+                  ready="$(printf '%s' "${status}" | jq -r '(.connector.state == "RUNNING") and ((.tasks | length) > 0) and all(.tasks[]; .state == "RUNNING")')"
+                  if [ "${ready}" = "true" ]; then
+                    exit 0
+                  fi
                 fi
                 sleep 2
               done
-              echo "Connector status endpoint did not become ready within 60s" >&2
+              echo "Connector did not become RUNNING within 60s" >&2
               exit 1
           env:
             - name: CONNECT_URL
