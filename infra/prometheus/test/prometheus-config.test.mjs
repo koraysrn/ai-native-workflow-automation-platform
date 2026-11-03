@@ -29,4 +29,7 @@ test("Compose mounts both rule files so a local Prometheus evaluates them", asyn
   assert.match(compose, /cdc-alert-rules\.yml:\/etc\/prometheus\/cdc-alert-rules\.yml:ro/);
   assert.match(compose, /postgres-exporter:/);
   assert.match(compose, /collector\.replication_slot/);
+  // Grafana must receive both the datasource and the dashboard provider/JSON.
+  assert.match(compose, /\.\/grafana\/provisioning\/datasources:\/etc\/grafana\/provisioning\/datasources:ro/);
+  assert.match(compose, /\.\/grafana\/provisioning\/dashboards:\/etc\/grafana\/provisioning\/dashboards:ro/);
 });

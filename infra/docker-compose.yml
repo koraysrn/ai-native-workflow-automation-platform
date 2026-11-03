@@ -127,6 +127,8 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      # Provider + awap.json; without this mount the dashboard was never provisioned.
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest

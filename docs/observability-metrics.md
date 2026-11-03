@@ -46,7 +46,7 @@ running Prometheus.
 | `backend` | Exposes `/actuator/prometheus`; scraped as job `awap-backend`. |
 | `postgres-exporter` | Exposes the replication-slot series; scraped as job `awap-postgres-exporter`. |
 | `prometheus` | Mounts `prometheus.yml`, `alert-rules.yml` and `cdc-alert-rules.yml` (previously the rule files were not mounted, so a local Prometheus loaded no rules at all). |
-| `grafana` | Provisions `awap.json` against the `prometheus` datasource. |
+| `grafana` | Provisions the pinned `prometheus` datasource UID and `awap.json` through the `dashboards.yml` file provider. |
 
 Start the stack and confirm both targets are `UP`:
 
@@ -120,6 +120,11 @@ so a broken template or a removed runbook link fails CI as well.
    supplies retry observations, so the panel is asserted as `series`; the sentinel variant proves
    the empty path renders without an error. A real stack with zero retries shows "No data" rather
    than an error panel.
+7. **Grafana never loaded the dashboard and the datasource UID did not match.** Compose mounted
+   only the datasource directory, there was no dashboard file provider, and `datasource.yml` had
+   no `uid` — so Grafana generated a random UID while every panel references `uid: prometheus`.
+   The provider ([`provisioning/dashboards/dashboards.yml`](../infra/grafana/provisioning/dashboards/dashboards.yml))
+   and the pinned datasource UID are now provisioned and covered by the dashboard tests.
 
 ## Notes
 
