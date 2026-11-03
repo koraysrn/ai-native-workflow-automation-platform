@@ -1,5 +1,5 @@
 {
-  "description": "Prometheus metric names referenced by the AWAP dashboard and alerts. Every entry maps to a Micrometer meter emitted by backend/identity.",
+  "description": "Prometheus metric names referenced by the AWAP dashboard and alerts. AWAP entries map to a Micrometer meter emitted by backend/identity; pg_* entries come from postgres_exporter for the CDC rules.",
   "metrics": [
     {
       "name": "awap_workflow_expression_validations_total",

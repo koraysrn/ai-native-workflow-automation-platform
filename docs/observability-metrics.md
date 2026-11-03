@@ -136,6 +136,9 @@ so a broken template or a removed runbook link fails CI as well.
   when nothing needs retrying instead of showing zeros.
 - `awap_outbox_pending` is a gauge with an `AtomicLong` registered once; Micrometer re-reads it on
   every scrape, so the value tracks the latest relay tick rather than a stale number.
+- `pg_replication_slots_active` and `pg_replication_slot_pg_wal_lsn_diff` come from
+  `postgres_exporter` (job `awap-postgres-exporter`), not from the backend; they are catalogued for
+  the CDC rules in [`cdc-alert-rules.yml`](../infra/prometheus/cdc-alert-rules.yml).
 - Empty metrics render as "No data" in Grafana; the panel JSON does not set `noValue` overrides, so
   an empty tenant never produces a red error panel.
 - `awap_document_sse_connections` is a gauge over an `AtomicInteger` held by
