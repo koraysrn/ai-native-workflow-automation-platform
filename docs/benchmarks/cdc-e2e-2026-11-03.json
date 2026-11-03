@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
   "issue": 161,
-  "runId": "41645994110-1",
-  "startedAt": "2026-11-03T13:40:54.357Z",
-  "generatedAt": "2026-11-03T13:48:00.725Z",
+  "runId": "41648558684-1",
+  "startedAt": "2026-11-03T13:57:48.095Z",
+  "generatedAt": "2026-11-03T14:04:57.109Z",
   "environment": {
     "composeProject": "awap-cdc-e2e",
     "connectorName": "awap-outbox-connector",
     "slotName": "awap_outbox",
     "connectUrl": "http://localhost:8083",
     "prometheusUrl": "http://localhost:9090",
-    "tenantId": "e66026b1-1b68-4d6f-85b3-262ef3f792a2",
+    "tenantId": "d384a249-6002-4153-832d-f2c9071cbe18",
     "relayIntervalMs": 1000,
     "kafkaEnabled": "true"
   },
@@ -32,10 +32,10 @@
       "title": "A new outbox row is streamed to outbox.event.TASK",
       "status": "passed",
       "detail": {
-        "eventId": "cebcf54a-afdc-47be-90a4-a7da7118dcb6",
+        "eventId": "e7515270-9683-4342-8057-0a0fb4a2a313",
         "topic": "outbox.event.TASK",
-        "key": "4b1b5642-8b8c-4fc6-ae8c-67969213de64",
-        "tenantHeader": "e66026b1-1b68-4d6f-85b3-262ef3f792a2"
+        "key": "7ffc2512-d3dc-4dcc-a988-8392cc882cbe",
+        "tenantHeader": "d384a249-6002-4153-832d-f2c9071cbe18"
       }
     },
     {
@@ -43,9 +43,9 @@
       "title": "The same event is consumed from the polling topic during the dual run",
       "status": "passed",
       "detail": {
-        "eventId": "cebcf54a-afdc-47be-90a4-a7da7118dcb6",
+        "eventId": "e7515270-9683-4342-8057-0a0fb4a2a313",
         "topic": "workflow.task.events",
-        "key": "4b1b5642-8b8c-4fc6-ae8c-67969213de64"
+        "key": "7ffc2512-d3dc-4dcc-a988-8392cc882cbe"
       }
     },
     {
@@ -53,11 +53,11 @@
       "title": "Duplicate events are absorbed by the existing notification dedupe key",
       "status": "passed",
       "detail": {
-        "cdcEventId": "782db40a-5e22-4344-9b13-4ba294455d6e",
+        "cdcEventId": "810a0a7b-ed67-48d2-a4a4-9eaf87e4f27d",
         "replayCount": 2,
         "deliveryRows": 1,
-        "dedupeKey": "cdc-e2e-41645994110-1",
-        "businessKey": "cdc-e2e-41645994110-1"
+        "dedupeKey": "cdc-e2e-41648558684-1",
+        "businessKey": "cdc-e2e-41648558684-1"
       }
     },
     {
@@ -112,14 +112,14 @@
       "status": "passed",
       "detail": {
         "eventIds": [
-          "934cd992-90b9-46b4-94ff-d9ec1783d005",
-          "9ae75998-4369-4cd7-84a6-c947f5ff8e0b",
-          "444ae90a-f8b0-4311-a915-ae4dca17003c"
+          "31213a4d-25ca-4c58-adf6-b5d95bf8aa40",
+          "2f23d5d8-de84-439c-88b7-dbe6bab63df1",
+          "c17a2b9b-6196-41e5-87b2-cd16b7e198f6"
         ],
         "streamedRecords": {
-          "934cd992-90b9-46b4-94ff-d9ec1783d005": 1793713621343,
-          "9ae75998-4369-4cd7-84a6-c947f5ff8e0b": 1793713621344,
-          "444ae90a-f8b0-4311-a915-ae4dca17003c": 1793713621346
+          "31213a4d-25ca-4c58-adf6-b5d95bf8aa40": 1793714638249,
+          "2f23d5d8-de84-439c-88b7-dbe6bab63df1": 1793714638250,
+          "c17a2b9b-6196-41e5-87b2-cd16b7e198f6": 1793714638251
         }
       }
     },
