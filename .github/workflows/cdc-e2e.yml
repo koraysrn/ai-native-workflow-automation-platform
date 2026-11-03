@@ -11,6 +11,7 @@ on:
       - "load-test/lib/cdc-e2e.mjs"
       - "load-test/test/cdc-e2e.test.mjs"
       - "infra/debezium/**"
+      - "infra/k8s/**"
       - "infra/docker-compose.yml"
       - "infra/docker-compose.cdc.yml"
       - "infra/prometheus/**"
