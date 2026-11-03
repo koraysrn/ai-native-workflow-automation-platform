@@ -216,7 +216,7 @@ async function psql(options, sql) {
 }
 
 async function runRegisterScript(options) {
-  const { stdout, stderr } = await execFileAsync("bash", [
+  const { stdout } = await execFileAsync("bash", [
     resolve(ROOT, "infra/debezium/register-connector.sh"),
   ], {
     cwd: ROOT,
@@ -231,7 +231,9 @@ async function runRegisterScript(options) {
       DB_NAME: process.env.DB_NAME ?? options.postgresDb,
     },
   });
-  return `${stdout}${stderr}`.trim();
+  // The script writes the expected first-create 404 probe to stderr; only its stdout (the final
+  // status document) is useful evidence.
+  return stdout.trim();
 }
 
 async function connectRequest(options, path, { method = "GET", body } = {}) {
@@ -663,18 +665,21 @@ async function main() {
       `dedupe suppression counter did not advance (${suppressedBefore} -> ${suppressedAfter})`,
     );
   }
+  const dedupeDetail = {
+    cdcEventId: notificationOutbox.id,
+    replayCount: 2,
+    deliveryRows: duplicateDeliveryCount,
+    dedupeKey: notificationEvent.dedupeKey,
+    businessKey: notificationEvent.businessKey,
+  };
+  if (suppressedBefore !== null && suppressedAfter !== null) {
+    dedupeDetail.suppressedBefore = suppressedBefore;
+    dedupeDetail.suppressedAfter = suppressedAfter;
+  }
   pass(
     "duplicate-events-absorbed",
     "Duplicate events are absorbed by the existing notification dedupe key",
-    {
-      cdcEventId: notificationOutbox.id,
-      replayCount: 2,
-      deliveryRows: duplicateDeliveryCount,
-      suppressedBefore,
-      suppressedAfter,
-      dedupeKey: notificationEvent.dedupeKey,
-      businessKey: notificationEvent.businessKey,
-    },
+    dedupeDetail,
   );
 
   // 5. Stop the connector: the slot goes inactive and the inactive-slot alert fires.
