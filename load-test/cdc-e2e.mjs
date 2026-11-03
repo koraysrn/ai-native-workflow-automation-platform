@@ -224,11 +224,11 @@ async function runRegisterScript(options) {
     env: {
       ...process.env,
       CONNECT_URL: options.connectUrl,
-      DB_HOST: options.postgresService,
-      DB_PORT: "5432",
-      DB_USER: options.postgresUser,
-      DB_PASSWORD: process.env.POSTGRES_PASSWORD ?? "awap",
-      DB_NAME: options.postgresDb,
+      DB_HOST: process.env.DB_HOST ?? options.postgresService,
+      DB_PORT: process.env.DB_PORT ?? "5432",
+      DB_USER: process.env.DB_USER ?? options.postgresUser,
+      DB_PASSWORD: process.env.DB_PASSWORD ?? process.env.POSTGRES_PASSWORD ?? "awap",
+      DB_NAME: process.env.DB_NAME ?? options.postgresDb,
     },
   });
   return `${stdout}${stderr}`.trim();

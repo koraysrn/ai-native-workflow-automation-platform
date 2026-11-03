@@ -86,8 +86,9 @@ generating half a gigabyte of WAL on every run.
 The duplicate suppression counter lives on the auth-protected `/actuator/prometheus` endpoint
 (HTTP 401 in this stack), so the harness treats it as optional evidence and asserts the durable
 `notification_deliveries` row count instead. The Kubernetes path applies
-[`debezium-connect.yaml`](../infra/k8s/debezium-connect.yaml) and registers through the same
-`register-connector.sh`; the live CI job uses Compose because that is the available stack.
+[`debezium-connect.yaml`](../infra/k8s/debezium-connect.yaml), whose `awap-connect-register` Job
+registers the connector with the same connector JSON and Secret-backed DB credentials; the live CI
+job uses Compose because that is the available stack.
 
 ## Prerequisites for CDC
 
@@ -109,9 +110,19 @@ docker compose -f infra/docker-compose.cdc.yml up -d
 DB_HOST=postgres DB_USER=awap DB_PASSWORD=awap DB_NAME=awap \
   ./infra/debezium/register-connector.sh
 
-# Kubernetes
+# Kubernetes (the manifest includes the connector ConfigMap and registration Job)
 kubectl apply -f infra/k8s/debezium-connect.yaml
+kubectl -n awap wait --for=condition=complete job/awap-connect-register --timeout=300s
+kubectl -n awap logs job/awap-connect-register
 kubectl -n awap port-forward svc/awap-connect 8083:8083
+```
+
+A completed Kubernetes Job is immutable. After changing the connector ConfigMap, recreate the
+one-shot Job before applying:
+
+```bash
+kubectl -n awap delete job awap-connect-register --ignore-not-found
+kubectl apply -f infra/k8s/debezium-connect.yaml
 ```
 
 Connector topic routing (`EventRouter`, `route.by.field=aggregate_type`):
