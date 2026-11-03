@@ -126,6 +126,10 @@ kubectl -n awap delete job awap-connect-register --ignore-not-found
 kubectl apply -f infra/k8s/debezium-connect.yaml
 ```
 
+The Job installs `curl`, `jq` and `gettext` from the Alpine repositories. In an air-gapped
+cluster, mirror those packages for the bootstrap Job or skip the Job and run
+`register-connector.sh` through `kubectl -n awap port-forward svc/awap-connect 8083:8083`.
+
 Connector topic routing (`EventRouter`, `route.by.field=aggregate_type`):
 
 | `aggregate_type` | CDC topic (case-sensitive) | Polling topic |
