@@ -95,10 +95,26 @@ services:
     volumes:
       - opensearch_data:/usr/share/opensearch/data
 
+  # Exposes the replication-slot series consumed by infra/prometheus/cdc-alert-rules.yml.
+  # The pg_replication_slot_* series only exist once the Debezium connector created the slot.
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-awap}:${POSTGRES_PASSWORD:-awap}@postgres:5432/${POSTGRES_DB:-awap}?sslmode=disable"
+    command:
+      - "--collector.replication_slot"
+    ports:
+      - "9187:9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   prometheus:
     image: prom/prometheus:latest
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alert-rules.yml:/etc/prometheus/alert-rules.yml:ro
+      - ./prometheus/cdc-alert-rules.yml:/etc/prometheus/cdc-alert-rules.yml:ro
     ports:
       - "9090:9090"
 
@@ -111,6 +127,8 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      # Provider + awap.json; without this mount the dashboard was never provisioned.
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest

@@ -4,6 +4,8 @@ import { test } from "node:test";
 import { metricBase, metricTokens } from "../lib/metrics.mjs";
 
 const DASHBOARD = new URL("../provisioning/dashboards/awap.json", import.meta.url);
+const PROVIDER = new URL("../provisioning/dashboards/dashboards.yml", import.meta.url);
+const DATASOURCE = new URL("../provisioning/datasources/datasource.yml", import.meta.url);
 const CATALOG = new URL("../metric-catalog.json", import.meta.url);
 
 async function loadJson(url) {
@@ -76,4 +78,17 @@ test("every panel uses the provisioned Prometheus datasource", async () => {
     assert.deepEqual(panel.datasource, { type: "prometheus", uid: "prometheus" });
   }
   assert.ok(dashboard.links.some((link) => link.url.includes("operations-runbook.md")));
+});
+
+test("the provisioned datasource actually has the UID the panels reference", async () => {
+  const datasource = await readFile(DATASOURCE, "utf8");
+  assert.match(datasource, /^\s*uid: prometheus$/m, "datasource UID must be pinned to prometheus");
+  assert.match(datasource, /url: http:\/\/prometheus:9090/);
+});
+
+test("the dashboard file provider is provisioned and points at the mounted JSON", async () => {
+  const provider = await readFile(PROVIDER, "utf8");
+  assert.match(provider, /^apiVersion: 1$/m);
+  assert.match(provider, /type: file/);
+  assert.match(provider, /path: \/etc\/grafana\/provisioning\/dashboards/);
 });

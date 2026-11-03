@@ -1,0 +1,14 @@
+apiVersion: 1
+
+# File provider for the AWAP dashboard. The JSON files live next to this provider and are
+# mounted into Grafana by infra/docker-compose.yml (issue #160).
+providers:
+  - name: AWAP
+    orgId: 1
+    folder: AWAP
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /etc/grafana/provisioning/dashboards
