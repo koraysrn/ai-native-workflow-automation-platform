@@ -74,7 +74,7 @@ test("the sentinel value can never match a synthetic series", () => {
 test("synthetic exporter carries the CDC series the CDC rules depend on", async () => {
   const exporter = renderExporterMetrics(1);
   const cdcRules = await readFile(CDC_RULES, "utf8");
-  for (const metric of ["pg_replication_slots_active", "pg_replication_slot_pg_wal_lsn_diff"]) {
+  for (const metric of ["pg_replication_slots_active", "pg_replication_slots_pg_wal_lsn_diff"]) {
     assert.ok(exporter.includes(metric), `synthetic exporter is missing ${metric}`);
     assert.ok(cdcRules.includes(metric), `CDC rules no longer reference ${metric}`);
   }

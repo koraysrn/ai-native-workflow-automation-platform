@@ -1,0 +1,142 @@
+name: Outbox CDC end-to-end
+
+on:
+  # Weekly live proof against a real Postgres + Kafka + Debezium Connect stack.
+  schedule:
+    - cron: "0 5 * * 3"
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "load-test/cdc-e2e.mjs"
+      - "load-test/lib/cdc-e2e.mjs"
+      - "load-test/test/cdc-e2e.test.mjs"
+      - "infra/debezium/**"
+      - "infra/docker-compose.yml"
+      - "infra/docker-compose.cdc.yml"
+      - "infra/prometheus/**"
+      - "docs/cdc-cutover-runbook.md"
+      - ".github/workflows/cdc-e2e.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cdc-e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: CDC e2e static checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Harness, connector and trigger tests
+        run: >-
+          node --test "load-test/test/cdc-e2e.test.mjs"
+          "infra/debezium/test/*.test.mjs"
+          "load-test/test/cdc-triggers.test.mjs"
+      - name: Prove the CDC alert thresholds fire (promtool)
+        run: |
+          docker run --rm -v "$PWD/infra/prometheus:/etc/prometheus" \
+            --entrypoint promtool prom/prometheus:v2.55.0 \
+            test rules /etc/prometheus/test/cdc-alert-rules.test.yml
+
+  e2e:
+    name: Live Debezium outbox e2e
+    needs: static
+    # The full stack run is opt-in on PRs (repository variable), and always runs on the
+    # schedule or a manual dispatch.
+    if: github.event_name != 'pull_request' || vars.CDC_E2E_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      COMPOSE_PROJECT_NAME: awap-cdc-e2e
+      AWAP_NETWORK: awap-cdc-e2e_default
+      KAFKA_ENABLED: "true"
+      OUTBOX_RELAY_INTERVAL_MS: "1000"
+      OUTBOX_RELAY_INITIAL_DELAY_MS: "1000"
+      DB_HOST: postgres
+      DB_USER: awap
+      DB_PASSWORD: awap
+      DB_NAME: awap
+      API_BASE: http://localhost:8080
+      CONNECT_URL: http://localhost:8083
+      PROMETHEUS_URL: http://localhost:9090
+      CDC_E2E_RUN_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Start PostgreSQL, Kafka, the backend and Prometheus
+        run: >-
+          docker compose -f infra/docker-compose.yml up -d --build
+          postgres redis kafka schema-registry backend postgres-exporter prometheus
+
+      - name: Wait for backend health
+        run: |
+          for attempt in $(seq 1 120); do
+            if curl -fsS http://localhost:8080/actuator/health >/dev/null; then
+              echo "Backend healthy after $attempt attempt(s)."
+              exit 0
+            fi
+            sleep 5
+          done
+          docker compose -f infra/docker-compose.yml logs --tail=300 backend
+          exit 1
+
+      - name: Start the Debezium Connect worker
+        run: docker compose -f infra/docker-compose.cdc.yml up -d
+
+      - name: Wait for the Connect REST API
+        run: |
+          for attempt in $(seq 1 60); do
+            if curl -fsS http://localhost:8083/connectors >/dev/null; then
+              echo "Kafka Connect ready after $attempt attempt(s)."
+              exit 0
+            fi
+            sleep 5
+          done
+          docker compose -f infra/docker-compose.cdc.yml logs --tail=300
+          exit 1
+
+      - name: Seed a tenant
+        run: node load-test/seed.mjs
+        env:
+          LOAD_TEST_SUFFIX: ${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Run the Debezium outbox end-to-end check
+        run: node load-test/cdc-e2e.mjs --output load-test/results/cdc-e2e.json
+
+      - name: Capture connector status and logs
+        if: always()
+        run: |
+          mkdir -p load-test/results
+          curl -fsS http://localhost:8083/connectors/awap-outbox-connector/status \
+            > load-test/results/connector-status.json || true
+          curl -fsS 'http://localhost:9090/api/v1/rules?type=alert' \
+            > load-test/results/prometheus-rules.json || true
+          docker compose -f infra/docker-compose.cdc.yml logs --no-color \
+            > load-test/results/connect.log || true
+          docker compose -f infra/docker-compose.yml logs --no-color \
+            backend kafka postgres-exporter prometheus > load-test/results/stack.log || true
+
+      - name: Upload the e2e report and stack evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: cdc-e2e-results
+          path: |
+            load-test/results
+            load-test/seed.json
+          retention-days: 30
+
+      - name: Stop the stack
+        if: always()
+        run: |
+          docker compose -f infra/docker-compose.cdc.yml down -v || true
+          docker compose -f infra/docker-compose.yml down -v || true

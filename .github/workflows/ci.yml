@@ -364,15 +364,22 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
-      - name: Connector, trigger and topic tests
+      - name: Connector, trigger, topic and e2e-helper tests
         run: >-
           node --test "infra/debezium/test/*.test.mjs"
           "load-test/test/cdc-triggers.test.mjs"
+          "load-test/test/cdc-e2e.test.mjs"
       - name: Validate CDC alert rules
         run: |
           docker run --rm -v "$PWD/infra/prometheus:/etc/prometheus" \
             --entrypoint promtool prom/prometheus:v2.55.0 \
             check rules /etc/prometheus/cdc-alert-rules.yml
+      # Issue #161: prove the inactive-slot and 512 MiB slot-lag thresholds actually fire.
+      - name: Test CDC alert rules fire (promtool test rules)
+        run: |
+          docker run --rm -v "$PWD/infra/prometheus:/etc/prometheus" \
+            --entrypoint promtool prom/prometheus:v2.55.0 \
+            test rules /etc/prometheus/test/cdc-alert-rules.test.yml
       - name: Validate the Compose and Kubernetes manifests
         run: |
           python3 -c "import yaml,sys; yaml.safe_load_all(open('infra/docker-compose.cdc.yml')); list(yaml.safe_load_all(open('infra/k8s/debezium-connect.yaml'))); print('manifests OK')"

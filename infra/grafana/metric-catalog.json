@@ -242,7 +242,7 @@
       "source": "postgres_exporter replication_slot collector (CDC alerts, issue #131)"
     },
     {
-      "name": "pg_replication_slot_pg_wal_lsn_diff",
+      "name": "pg_replication_slots_pg_wal_lsn_diff",
       "source": "postgres_exporter replication_slot collector (CDC WAL lag, issue #131)"
     },
     {

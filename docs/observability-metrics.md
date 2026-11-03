@@ -55,7 +55,7 @@ docker compose -f infra/docker-compose.yml up -d postgres postgres-exporter prom
 curl -s http://localhost:9090/api/v1/targets | jq '.data.activeTargets[].labels'
 ```
 
-`pg_replication_slots_active` and `pg_replication_slot_pg_wal_lsn_diff` only appear once the
+`pg_replication_slots_active` and `pg_replication_slots_pg_wal_lsn_diff` only appear once the
 Debezium connector has created the `awap_outbox` slot; until then the CDC rules stay silent by
 design and the series are simply absent.
 
@@ -136,7 +136,7 @@ so a broken template or a removed runbook link fails CI as well.
   when nothing needs retrying instead of showing zeros.
 - `awap_outbox_pending` is a gauge with an `AtomicLong` registered once; Micrometer re-reads it on
   every scrape, so the value tracks the latest relay tick rather than a stale number.
-- `pg_replication_slots_active` and `pg_replication_slot_pg_wal_lsn_diff` come from
+- `pg_replication_slots_active` and `pg_replication_slots_pg_wal_lsn_diff` come from
   `postgres_exporter` (job `awap-postgres-exporter`), not from the backend; they are catalogued for
   the CDC rules in [`cdc-alert-rules.yml`](../infra/prometheus/cdc-alert-rules.yml).
 - Empty metrics render as "No data" in Grafana; the panel JSON does not set `noValue` overrides, so

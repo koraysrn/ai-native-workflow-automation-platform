@@ -17,7 +17,9 @@ groups:
           runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/cdc-cutover-runbook.md#monitoring"
 
       - alert: AwapCdcSlotLagHigh
-        expr: pg_replication_slot_pg_wal_lsn_diff{slot_name="awap_outbox"} > 536870912
+        # postgres_exporter exposes the plural series name (`pg_replication_slots_*`); the singular
+        # form never matched, so the alert was dead in production before the live e2e run (#161).
+        expr: pg_replication_slots_pg_wal_lsn_diff{slot_name="awap_outbox"} > 536870912
         for: 10m
         labels:
           severity: critical
