@@ -62,18 +62,18 @@ node load-test/cdc-e2e.mjs --output load-test/results/cdc-e2e.json
 ```
 
 The scheduled/manual [`cdc-e2e.yml`](../.github/workflows/cdc-e2e.yml) workflow runs the same
-command and uploads the `cdc-e2e-results` artifact. The committed baseline is
-[`benchmarks/cdc-e2e-2026-11-03.json`](benchmarks/cdc-e2e-2026-11-03.json); the final CI proof is
-[run 41645994110](https://github.com/koraysrn/ai-native-workflow-automation-platform/actions/runs/41645994110)
+command and uploads the `cdc-e2e-results` artifact. The committed artifact
+[`benchmarks/cdc-e2e-2026-11-03.json`](benchmarks/cdc-e2e-2026-11-03.json) is the upload from the
+final CI proof, [run 41645994110](https://github.com/koraysrn/ai-native-workflow-automation-platform/actions/runs/41645994110)
 (10/10 assertions passed):
 
 | Acceptance item | Assertion | Measured result |
 |---|---|---|
-| Compose stack starts Connect and registers the connector | `compose-connector-registered` | connector and task `RUNNING` |
-| A new outbox row streams to `outbox.event.<aggregate>` | `outbox-row-streamed-to-aggregate-topic` | event `2bccb85c…` on `outbox.event.TASK`, key = aggregate id, `tenantId` header present |
+| Compose/K8s stack starts Connect and registers the connector | `compose-connector-registered`; K8s `awap-connect-register` Job | connector and task `RUNNING`; the Job uses the same ConfigMap/Secret, PUT/POST and status poll |
+| A new outbox row streams to `outbox.event.<aggregate>` | `outbox-row-streamed-to-aggregate-topic` | event `cebcf54a…` on `outbox.event.TASK`, key `4b1b5642…`, `tenantId` header present |
 | The same row is consumed during the dual run | `dual-run-polling-consumed` | same event id/key on `workflow.task.events` |
-| Duplicates are absorbed by existing dedupe keys | `duplicate-events-absorbed` | the exact CDC payload replayed twice produced **one** `notification_deliveries` row (`business_key=cdc-e2e-local-2026-11-03`) |
-| Slot lag / inactive-slot alerts | `connector-stop-makes-slot-inactive`, `inactive-slot-alert-fires`, `slot-lag-rule-loaded` | slot `active=false` with 6,568 bytes of retained WAL; `AwapCdcSlotInactive` reached `firing`; the 512 MiB rule is loaded and healthy |
+| Duplicates are absorbed by existing dedupe keys | `duplicate-events-absorbed` | the exact CDC payload replayed twice produced **one** `notification_deliveries` row (`business_key=cdc-e2e-41645994110-1`) |
+| Slot lag / inactive-slot alerts | `connector-stop-makes-slot-inactive`, `inactive-slot-alert-fires`, `slot-lag-rule-loaded` | slot `active=false` with 15,176 bytes of retained WAL; `AwapCdcSlotInactive` reached `firing`; the 512 MiB rule is loaded and healthy |
 | Resume without loss | `connector-resumed`, `resume-without-loss`, `inactive-slot-alert-resolves` | slot active again, all 3 rows written during the stop were streamed, alert returned to `inactive` |
 
 The live run found a dead alert expression: `postgres_exporter` emits the plural series

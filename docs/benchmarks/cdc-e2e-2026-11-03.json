@@ -1,16 +1,16 @@
 {
   "schemaVersion": 1,
   "issue": 161,
-  "runId": "local-2026-11-03",
-  "startedAt": "2026-11-03T12:53:35.647Z",
-  "generatedAt": "2026-11-03T13:01:00.608Z",
+  "runId": "41645994110-1",
+  "startedAt": "2026-11-03T13:40:54.357Z",
+  "generatedAt": "2026-11-03T13:48:00.725Z",
   "environment": {
     "composeProject": "awap-cdc-e2e",
     "connectorName": "awap-outbox-connector",
     "slotName": "awap_outbox",
     "connectUrl": "http://localhost:8083",
     "prometheusUrl": "http://localhost:9090",
-    "tenantId": "c6d86328-e221-4f08-9d5c-b58b908b3759",
+    "tenantId": "e66026b1-1b68-4d6f-85b3-262ef3f792a2",
     "relayIntervalMs": 1000,
     "kafkaEnabled": "true"
   },
@@ -32,10 +32,10 @@
       "title": "A new outbox row is streamed to outbox.event.TASK",
       "status": "passed",
       "detail": {
-        "eventId": "2bccb85c-17a9-45f3-b3e2-4e0ddf8977f3",
+        "eventId": "cebcf54a-afdc-47be-90a4-a7da7118dcb6",
         "topic": "outbox.event.TASK",
-        "key": "3665358a-37e6-49df-9fa9-e6b31fa70acb",
-        "tenantHeader": "c6d86328-e221-4f08-9d5c-b58b908b3759"
+        "key": "4b1b5642-8b8c-4fc6-ae8c-67969213de64",
+        "tenantHeader": "e66026b1-1b68-4d6f-85b3-262ef3f792a2"
       }
     },
     {
@@ -43,9 +43,9 @@
       "title": "The same event is consumed from the polling topic during the dual run",
       "status": "passed",
       "detail": {
-        "eventId": "2bccb85c-17a9-45f3-b3e2-4e0ddf8977f3",
+        "eventId": "cebcf54a-afdc-47be-90a4-a7da7118dcb6",
         "topic": "workflow.task.events",
-        "key": "3665358a-37e6-49df-9fa9-e6b31fa70acb"
+        "key": "4b1b5642-8b8c-4fc6-ae8c-67969213de64"
       }
     },
     {
@@ -53,13 +53,11 @@
       "title": "Duplicate events are absorbed by the existing notification dedupe key",
       "status": "passed",
       "detail": {
-        "cdcEventId": "38a4b139-f1fa-46cb-9c28-6fa4f0b0a81b",
+        "cdcEventId": "782db40a-5e22-4344-9b13-4ba294455d6e",
         "replayCount": 2,
         "deliveryRows": 1,
-        "suppressedBefore": null,
-        "suppressedAfter": null,
-        "dedupeKey": "cdc-e2e-local-2026-11-03",
-        "businessKey": "cdc-e2e-local-2026-11-03"
+        "dedupeKey": "cdc-e2e-41645994110-1",
+        "businessKey": "cdc-e2e-41645994110-1"
       }
     },
     {
@@ -69,7 +67,7 @@
       "detail": {
         "connectorState": "STOPPED",
         "slotActive": false,
-        "slotLagBytes": 6568,
+        "slotLagBytes": 15176,
         "gapEventsPublishedByPolling": 3,
         "gapEventsStreamedByCdc": 0
       }
@@ -82,7 +80,7 @@
         "state": "firing",
         "health": "ok",
         "alertCount": 1,
-        "slotLagBytes": 6568
+        "slotLagBytes": 15176
       }
     },
     {
@@ -92,7 +90,7 @@
       "detail": {
         "state": "inactive",
         "health": "ok",
-        "slotLagBytes": 6568,
+        "slotLagBytes": 15176,
         "thresholdBytes": 536870912
       }
     },
@@ -114,14 +112,14 @@
       "status": "passed",
       "detail": {
         "eventIds": [
-          "33eee259-fa65-43e3-a84d-efc6cfd74489",
-          "24f61cf9-560c-4166-98b1-66e820304c4e",
-          "b72ddde2-40e0-4dff-bc24-43a038cbf4b4"
+          "934cd992-90b9-46b4-94ff-d9ec1783d005",
+          "9ae75998-4369-4cd7-84a6-c947f5ff8e0b",
+          "444ae90a-f8b0-4311-a915-ae4dca17003c"
         ],
         "streamedRecords": {
-          "33eee259-fa65-43e3-a84d-efc6cfd74489": 1793710799521,
-          "24f61cf9-560c-4166-98b1-66e820304c4e": 1793710799523,
-          "b72ddde2-40e0-4dff-bc24-43a038cbf4b4": 1793710799524
+          "934cd992-90b9-46b4-94ff-d9ec1783d005": 1793713621343,
+          "9ae75998-4369-4cd7-84a6-c947f5ff8e0b": 1793713621344,
+          "444ae90a-f8b0-4311-a915-ae4dca17003c": 1793713621346
         }
       }
     },
