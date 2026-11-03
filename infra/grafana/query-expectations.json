@@ -1,0 +1,19 @@
+{
+  "description": "Expected result shape for every provisioned dashboard panel when Prometheus is fed the synthetic series from infra/prometheus/synthetic-metrics.mjs (issue #160). 'series' means every target must return at least one time series. Add a panel here before adding it to awap.json; the live validation script fails on undeclared panels.",
+  "sentinel": {
+    "value": "__awap_no_data__",
+    "expect": "empty",
+    "description": "Any target filtered by $tenant or $channel must return an empty result for a sentinel value that no series carries. This is the explicitly expected empty case."
+  },
+  "panels": {
+    "Workflow success vs failure rate": "series",
+    "Workflow failure ratio": "series",
+    "Task completion rate": "series",
+    "Task decisions": "series",
+    "Workflow process duration p95": "series",
+    "SLA breaches (1h)": "series",
+    "Notification deliveries and failures": "series",
+    "Notification retry lag and dispatch latency": "series",
+    "Outbox backlog, relay rate and DLQ": "series"
+  }
+}

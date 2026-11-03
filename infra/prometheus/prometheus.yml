@@ -13,6 +13,12 @@ scrape_configs:
     static_configs:
       - targets: ["backend:8080"]
 
+  # postgres_exporter provides the replication-slot series used by cdc-alert-rules.yml.
+  # Slot series only appear once the Debezium connector has created the slot.
+  - job_name: awap-postgres-exporter
+    static_configs:
+      - targets: ["postgres-exporter:9187"]
+
   - job_name: otel-collector
     static_configs:
       - targets: ["otel-collector:8889"]

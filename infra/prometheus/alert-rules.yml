@@ -325,13 +325,15 @@ groups:
           runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o3--slo-alerts"
 
       - alert: AwapInstanceDown
-        expr: up{job="awap-identity"} == 0
+        # Must match the scrape job in prometheus.yml; the previous `awap-identity` job
+        # never existed, so this alert could never fire (found by #160 live validation).
+        expr: up{job="awap-backend"} == 0
         for: 1m
         labels:
           severity: critical
         annotations:
           summary: "AWAP identity instance is down"
-          description: "The awap-identity scrape target has been unreachable for 1 minute."
+          description: "The awap-backend scrape target has been unreachable for 1 minute."
           runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o3--slo-alerts"
 
   - name: awap-analytics-sink

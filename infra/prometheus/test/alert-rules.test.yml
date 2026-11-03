@@ -1,0 +1,162 @@
+# promtool unit tests for the alerts added in issue #130 / PR #153 (issue #160).
+#
+# Run locally and in CI with:
+#   docker run --rm -v "$PWD/infra/prometheus:/etc/prometheus" \
+#     --entrypoint promtool prom/prometheus:v2.55.0 \
+#     test rules /etc/prometheus/test/alert-rules.test.yml
+#
+# Each test feeds synthetic series through the real rule file, so both the threshold and
+# the `for:` window are exercised instead of only checking that the YAML parses.
+rule_files:
+  - ../alert-rules.yml
+evaluation_interval: 1m
+
+tests:
+  # ---------------------------------------------------------------- workflow failure ratio
+  # 50% failures over 10m, held for another 10m -> the alert must fire.
+  - interval: 1m
+    input_series:
+      - series: 'awap_workflow_success_total{tenant="acme"}'
+        values: '0+60x25'
+      - series: 'awap_workflow_failure_total{tenant="acme"}'
+        values: '0+60x25'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: AwapWorkflowFailureRateHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "Workflow failure ratio above 20%"
+              description: "50% of workflow executions failed over 10 minutes."
+              runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o3--slo-alerts"
+
+  # ~1.6% failures stays far below the 20% threshold -> no alert.
+  - interval: 1m
+    input_series:
+      - series: 'awap_workflow_success_total{tenant="acme"}'
+        values: '0+60x25'
+      - series: 'awap_workflow_failure_total{tenant="acme"}'
+        values: '0+1x25'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: AwapWorkflowFailureRateHigh
+        exp_alerts: []
+
+  # ----------------------------------------------------------------- notification retry lag
+  # All retries land in the (10s, 30s] bucket -> p95 above 10s, so the alert fires.
+  - interval: 1m
+    input_series:
+      - series: 'awap_notification_retry_lag_seconds_bucket{le="1"}'
+        values: '0+0x25'
+      - series: 'awap_notification_retry_lag_seconds_bucket{le="5"}'
+        values: '0+0x25'
+      - series: 'awap_notification_retry_lag_seconds_bucket{le="10"}'
+        values: '0+0x25'
+      - series: 'awap_notification_retry_lag_seconds_bucket{le="30"}'
+        values: '0+60x25'
+      - series: 'awap_notification_retry_lag_seconds_bucket{le="+Inf"}'
+        values: '0+60x25'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: AwapNotificationRetryLagHigh
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              summary: "Notification retry lag p95 above 10s"
+              description: "Deliveries that needed a retry are taking 29s at p95."
+              runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o11--notification-retries-issue-119"
+
+  # Every retry completes within 1s -> p95 well below the 10s threshold -> no alert.
+  - interval: 1m
+    input_series:
+      - series: 'awap_notification_retry_lag_seconds_bucket{le="1"}'
+        values: '0+60x25'
+      - series: 'awap_notification_retry_lag_seconds_bucket{le="5"}'
+        values: '0+60x25'
+      - series: 'awap_notification_retry_lag_seconds_bucket{le="10"}'
+        values: '0+60x25'
+      - series: 'awap_notification_retry_lag_seconds_bucket{le="30"}'
+        values: '0+60x25'
+      - series: 'awap_notification_retry_lag_seconds_bucket{le="+Inf"}'
+        values: '0+60x25'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: AwapNotificationRetryLagHigh
+        exp_alerts: []
+
+  # ------------------------------------------------------------------- webhook dead growth
+  # 2 DLQ messages/s -> 1,800 in 15m, far above the 10-message growth threshold.
+  - interval: 1m
+    input_series:
+      - series: 'awap_dlq_messages_total{topic="awap.dlq"}'
+        values: '0+120x25'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: AwapWebhookDeadGrowth
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              topic: awap.dlq
+            exp_annotations:
+              summary: "Webhook/DLQ dead messages are growing"
+              description: "1800 messages landed in the DLQ within 15 minutes; webhook retries are exhausting."
+              runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o3--slo-alerts"
+
+  # A 7.5-message trickle over 15m stays below the threshold -> no alert.
+  - interval: 1m
+    input_series:
+      - series: 'awap_dlq_messages_total{topic="awap.dlq"}'
+        values: '0+0.5x25'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: AwapWebhookDeadGrowth
+        exp_alerts: []
+
+  # ------------------------------------------------------------------ outbox stuck backlog
+  # 1,500 pending rows for 15m -> the relay is not draining.
+  - interval: 1m
+    input_series:
+      - series: 'awap_outbox_pending'
+        values: '1500x20'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: AwapOutboxBacklogStuck
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "Outbox backlog is stuck"
+              description: "1500 outbox rows are unpublished after 15 minutes; the relay is not draining."
+              runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o3--slo-alerts"
+
+  # 999 pending rows is under the 1,000-row threshold -> no alert.
+  - interval: 1m
+    input_series:
+      - series: 'awap_outbox_pending'
+        values: '999x20'
+    alert_rule_test:
+      - eval_time: 16m
+        alertname: AwapOutboxBacklogStuck
+        exp_alerts: []
+
+  # ----------------------------------------------------------------------- instance down
+  # The alert must watch the scrape job that prometheus.yml actually configures. Before
+  # issue #160 it watched `awap-identity`, which no scrape config created, so it never fired.
+  - interval: 1m
+    input_series:
+      - series: 'up{job="awap-backend",instance="backend:8080"}'
+        values: '0x5'
+    alert_rule_test:
+      - eval_time: 2m
+        alertname: AwapInstanceDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: awap-backend
+              instance: backend:8080
+            exp_annotations:
+              summary: "AWAP identity instance is down"
+              description: "The awap-backend scrape target has been unreachable for 1 minute."
+              runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o3--slo-alerts"

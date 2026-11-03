@@ -343,6 +343,18 @@ jobs:
           docker run --rm -v "$PWD/infra/prometheus:/etc/prometheus" \
             --entrypoint promtool prom/prometheus:v2.55.0 \
             check rules /etc/prometheus/alert-rules.yml
+      # Issue #160: prove the new alerts fire for representative values instead of only
+      # checking that the YAML parses.
+      - name: Test alert rules fire (promtool test rules)
+        run: |
+          docker run --rm -v "$PWD/infra/prometheus:/etc/prometheus" \
+            --entrypoint promtool prom/prometheus:v2.55.0 \
+            test rules /etc/prometheus/test/alert-rules.test.yml
+      # Issue #160: execute every panel query against a real Prometheus fed by the
+      # synthetic exporter, and assert the explicit empty (sentinel) case.
+      - name: Validate dashboard queries against a live Prometheus
+        timeout-minutes: 10
+        run: node infra/prometheus/validate-live-queries.mjs
 
   cdc-deployment:
     name: CDC deployment checks
