@@ -286,7 +286,7 @@ export async function run(options = {}) {
     console.error(`The Trivy report at ${input} is not a JSON object; refusing to pass the gate.`);
     return 2;
   }
-  if (report.Results !== undefined && !Array.isArray(report.Results)) {
+  if (report.Results !== undefined && report.Results !== null && !Array.isArray(report.Results)) {
     console.error(
       `The Trivy report at ${input} has a non-array Results field; refusing to pass the gate.`,
     );

@@ -149,6 +149,24 @@ test("the CLI fails closed on a malformed report shape", async () => {
   );
 });
 
+test("a clean Trivy report with null or absent Results passes the gate", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "awap-trivy-clean-"));
+  const nullResults = join(directory, "null-results.json");
+  const absentResults = join(directory, "absent-results.json");
+  await writeFile(nullResults, JSON.stringify({ SchemaVersion: 2, Results: null }));
+  await writeFile(absentResults, JSON.stringify({ SchemaVersion: 2 }));
+  const sink = { log() {} };
+
+  assert.equal(
+    await run({ argv: ["--input", nullResults, "--summary", "false"], env: {}, stdout: sink }),
+    0,
+  );
+  assert.equal(
+    await run({ argv: ["--input", absentResults, "--summary", "false"], env: {}, stdout: sink }),
+    0,
+  );
+});
+
 test("the CLI returns 1 for a gated report, 0 for a clean report and 2 when the file is missing", async () => {
   const directory = await mkdtemp(join(tmpdir(), "awap-trivy-report-"));
   const failing = join(directory, "failing.json");
