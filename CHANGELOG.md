@@ -42,3 +42,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   the `evaluateCutover()` verdict, a committed baseline and CI artifacts. The CDC deployment now uses
   `wal_level=logical`, partition-aware topic filtering, `REPLICA IDENTITY FULL` (V50) and the
   Debezium image's environment contract.
+- Trivy regression signal for the dependency gate: a CVE severity breakdown and annotations in the
+  CI job summary, a retained JSON artifact, and a tracking issue after two consecutive failing
+  `main` runs. The CI-only decision is recorded in ADR-0005 and the triage procedure in runbook O21.

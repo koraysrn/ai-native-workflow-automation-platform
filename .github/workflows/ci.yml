@@ -264,15 +264,67 @@ jobs:
   trivy:
     name: Trivy vulnerability scan
     runs-on: ubuntu-latest
+    # Issue #162: the CI job is the Trivy regression signal (decision recorded in ADR-0005).
+    # `actions: read` is needed to count consecutive failing runs; `issues: write` opens the
+    # repeated-failure tracking issue. The scan step itself only reads the repository.
+    permissions:
+      contents: read
+      actions: read
+      issues: write
     steps:
       - uses: actions/checkout@v7
-      - name: Scan filesystem
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Scan filesystem (JSON)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
-          severity: CRITICAL,HIGH
-          exit-code: 1
+          format: json
+          output: trivy-results.json
+          # The report step owns the gate so it can emit the summary/annotations first.
+          exit-code: 0
+      - name: Report results and enforce the gate
+        run: >-
+          node scripts/trivy-regression-report.mjs
+          --input trivy-results.json
+          --fail-on CRITICAL,HIGH
+      - name: Upload Trivy report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: trivy-report
+          path: trivy-results.json
+          retention-days: 30
+          if-no-files-found: ignore
+      - name: Open or update the repeated-failure issue
+        # PR failures are already attached to the pull request; escalation is for `main` only.
+        if: failure() && github.ref == 'refs/heads/main'
+        # The gate already made the job red; a GitHub API hiccup must not hide the real cause.
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+        run: >-
+          node scripts/trivy-regression-notify.mjs
+          --mode failure
+          --report trivy-results.json
+          --streak-threshold 2
+      - name: Close the repeated-failure issue after recovery
+        if: success() && github.ref == 'refs/heads/main'
+        # A cleanup/API failure must not turn a green Trivy scan into a red build.
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_SERVER_URL: ${{ github.server_url }}
+        run: node scripts/trivy-regression-notify.mjs --mode success
 
   gitleaks:
     name: Secret scan (Gitleaks)
@@ -336,6 +388,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
+      - name: Trivy regression tooling tests
+        run: node --test "scripts/test/*.test.mjs"
       - name: Dashboard and alert rule tests
         run: node --test "infra/grafana/test/*.test.mjs" "infra/prometheus/test/*.test.mjs"
       - name: Validate Prometheus rules

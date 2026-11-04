@@ -61,4 +61,7 @@ Boot 4.1.1 manages lower versions).
 - Enforcement: `backend/scripts/check-jackson-versions.sh` runs in CI and fails below the floor.
 - Compatibility: `JacksonCompatibilityTest` covers UUID/Instant round-trips, unknown fields,
   strict mode and the Avro payload shape.
+- Regression signal: the `Trivy vulnerability scan` CI job publishes a severity breakdown/annotations
+  and escalates repeated `main` failures; a gated Jackson finding points back to this floor. See
+  runbook O21 (`docs/operations-runbook.md#o21--trivy-regression-signal-issue-162`).
 - Decision record and removal checklist: `docs/adr/0005-jackson-bom-override.md`.
