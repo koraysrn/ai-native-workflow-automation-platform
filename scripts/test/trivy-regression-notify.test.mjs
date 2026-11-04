@@ -154,15 +154,19 @@ test("the issue body contains the streak, run links and the Jackson floor contex
 });
 
 test("the issue body does not claim PASS when the scan report is missing", () => {
-  const body = renderIssueBody({
+  const shared = {
     streak: 2,
     threshold: 2,
     runUrl: "https://github.com/owner/repo/actions/runs/999",
     commitUrl: "https://github.com/owner/repo/commit/abc",
-    reportAvailable: false,
-  });
-  assert.match(body, /Scan report unavailable/);
-  assert.doesNotMatch(body, /\*\*Result:\*\* ✅ PASS/);
+  };
+  const explicit = renderIssueBody({ ...shared, reportAvailable: false });
+  assert.match(explicit, /Scan report unavailable/);
+  assert.doesNotMatch(explicit, /\*\*Result:\*\* ✅ PASS/);
+
+  const nullReport = renderIssueBody({ ...shared, report: null });
+  assert.match(nullReport, /Scan report unavailable/);
+  assert.doesNotMatch(nullReport, /\*\*Result:\*\* ✅ PASS/);
 });
 
 test("the first failure does not open an issue", async () => {

@@ -131,6 +131,24 @@ test("unknown severities are normalised instead of being dropped", () => {
   assert.deepEqual(parseSeverityList("high, CRITICAL,high"), ["HIGH", "CRITICAL"]);
 });
 
+test("the CLI fails closed on a malformed report shape", async () => {
+  const directory = await mkdtemp(join(tmpdir(), "awap-trivy-invalid-"));
+  const nullReport = join(directory, "null.json");
+  const badResults = join(directory, "bad-results.json");
+  await writeFile(nullReport, "null");
+  await writeFile(badResults, JSON.stringify({ Results: "not-an-array" }));
+  const sink = { log() {} };
+
+  assert.equal(
+    await run({ argv: ["--input", nullReport, "--summary", "false"], env: {}, stdout: sink }),
+    2,
+  );
+  assert.equal(
+    await run({ argv: ["--input", badResults, "--summary", "false"], env: {}, stdout: sink }),
+    2,
+  );
+});
+
 test("the CLI returns 1 for a gated report, 0 for a clean report and 2 when the file is missing", async () => {
   const directory = await mkdtemp(join(tmpdir(), "awap-trivy-report-"));
   const failing = join(directory, "failing.json");

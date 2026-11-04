@@ -72,7 +72,8 @@ Operating instructions, including the Jackson override floor checks, are in
 2. Delete `jackson-2-bom.version` and `jackson-bom.version` from `backend/pom.xml`.
 3. Run `backend/scripts/check-jackson-versions.sh` and `mvn -B verify` — both must pass without the
    override.
-4. Run Trivy and OWASP Dependency Check; no HIGH/CRITICAL Jackson findings.
+4. Run Trivy and OWASP Dependency Check; the `Trivy vulnerability scan` summary/annotations must
+   show no HIGH/CRITICAL Jackson findings, and OWASP must be clean.
 5. Update this ADR status to `Superseded`, remove the floor check and note the removal in
    `COMPATIBILITY.md`.
 

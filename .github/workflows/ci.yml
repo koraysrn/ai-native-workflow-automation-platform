@@ -273,6 +273,9 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
       - name: Scan filesystem (JSON)
         uses: aquasecurity/trivy-action@v0.36.0
         with:

@@ -282,6 +282,16 @@ export async function run(options = {}) {
     console.error("The Trivy scan step must produce trivy-results.json before this report runs.");
     return 2;
   }
+  if (report === null || typeof report !== "object" || Array.isArray(report)) {
+    console.error(`The Trivy report at ${input} is not a JSON object; refusing to pass the gate.`);
+    return 2;
+  }
+  if (report.Results !== undefined && !Array.isArray(report.Results)) {
+    console.error(
+      `The Trivy report at ${input} has a non-array Results field; refusing to pass the gate.`,
+    );
+    return 2;
+  }
 
   const findings = findingsFromReport(report);
   const gated = gatedFindings(findings, failOn);

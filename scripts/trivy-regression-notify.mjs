@@ -34,6 +34,7 @@ function githubHeaders(token, hasBody) {
   return {
     Accept: "application/vnd.github+json",
     Authorization: `Bearer ${token}`,
+    "User-Agent": "awap-trivy-regression-notify",
     "X-GitHub-Api-Version": "2022-11-28",
     ...(hasBody ? { "Content-Type": "application/json" } : {}),
   };
@@ -118,8 +119,10 @@ export function renderIssueBody(options = {}) {
     commitUrl,
     branch = "main",
     report = {},
-    reportAvailable = true,
   } = options;
+  const reportAvailable =
+    options.reportAvailable ??
+    (report !== null && typeof report === "object" && !Array.isArray(report));
   let reportBlock;
   if (reportAvailable) {
     const findings = findingsFromReport(report);
@@ -380,7 +383,11 @@ export async function run(options = {}) {
   let reportAvailable = true;
   const reportPath = args.report ?? "trivy-results.json";
   try {
-    report = JSON.parse(await readFile(reportPath, "utf8"));
+    const parsed = JSON.parse(await readFile(reportPath, "utf8"));
+    if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("the report is not a JSON object");
+    }
+    report = parsed;
   } catch (error) {
     reportAvailable = false;
     console.error(`Unable to read ${reportPath}; notifying that the scan report is unavailable.`);

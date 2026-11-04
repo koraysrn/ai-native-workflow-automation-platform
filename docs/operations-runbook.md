@@ -966,9 +966,10 @@ target; the decision and alternatives are in
 **Triage.**
 1. Open the failing run → job summary → `trivy-report` artifact. Identify the CVE, severity,
    package, installed/fixed version and target.
-2. Reproduce locally with the same scan type:
+2. Reproduce locally with the same scan type and the `Trivy.Version` recorded in the artifact
+   (`0.70.0` at the time of writing):
    ```sh
-   docker run --rm -v "$PWD:/work" -w /work aquasec/trivy:latest \
+   docker run --rm -v "$PWD:/work" -w /work aquasec/trivy:0.70.0 \
      fs --severity CRITICAL,HIGH --format table .
    ```
 3. Upgrade or pin the dependency to a fixed version. Keep the change in a dedicated PR and attach
