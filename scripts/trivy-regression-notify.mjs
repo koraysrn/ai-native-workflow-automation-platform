@@ -17,7 +17,7 @@ import { pathToFileURL } from "node:url";
 import { findingsFromReport, renderSummary } from "./trivy-regression-report.mjs";
 
 export const DEFAULT_ISSUE_TITLE = "security: Trivy gate failing repeatedly on main";
-export const DEFAULT_JOB_NAME = "Trivy vulnerability scan";
+export const DEFAULT_JOB_NAME = "Vulnerability Scan";
 export const ISSUE_MARKER = "<!-- awap-trivy-regression -->";
 
 export function shouldNotify(streak, threshold = 2) {
@@ -146,7 +146,7 @@ export function renderIssueBody(options = {}) {
     `**Latest run:** ${runUrl}`,
     `**Commit:** ${commitUrl}`,
     "",
-    "The required `Trivy vulnerability scan` check is red on the default branch. This issue is",
+    "The required `Vulnerability Scan` check is red on the default branch. This issue is",
     "opened once and updated for every further consecutive failure; a green `main` run comments and",
     "closes it automatically. Do not close it manually while the gate is red.",
     "",

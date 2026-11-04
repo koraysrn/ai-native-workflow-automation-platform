@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build-and-push:
-    name: Build and push images
+    name: Build & Push Images
     uses: ./.github/workflows/docker-build.yml
     with:
       push: true
@@ -20,7 +20,7 @@ jobs:
       packages: write
 
   argocd-sync:
-    name: Trigger ArgoCD sync (staging)
+    name: Deploy to Staging
     needs: build-and-push
     runs-on: ubuntu-latest
     steps:

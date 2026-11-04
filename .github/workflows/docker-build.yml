@@ -1,4 +1,4 @@
-name: Docker build
+name: Docker Build
 
 on:
   workflow_call:
@@ -19,7 +19,7 @@ permissions:
 
 jobs:
   build:
-    name: Build images
+    name: Build Images
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

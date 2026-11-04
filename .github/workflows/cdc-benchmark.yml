@@ -1,4 +1,4 @@
-name: Outbox CDC benchmark
+name: CDC Benchmark
 
 on:
   # Weekly measured polling-vs-CDC comparison against the real Compose stack.
@@ -29,7 +29,7 @@ concurrency:
 
 jobs:
   static:
-    name: CDC benchmark static checks
+    name: Static Checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -40,7 +40,7 @@ jobs:
         run: node --test "load-test/test/*.test.mjs" "infra/debezium/test/*.test.mjs"
 
   benchmark:
-    name: Measured polling vs CDC
+    name: Polling vs CDC Benchmark
     needs: static
     # The full Compose + Debezium run is opt-in on PRs (repository variable), and always runs on
     # the schedule or a manual dispatch.

@@ -21,15 +21,15 @@ This document defines the protection of the `main` branch, the issue/PR label ta
 
 ### Required status checks
 
-- `Backend (Java 25 / Spring Boot 4.1.1)`
-- `Frontend (TypeScript 7.x / Next.js 16)`
-- `AI Layer (Python 3.15 / FastAPI)`
-- `Version compatibility check`
-- `Trivy vulnerability scan`
-- `Secret scan (Gitleaks)`
-- `OWASP Dependency Check`
-- `SonarQube analysis`
-- `Docker build (backend, frontend, ai-layer)`
+- `Backend`
+- `Frontend`
+- `AI Layer`
+- `Verify Versions`
+- `Vulnerability Scan`
+- `Secret Scan`
+- `Dependency Scan`
+- `Code Quality`
+- `Docker Build`
 
 ## Merge policy
 

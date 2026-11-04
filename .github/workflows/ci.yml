@@ -22,7 +22,7 @@ concurrency:
 
 jobs:
   backend:
-    name: Backend (Java 25 / Spring Boot 4.1.1)
+    name: Backend
     runs-on: ubuntu-latest
     needs: frontend
     steps:
@@ -76,7 +76,7 @@ jobs:
             backend/identity/target/pit-reports-notification-read
 
   owasp:
-    name: OWASP Dependency Check
+    name: Dependency Scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -113,7 +113,7 @@ jobs:
         working-directory: backend
 
   frontend:
-    name: Frontend (TypeScript 7.x / Next.js 16)
+    name: Frontend
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -148,7 +148,7 @@ jobs:
       # The browser suite runs in the dedicated `e2e` job against the Compose stack.
 
   e2e:
-    name: E2E (Playwright / Compose)
+    name: End-to-End Tests
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
@@ -240,7 +240,7 @@ jobs:
         run: docker compose -f infra/docker-compose.yml down -v
 
   ai-layer:
-    name: AI Layer (Python 3.15 / FastAPI)
+    name: AI Layer
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -262,7 +262,7 @@ jobs:
         working-directory: ai-layer
 
   trivy:
-    name: Trivy vulnerability scan
+    name: Vulnerability Scan
     runs-on: ubuntu-latest
     # Issue #162: the CI job is the Trivy regression signal (decision recorded in ADR-0005).
     # `actions: read` is needed to count consecutive failing runs; `issues: write` opens the
@@ -327,7 +327,7 @@ jobs:
         run: node scripts/trivy-regression-notify.mjs --mode success
 
   gitleaks:
-    name: Secret scan (Gitleaks)
+    name: Secret Scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -339,7 +339,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   sonarqube:
-    name: SonarQube analysis
+    name: Code Quality
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -360,7 +360,7 @@ jobs:
         working-directory: backend
 
   docker-build:
-    name: Docker build (backend, frontend, ai-layer)
+    name: Docker Build
     uses: ./.github/workflows/docker-build.yml
     with:
       push: false
@@ -370,7 +370,7 @@ jobs:
       packages: write
 
   openapi:
-    name: OpenAPI lint (Spectral)
+    name: API Lint
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -381,7 +381,7 @@ jobs:
         run: npx --yes @stoplight/spectral-cli@6.14.3 lint docs/openapi/awap-openapi.yaml --fail-severity warn
 
   observability-static:
-    name: Dashboard and alert checks
+    name: Observability Checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -411,7 +411,7 @@ jobs:
         run: node infra/prometheus/validate-live-queries.mjs
 
   cdc-deployment:
-    name: CDC deployment checks
+    name: CDC Checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -439,7 +439,7 @@ jobs:
           python3 -c "import yaml,sys; yaml.safe_load_all(open('infra/docker-compose.cdc.yml')); list(yaml.safe_load_all(open('infra/k8s/debezium-connect.yaml'))); print('manifests OK')"
 
   load-test-static:
-    name: Load-test checks (node --test)
+    name: Load Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -459,7 +459,7 @@ jobs:
         run: rm -rf load-test/k6/dist
 
   pact-gate:
-    name: Pact broker can-i-deploy
+    name: Contract Verification
     runs-on: ubuntu-latest
     needs: backend
     # Activates once a Pact Broker is configured (PACT_BROKER_BASE_URL repository variable

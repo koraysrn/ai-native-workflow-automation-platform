@@ -1,4 +1,4 @@
-name: NVD cache refresh
+name: NVD Cache Refresh
 
 on:
   schedule:
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   refresh:
-    name: Refresh NVD database cache
+    name: Refresh Cache
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

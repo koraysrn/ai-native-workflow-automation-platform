@@ -40,7 +40,7 @@ lag only; the backlog-sweep, slot-lag and WAL-growth inputs defaulted to zero. C
 
 The `cdc-benchmark-results` artifact from that run contains `polling.json`, `cdc.json`,
 `cdc-benchmark.json`, the connector status and the stack logs. Every run of the
-[Outbox CDC benchmark workflow](../.github/workflows/cdc-benchmark.yml) uploads the same artifact
+[CDC Benchmark workflow](../.github/workflows/cdc-benchmark.yml) uploads the same artifact
 (30-day retention) and fails if the connector is registered but produces no samples.
 
 ## Live end-to-end verification (issue #161)
