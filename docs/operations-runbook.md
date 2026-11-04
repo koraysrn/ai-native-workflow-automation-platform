@@ -939,3 +939,68 @@ capacity signal. Subscriber failures and dropped fan-out events are logged with 
 frontend, and the existing list/download contract (now including `scanStatus`, `scanError`, `name`
 and `downloadable`) keeps working. No migration is required; the bus and streams are in-memory and
 disappear with the process.
+
+## O21 — Trivy regression signal (issue #162)
+
+**Purpose.** The `Trivy vulnerability scan` CI job is the regression alarm for the dependency
+surface, including the Jackson override in ADR-0005. Issue #162 chose a CI-only signal instead of a
+Grafana/Prometheus dashboard because Trivy runs in GitHub Actions and has no Prometheus scrape
+target; the decision and alternatives are in
+[ADR-0005](adr/0005-jackson-bom-override.md#trivy-regression-signal-issue-162).
+
+**Where the signal appears.**
+
+| Surface | Contents |
+|---|---|
+| Job summary (`$GITHUB_STEP_SUMMARY`) | Result, gate severities, CVE counts by CRITICAL/HIGH/MEDIUM/LOW/UNKNOWN, fixable counts and the gated findings |
+| Annotations | One `::error` per gated finding, pointing at the manifest/lockfile |
+| Artifact | `trivy-report` / `trivy-results.json`, retained 30 days |
+| Tracking issue | Opened or updated after two consecutive failing `main` runs; closed by the first green `main` run |
+
+**When the alarm fires.**
+1. The gate fails when the scan contains a `CRITICAL` or `HIGH` finding. The same run remains the
+   required merge check for PRs.
+2. The repeated-failure issue is the on-call signal; a single failing PR does not open it.
+3. A green `main` run comments on the issue and closes it. Do not close it manually while red.
+
+**Triage.**
+1. Open the failing run → job summary → `trivy-report` artifact. Identify the CVE, severity,
+   package, installed/fixed version and target.
+2. Reproduce locally with the same scan type:
+   ```sh
+   docker run --rm -v "$PWD:/work" -w /work aquasec/trivy:latest \
+     fs --severity CRITICAL,HIGH --format table .
+   ```
+3. Upgrade or pin the dependency to a fixed version. Keep the change in a dedicated PR and attach
+   the Trivy result to the PR description.
+4. If no fix exists, add a narrow `.trivyignore` entry **with** a justification, owner and removal
+   condition, and get a security review. Never remove the gate, lower `--fail-on`, or ignore a
+   whole package.
+5. Re-run the report locally against the artifact:
+   ```sh
+   node scripts/trivy-regression-report.mjs --input trivy-results.json --summary false
+   ```
+6. Push the fix; the green `main` run closes the tracking issue automatically.
+
+**Relation to the Jackson override floor.**
+A gated Jackson finding (the summary calls this out explicitly) means one of two things:
+- the resolved Jackson version fell below the floor (`2.21.7` for Jackson 2, `3.1.7` for Jackson 3)
+  because a BOM/dependency change bypassed the override; or
+- a new Jackson CVE exists above the current floor and the override must be raised.
+
+Run:
+
+```sh
+backend/scripts/check-jackson-versions.sh
+```
+
+Confirm the output is at or above both floors. Do **not** delete `jackson-2-bom.version` /
+`jackson-bom.version` or remove the floor check to make Trivy green. The removal condition is in
+ADR-0005: only when Spring Boot's own BOM manages at least 2.21.7 and 3.1.7.
+
+**Escalation.**
+- Two consecutive failures: the tracking issue is open; assign the platform owner.
+- Three or more failures, or a `CRITICAL` finding with no fix: open a security incident, record the
+  compensating control and the decision to accept risk.
+- If the GitHub API call in the notification step fails, the job summary/artifact still contain the
+  full result; open the issue manually from the run and mention the failing step in the incident.

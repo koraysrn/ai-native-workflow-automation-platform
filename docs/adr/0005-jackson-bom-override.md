@@ -29,8 +29,41 @@ overridden) or be removed too early (CVE reintroduced).
    default typing and the Avro event payload shape.
 4. Renovate groups Maven upgrades (`backend-maven`); the Jackson group is described in
    [`renovate.json`](../../renovate.json) so the BOM bump and the override are reviewed together.
-5. Trivy/OWASP remain the regression gate: the same CI run fails if a HIGH/CRITICAL Jackson CVE is
-   reported again. No additional dashboard is required because the failure blocks the PR.
+5. Use a **CI-only Trivy regression signal** (decided in issue #162) instead of a
+   Grafana/Prometheus dashboard. Trivy runs inside GitHub Actions and its findings are not scraped
+   by Prometheus; a Pushgateway just for CI would add a production dependency and a stale-metric
+   failure mode. The signal is:
+   - a job summary and PR annotations with the CVE severity breakdown, produced by
+     [`scripts/trivy-regression-report.mjs`](../../scripts/trivy-regression-report.mjs);
+   - the raw JSON report uploaded as a workflow artifact for history;
+   - one tracking issue opened after two consecutive failing `main` runs and closed when the gate
+     recovers, driven by
+     [`scripts/trivy-regression-notify.mjs`](../../scripts/trivy-regression-notify.mjs).
+
+   OWASP Dependency Check remains a separate gate; Trivy stays merge-blocking.
+
+## Trivy regression signal (issue #162)
+
+The OWASP and Trivy CI jobs are the regression alarm, but a failed PR alone disappears from the
+team's view once the branch is fixed. Issue #162 therefore makes the alarm visible without adding
+CI metrics to the production monitoring stack:
+
+| Concern | Decision |
+|---|---|
+| Data source | Trivy JSON produced by the CI `trivy` job; no Pushgateway and no Prometheus scrape. |
+| Per-run visibility | `$GITHUB_STEP_SUMMARY` (severity counts, fixable counts and the gated findings) plus one `::error` annotation per gated finding. |
+| History | `trivy-results.json` is uploaded as a workflow artifact. |
+| Recurrence | After **two consecutive failing runs on `main`**, the job opens or updates a single tracking issue; a green `main` run comments and closes it. |
+| Merge gate | The report script exits non-zero when a `CRITICAL`/`HIGH` finding exists, so the required `Trivy vulnerability scan` check still blocks merges. |
+
+Why not Grafana/Prometheus: the existing dashboard and alert rules only cover runtime Micrometer
+metrics and CDC exporter series ([`metric-catalog.json`](../../infra/grafana/metric-catalog.json)).
+CI results have no scrape target; exporting them would require a Pushgateway (or a new metrics API)
+and a lifecycle job to avoid stale series after a workflow is deleted. The CI-only signal keeps the
+same source of truth as the gate and adds no infrastructure.
+
+Operating instructions, including the Jackson override floor checks, are in
+[`operations-runbook.md`](../operations-runbook.md#o21--trivy-regression-signal-issue-162).
 
 ## Removal checklist
 
