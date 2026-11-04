@@ -1,4 +1,4 @@
-name: Nightly load test
+name: Nightly Load Test
 
 on:
   schedule:
@@ -15,7 +15,7 @@ permissions:
 
 jobs:
   static:
-    name: Load-test static checks
+    name: Static Checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -34,7 +34,7 @@ jobs:
         run: rm -rf load-test/k6/dist
 
   load-test:
-    name: k6 ${{ github.event_name == 'pull_request' && 'smoke' || 'full' }} run
+    name: k6 Test
     needs: static
     # The PR smoke run boots the full Compose stack; it is opt-in until the stack boot is stable
     # in CI (set the LOAD_TEST_SMOKE_ENABLED repository variable). Static checks always run.

@@ -942,7 +942,7 @@ disappear with the process.
 
 ## O21 — Trivy regression signal (issue #162)
 
-**Purpose.** The `Trivy vulnerability scan` CI job is the regression alarm for the dependency
+**Purpose.** The `Vulnerability Scan` CI job is the regression alarm for the dependency
 surface, including the Jackson override in ADR-0005. Issue #162 chose a CI-only signal instead of a
 Grafana/Prometheus dashboard because Trivy runs in GitHub Actions and has no Prometheus scrape
 target; the decision and alternatives are in

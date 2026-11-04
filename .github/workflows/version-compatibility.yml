@@ -1,4 +1,4 @@
-name: Version compatibility check
+name: Version Compatibility
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   versions:
-    name: Version compatibility check
+    name: Verify Versions
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7

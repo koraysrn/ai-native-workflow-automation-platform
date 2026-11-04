@@ -1,4 +1,4 @@
-name: Outbox CDC end-to-end
+name: CDC End-to-End
 
 on:
   # Weekly live proof against a real Postgres + Kafka + Debezium Connect stack.
@@ -27,7 +27,7 @@ concurrency:
 
 jobs:
   static:
-    name: CDC e2e static checks
+    name: Static Checks
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -46,7 +46,7 @@ jobs:
             test rules /etc/prometheus/test/cdc-alert-rules.test.yml
 
   e2e:
-    name: Live Debezium outbox e2e
+    name: Live Debezium E2E
     needs: static
     # The full stack run is opt-in on PRs (repository variable), and always runs on the
     # schedule or a manual dispatch.

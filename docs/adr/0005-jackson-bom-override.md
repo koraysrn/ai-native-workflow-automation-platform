@@ -54,7 +54,7 @@ CI metrics to the production monitoring stack:
 | Per-run visibility | `$GITHUB_STEP_SUMMARY` (severity counts, fixable counts and the gated findings) plus one `::error` annotation per gated finding. |
 | History | `trivy-results.json` is uploaded as a workflow artifact. |
 | Recurrence | After **two consecutive failing runs on `main`**, the job opens or updates a single tracking issue; a green `main` run comments and closes it. |
-| Merge gate | The report script exits non-zero when a `CRITICAL`/`HIGH` finding exists, so the required `Trivy vulnerability scan` check still blocks merges. |
+| Merge gate | The report script exits non-zero when a `CRITICAL`/`HIGH` finding exists, so the required `Vulnerability Scan` check still blocks merges. |
 
 Why not Grafana/Prometheus: the existing dashboard and alert rules only cover runtime Micrometer
 metrics and CDC exporter series ([`metric-catalog.json`](../../infra/grafana/metric-catalog.json)).
@@ -72,7 +72,7 @@ Operating instructions, including the Jackson override floor checks, are in
 2. Delete `jackson-2-bom.version` and `jackson-bom.version` from `backend/pom.xml`.
 3. Run `backend/scripts/check-jackson-versions.sh` and `mvn -B verify` — both must pass without the
    override.
-4. Run Trivy and OWASP Dependency Check; the `Trivy vulnerability scan` summary/annotations must
+4. Run Trivy and OWASP Dependency Check; the `Vulnerability Scan` summary/annotations must
    show no HIGH/CRITICAL Jackson findings, and OWASP must be clean.
 5. Update this ADR status to `Superseded`, remove the floor check and note the removal in
    `COMPATIBILITY.md`.

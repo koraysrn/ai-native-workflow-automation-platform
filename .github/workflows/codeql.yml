@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   analyze:
-    name: Analyze (java, javascript-typescript, python)
+    name: Analyze
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false

@@ -10,7 +10,7 @@ const NOTIFY_SCRIPT = new URL("../trivy-regression-notify.mjs", import.meta.url)
 
 test("the Trivy job emits the summary, artifact and gate", async () => {
   const workflow = await readFile(CI, "utf8");
-  assert.match(workflow, /^ {2}trivy:\n {4}name: Trivy vulnerability scan$/m);
+  assert.match(workflow, /^ {2}trivy:\n {4}name: Vulnerability Scan$/m);
   assert.match(workflow, /format: json/);
   assert.match(workflow, /output: trivy-results\.json/);
   assert.match(workflow, /node scripts\/trivy-regression-report\.mjs/);
