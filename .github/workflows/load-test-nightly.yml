@@ -77,45 +77,63 @@ jobs:
           API_BASE: http://localhost:8080
           LOAD_TEST_SUFFIX: ${{ github.run_id }}-${{ github.run_attempt }}
 
+      # seed.mjs writes TENANT_ID/ACCESS_TOKEN/CSRF_TOKEN to $GITHUB_ENV, which the runner exports
+      # to later steps. Fail here rather than letting every k6 request run unauthenticated and
+      # silently measuring 401 latency.
+      - name: Verify the seeded k6 variables are exported
+        run: |
+          missing=0
+          for name in TENANT_ID ACCESS_TOKEN CSRF_TOKEN; do
+            if [ -z "$(printenv "$name")" ]; then
+              echo "::error::$name was not exported by the seed step"
+              missing=1
+            fi
+          done
+          exit "$missing"
+
+      # load-test/results is gitignored, so it does not exist in a fresh checkout. k6 only logs an
+      # error when --summary-export cannot create the file, but the run then loses its summary and
+      # the artifact upload finds nothing, which hid why the nightly run failed.
+      - name: Prepare the results directory
+        run: mkdir -p load-test/results
+
+      - name: Install k6
+        uses: grafana/setup-k6-action@v1
+
+      # k6 runs on the runner itself (not in a container action) so localhost reaches the Compose
+      # stack. The variables seed.mjs writes to $GITHUB_ENV are exported into each step's process
+      # environment, which k6 reads through __ENV; they are deliberately not repeated in a step
+      # `env:` block, because `${{ env.X }}` only resolves values declared in the workflow and
+      # would pass empty credentials. k6 exits 99 when a threshold is crossed, and the
+      # `http_req_failed{scenario:multi_tenant_ramp}` budget is exactly what empty credentials
+      # broke: every request returned 401 and counted as failed.
       - name: Smoke run (PRs only, low VUs)
         if: github.event_name == 'pull_request'
-        uses: grafana/k6-action@v0.3.1
-        with:
-          filename: load-test/k6/awap-load-test.js
-          cloud: false
-          flags: --summary-export=load-test/results/smoke-summary.json
+        run: >-
+          k6 run load-test/k6/awap-load-test.js
+          --summary-export=load-test/results/smoke-summary.json
         env:
           API_BASE: http://localhost:8080
           WEBHOOK_TARGET: http://localhost:9099/webhook
           K6_SMOKE: "1"
-          TENANT_ID: ${{ env.TENANT_ID }}
-          ACCESS_TOKEN: ${{ env.ACCESS_TOKEN }}
-          WORKFLOW_DEFINITION_ID: ${{ env.WORKFLOW_DEFINITION_ID }}
 
       - name: Full run (nightly and manual)
         if: github.event_name != 'pull_request'
-        uses: grafana/k6-action@v0.3.1
-        with:
-          filename: load-test/k6/awap-load-test.js
-          cloud: false
-          flags: --summary-export=load-test/results/full-summary.json
+        run: >-
+          k6 run load-test/k6/awap-load-test.js
+          --summary-export=load-test/results/full-summary.json
         env:
           API_BASE: http://localhost:8080
           WEBHOOK_TARGET: http://localhost:9099/webhook
-          TENANT_ID: ${{ env.TENANT_ID }}
-          ACCESS_TOKEN: ${{ env.ACCESS_TOKEN }}
-          WORKFLOW_DEFINITION_ID: ${{ env.WORKFLOW_DEFINITION_ID }}
 
+      # The SQL file asserts the plan and raises on a regression, so ON_ERROR_STOP makes psql fail
+      # the step instead of printing a scan plan that any "Scan" grep would accept.
       - name: Verify outbox partition pruning (EXPLAIN)
         if: github.event_name != 'pull_request'
         run: |
-          PLAN=$(docker compose -f infra/docker-compose.yml exec -T postgres \
-            psql -U awap -d awap -f /dev/stdin < load-test/k6/explain-outbox-partition.sql 2>&1)
-          printf '%s\n' "$PLAN"
-          printf '%s\n' "$PLAN" | grep -q 'Scan' || {
-            echo "EXPLAIN produced no scan plan; partition check failed" >&2
-            exit 1
-          }
+          docker compose -f infra/docker-compose.yml exec -T postgres \
+            psql -v ON_ERROR_STOP=1 -U awap -d awap -f /dev/stdin \
+            < load-test/k6/explain-outbox-partition.sql
 
       - name: Upload k6 summary and webhook log
         if: always()
@@ -126,6 +144,7 @@ jobs:
             load-test/results
             load-test/seed.json
             load-test/fake-webhook.log
+          if-no-files-found: ignore
           retention-days: 14
 
       - name: Stop the stack

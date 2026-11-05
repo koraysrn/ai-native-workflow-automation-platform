@@ -137,7 +137,25 @@ DELETE FROM tenants WHERE slug LIKE 'load-%';
 - PRs that touch `load-test/**` always run the static checks; the low-VU smoke profile (which boots
   the full Compose stack) runs on PRs only when the `LOAD_TEST_SMOKE_ENABLED` repository variable is
   `true`, and nightly/manual runs always execute the full profile.
-- k6 JSON summaries are uploaded as artifacts; a threshold breach fails the job.
+- k6 JSON summaries are uploaded as artifacts; a threshold breach fails the job (k6 exits 99).
+- k6 runs on the runner (`grafana/setup-k6-action`), so `localhost:8080`/`:9099` resolve to the
+  Compose stack. `TENANT_ID`/`ACCESS_TOKEN`/`CSRF_TOKEN` travel from `seed.mjs` through
+  `$GITHUB_ENV` into the k6 process; they must not be re-declared with `${{ env.* }}`, which only
+  resolves values written in the workflow file and would pass empty credentials.
+- The job creates `load-test/results` first: the directory is gitignored, so a fresh checkout has
+  no such path and k6 would silently drop its `--summary-export` file.
 - `.github/workflows/cdc-benchmark.yml` runs the polling-vs-CDC comparison weekly, on demand, and
   on benchmark-related PRs when `CDC_BENCHMARK_ENABLED=true`. It uploads the raw samples and report
   as the `cdc-benchmark-results` artifact and fails when CDC is registered but emits no samples.
+
+## Coverage caveats
+
+The scenarios treat 401/403/404 as expected responses (`http.expectedStatuses(...)` in the k6
+script), so an under-seeded stack still measures latency without tripping `http_req_failed`. Two
+flows therefore exercise the request path only:
+
+- `outbox_relay_burst` posts to `/api/v1/workflow-instances` with the `WORKFLOW_DEFINITION_ID`
+  exported by `seed.mjs`, which is empty for a freshly seeded tenant, so the call answers 404. Seed
+  and publish a workflow definition to drive the outbox relay end to end.
+- `document_upload_download` needs the `storage` Compose profile (MinIO) and a CSRF token on the
+  presign `POST`; without them the presign answers 401 (missing CSRF token) or 500 (no MinIO).
