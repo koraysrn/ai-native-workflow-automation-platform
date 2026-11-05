@@ -83,7 +83,12 @@ async function seedTenant(index) {
   });
   const csrfToken = csrf.body.token || cookieValue(csrf.setCookies, "XSRF-TOKEN");
   if (!csrfToken) {
-    throw new Error(`CSRF bootstrap for ${slug} returned no token`);
+    // Include the status: a 500 here (e.g. an endpoint missing from a stale image) reads as a
+    // missing token otherwise and hides the real cause of the nightly load-test failure.
+    throw new Error(
+      `CSRF bootstrap for ${slug} returned no token (status ${csrf.status}): ` +
+        JSON.stringify(csrf.body),
+    );
   }
 
   const auth = {
