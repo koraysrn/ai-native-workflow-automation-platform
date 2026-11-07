@@ -1,6 +1,6 @@
 # Repository Governance
 
-This document defines the protection of the `main` branch, the issue/PR label taxonomy, the milestone structure and the merge policy as code. The policy is enforced by the idempotent [`scripts/apply-branch-protection.sh`](../scripts/apply-branch-protection.sh): `--apply` creates or updates the protection, `--verify` fails on drift and `--dry-run` prints the planned calls without changing GitHub. A scheduled [`branch-protection-drift.yml`](../.github/workflows/branch-protection-drift.yml) job reads the live settings and fails when they diverge. [`settings/branch-protection.json`](../settings/branch-protection.json) is a generated snapshot of `--expected`; the test suite fails when it no longer matches.
+This document defines the protection of the `main` branch, the issue/PR label taxonomy, the milestone structure and the merge policy as code. The policy is enforced by the idempotent [`scripts/apply-branch-protection.sh`](../scripts/apply-branch-protection.sh): `--apply` creates or updates the protection, `--verify` fails on drift and `--dry-run` prints the planned calls without changing GitHub. A scheduled [`branch-protection-drift.yml`](../.github/workflows/branch-protection-drift.yml) job reads the live settings and fails when they diverge. [`settings/branch-protection.json`](../settings/branch-protection.json) is a generated snapshot of `--expected`; regenerate it with `scripts/apply-branch-protection.sh --expected > settings/branch-protection.json` and let the test suite prove it is in sync.
 
 ## Branch protection - `main`
 
@@ -47,6 +47,7 @@ The repository currently has one maintainer (`@koraysrn`). GitHub never counts a
 - Break-glass is a temporary, audited change documented in runbook [O22](operations-runbook.md#o22--branch-protection-drift-and-break-glass-issue-178): open an incident ticket, lower only the approval count, merge the urgent PR, then restore the policy immediately with `--apply` and prove it with `--verify`.
 - The scheduled drift job fails while the exception is active. That failure is the reminder to restore protection; do not mute it.
 - When a second maintainer is added, enable `require_code_owner_reviews` and remove this exception in the same policy change.
+- Automation that must merge without an interactive review (for example release automation) should use a dedicated GitHub App with the minimum required permissions. Never disable protection globally to unblock a bot.
 
 ### Drift detection
 

@@ -206,7 +206,7 @@ test("help documents every mode and exits zero", () => {
   const result = runScript(["--help"], { BRANCH_PROTECTION_TRACE_FILE: SHARED_TRACE });
   assert.equal(result.status, 0);
   for (const mode of ["--dry-run", "--apply", "--verify", "--expected", "--list-paths"]) {
-    assert.match(result.stdout, new RegExp(mode.replace(/-/g, "\\-")));
+    assert.ok(result.stdout.includes(mode), `help output does not mention ${mode}`);
   }
 });
 
