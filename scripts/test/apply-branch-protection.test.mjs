@@ -271,6 +271,37 @@ test("the committed policy snapshot matches --expected", async () => {
   ]);
 });
 
+test("the default mode is a non-mutating dry run", async () => {
+  const harness = await createHarness();
+  const result = runScenario(harness, []);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /DRY RUN: no GitHub API mutation/);
+  assert.equal(await readFile(harness.putLog, "utf8"), "");
+});
+
+test("the repository can be resolved from gh repo view", async () => {
+  const harness = await createHarness();
+  const result = runScript(["--dry-run"], scenarioEnv(harness, { FAKE_GH_REPO_VIEW: "ok" }));
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /repos\/owner\/repo\/branches\/main\/protection/);
+});
+
+test("--branch and the --opt=value forms are parsed", async () => {
+  const harness = await createHarness();
+  const spaced = runScenario(harness, ["--dry-run", "--branch", "release"]);
+  const equals = runScenario(harness, ["--dry-run", "--branch=release"]);
+  const repoEquals = runScript(
+    ["--dry-run", "--repo=owner/repo", `--workflows-dir=${harness.workflows}`],
+    scenarioEnv(harness),
+  );
+  assert.equal(spaced.status, 0);
+  assert.match(spaced.stdout, /repos\/owner\/repo\/branches\/release\/protection/);
+  assert.equal(equals.status, 0);
+  assert.match(equals.stdout, /repos\/owner\/repo\/branches\/release\/protection/);
+  assert.equal(repoEquals.status, 0);
+  assert.match(repoEquals.stdout, /DRY RUN/);
+});
+
 test("dry run prints the planned calls and performs no GitHub call", async () => {
   const harness = await createHarness();
   const result = runScenario(harness, ["--dry-run"]);
@@ -403,6 +434,30 @@ test("an unknown required check and an unlisted workflow job are rejected", asyn
   );
   assert.equal(unlisted.status, 1);
   assert.match(unlisted.stderr, /workflow job 'Rogue Job' is neither required/);
+});
+
+test("an extra Docker Build matrix entry must be added to REQUIRED_CHECKS", async () => {
+  const harness = await createHarness();
+  const workflow = path.join(harness.workflows, "docker-build.yml");
+  const content = await readFile(workflow, "utf8");
+  await writeFile(
+    workflow,
+    content.replace(
+      "          - name: awap-backend",
+      [
+        "          - name: awap-worker",
+        "            dockerfile: backend/Dockerfile",
+        "            context: .",
+        "          - name: awap-backend",
+      ].join("\n"),
+    ),
+  );
+  const result = runScenario(harness, ["--dry-run"]);
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /reusable workflow context 'Docker Build \/ Build Images \(awap-worker, backend\/Dockerfile, \.\)' is not required/,
+  );
 });
 
 test("a Docker Build matrix change is detected as check-name drift", async () => {

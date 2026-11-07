@@ -410,9 +410,6 @@ preflight_remote() {
   scopes="$(printf '%s\n' "$response" |
     awk 'BEGIN { IGNORECASE = 1 } /^x-oauth-scopes:/ { sub(/^[^:]*:[[:space:]]*/, ""); print; exit }')"
   body="$(printf '%s\n' "$response" | awk 'found { print } /^$/ { found = 1 }')"
-  if [ -z "$body" ]; then
-    body="$response"
-  fi
   admin="$(printf '%s' "$body" | "$JQ_CLI" -r '.permissions.admin // false' 2>/dev/null || true)"
 
   if [ -n "$scopes" ]; then
