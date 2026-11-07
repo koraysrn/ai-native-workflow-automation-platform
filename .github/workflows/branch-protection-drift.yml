@@ -1,0 +1,51 @@
+name: Branch Protection Drift
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+      - "scripts/apply-branch-protection.sh"
+      - "scripts/test/apply-branch-protection.test.mjs"
+      - "settings/branch-protection.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: branch-protection-drift
+  cancel-in-progress: true
+
+jobs:
+  drift:
+    name: Branch Protection Drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify live protection against the reviewed policy
+        env:
+          GH_TOKEN: ${{ secrets.BRANCH_PROTECTION_TOKEN }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::BRANCH_PROTECTION_TOKEN is not configured; branch protection cannot be verified."
+            exit 1
+          fi
+          scripts/apply-branch-protection.sh --verify --repo "$GITHUB_REPOSITORY"
+      - name: Write the drift failure summary
+        if: failure()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## Branch protection drift
+
+          The live `main` protection does not match `scripts/apply-branch-protection.sh`.
+
+          1. Dry-run the fix: `scripts/apply-branch-protection.sh --dry-run`
+          2. Apply it: `scripts/apply-branch-protection.sh --apply`
+          3. Re-run: `scripts/apply-branch-protection.sh --verify`
+
+          Any temporary single-maintainer exception must be recorded in an incident
+          ticket and restored immediately; see runbook O22.
+          EOF

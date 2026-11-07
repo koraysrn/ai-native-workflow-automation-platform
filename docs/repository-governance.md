@@ -1,6 +1,6 @@
 # Repository Governance
 
-This document defines the protection of the `main` branch, the issue/PR label taxonomy, the milestone structure and the merge policy as code. The idempotent apply script lives at [`scripts/apply-repo-governance.ps1`](../scripts/apply-repo-governance.ps1).
+This document defines the protection of the `main` branch, the issue/PR label taxonomy, the milestone structure and the merge policy as code. The policy is enforced by the idempotent [`scripts/apply-branch-protection.sh`](../scripts/apply-branch-protection.sh): `--apply` creates or updates the protection, `--verify` fails on drift and `--dry-run` prints the planned calls without changing GitHub. A scheduled [`branch-protection-drift.yml`](../.github/workflows/branch-protection-drift.yml) job reads the live settings and fails when they diverge. [`settings/branch-protection.json`](../settings/branch-protection.json) is a generated snapshot of `--expected`; regenerate it with `scripts/apply-branch-protection.sh --expected > settings/branch-protection.json` and let the test suite prove it is in sync.
 
 ## Branch protection - `main`
 
@@ -12,14 +12,14 @@ This document defines the protection of the `main` branch, the issue/PR label ta
 | Require conversation resolution | Yes |
 | Dismiss stale reviews | Yes |
 | Required approving review count | 1 |
-| Require code owner reviews | No (see note below) |
+| Require code owner reviews | No (single-maintainer exception, see below) |
 | Allow force pushes | No |
 | Allow deletions | No |
 | Strict status checks | Yes |
 
-> **Note - code owner review & required reviews:** Because the repository has a single maintainer (`@koraysrn`), `require_code_owner_reviews` is disabled and `required_approving_review_count` is targeted at 1. Enforcing a required review now would lock every PR, since the author cannot approve their own PR. These rules must be activated in GitHub once additional maintainers are added.
-
 ### Required status checks
+
+The names are defined once in the `REQUIRED_CHECKS` array of [`apply-branch-protection.sh`](../scripts/apply-branch-protection.sh). The script validates every name against the job names in [`ci.yml`](../.github/workflows/ci.yml) and [`version-compatibility.yml`](../.github/workflows/version-compatibility.yml), and against the per-matrix contexts derived from [`docker-build.yml`](../.github/workflows/docker-build.yml); an unknown name or an unlisted unconditional job/matrix entry fails the run, so renaming or reshaping a workflow cannot leave a PR permanently pending.
 
 - `Backend`
 - `Frontend`
@@ -29,7 +29,37 @@ This document defines the protection of the `main` branch, the issue/PR label ta
 - `Secret Scan`
 - `Dependency Scan`
 - `Code Quality`
-- `Docker Build`
+- `Docker Build / Build Images (awap-backend, backend/Dockerfile, .)`
+- `Docker Build / Build Images (awap-frontend, frontend/Dockerfile, .)`
+- `Docker Build / Build Images (awap-ai-layer, ai-layer/Dockerfile, .)`
+- `End-to-End Tests`
+- `API Lint`
+- `Observability Checks`
+- `CDC Checks`
+- `Load Tests`
+- `Branch Protection`
+
+`Contract Verification` (`pact-gate`) is intentionally not required: it only runs once `PACT_BROKER_BASE_URL` is configured, so requiring it would leave every PR pending on a repository without a Pact Broker. The reusable Docker workflow reports one context per matrix entry, so the three expanded names above are required instead of the bare `Docker Build` caller job; the script derives them from [`docker-build.yml`](../.github/workflows/docker-build.yml) and fails if the matrix changes without the policy following.
+
+### Single-maintainer exception (explicit, audited)
+
+The repository currently has one maintainer (`@koraysrn`). GitHub never counts a self-approval, so `required_approving_review_count` is kept at 1 for the policy but the only maintainer cannot satisfy it on their own PR. The exception is explicit and must not be silently weakened:
+
+- Do **not** permanently set the approval count to 0, disable admin enforcement, remove required checks or delete the protection.
+- Break-glass is a temporary, audited change documented in runbook [O22](operations-runbook.md#o22--branch-protection-drift-and-break-glass-issue-178): open an incident ticket, lower only the approval count, merge the urgent PR, then restore the policy immediately with `--apply` and prove it with `--verify`.
+- The scheduled drift job fails while the exception is active. That failure is the reminder to restore protection; do not mute it.
+- When a second maintainer is added, enable `require_code_owner_reviews` and remove this exception in the same policy change.
+- Automation that must merge without an interactive review (for example release automation) should use a dedicated GitHub App with the minimum required permissions. Never disable protection globally to unblock a bot.
+
+### Drift detection
+
+[`branch-protection-drift.yml`](../.github/workflows/branch-protection-drift.yml) runs daily at 06:00 UTC, on `workflow_dispatch`, and on pushes that change the workflow, the script, its tests or the policy snapshot. It uses the `BRANCH_PROTECTION_TOKEN` repository secret (repository admin: read and write; a classic token needs the `repo` scope) and runs:
+
+```sh
+scripts/apply-branch-protection.sh --verify --repo owner/repo
+```
+
+A divergence prints one `DRIFT <field>: expected ..., got ...` line per differing field and fails the job. The failure summary points at `--apply` and O22.
 
 ## Merge policy
 

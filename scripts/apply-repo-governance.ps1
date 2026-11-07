@@ -54,12 +54,15 @@ Ensure-Milestone "Preparation Phase"  "Preparation phase - repo, CI/CD and secur
 Ensure-Milestone "Phase 0 - Core MVP" "Phase 0 - core MVP"
 Ensure-Milestone "Phase 1 - Expansion" "Phase 1 - post-MVP expansion"
 
-# 4. Branch protection on main (policy lives in settings/branch-protection.json)
-$policy = Join-Path $PSScriptRoot "..\settings\branch-protection.json"
-if (-not (Test-Path $policy)) {
-    throw "Missing branch protection policy: $policy"
+# 4. Branch protection on main (policy is defined once in the shell script)
+$protectionScript = Join-Path $PSScriptRoot "apply-branch-protection.sh"
+if (-not (Get-Command bash -ErrorAction SilentlyContinue)) {
+    throw "bash is required to apply branch protection: $protectionScript"
 }
-gh api -X PUT "repos/$Repo/branches/main/protection" --input $policy | Out-Null
+bash $protectionScript --apply --repo $Repo
+if ($LASTEXITCODE -ne 0) {
+    throw "Branch protection apply failed"
+}
 Write-Host "[OK] Branch protection applied to main"
 
 Write-Host "== Done =="

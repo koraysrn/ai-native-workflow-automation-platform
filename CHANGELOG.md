@@ -45,3 +45,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Trivy regression signal for the dependency gate: a CVE severity breakdown and annotations in the
   CI job summary, a retained JSON artifact, and a tracking issue after two consecutive failing
   `main` runs. The CI-only decision is recorded in ADR-0005 and the triage procedure in runbook O21.
+- Enforced branch protection for `main`: an idempotent apply/verify/dry-run script with the required
+  check names defined once and validated against the actual CI jobs, a scheduled drift workflow with
+  a dedicated admin token, and an explicit audited single-maintainer break-glass procedure (runbook
+  O22). Every script mode and error path is exercised in CI.
