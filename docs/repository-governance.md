@@ -29,7 +29,9 @@ The names are defined once in the `REQUIRED_CHECKS` array of [`apply-branch-prot
 - `Secret Scan`
 - `Dependency Scan`
 - `Code Quality`
-- `Docker Build`
+- `Docker Build / Build Images (awap-backend, backend/Dockerfile, .)`
+- `Docker Build / Build Images (awap-frontend, frontend/Dockerfile, .)`
+- `Docker Build / Build Images (awap-ai-layer, ai-layer/Dockerfile, .)`
 - `End-to-End Tests`
 - `API Lint`
 - `Observability Checks`
@@ -37,7 +39,7 @@ The names are defined once in the `REQUIRED_CHECKS` array of [`apply-branch-prot
 - `Load Tests`
 - `Branch Protection`
 
-`Contract Verification` (`pact-gate`) is intentionally not required: it only runs once `PACT_BROKER_BASE_URL` is configured, so requiring it would leave every PR pending on a repository without a Pact Broker.
+`Contract Verification` (`pact-gate`) is intentionally not required: it only runs once `PACT_BROKER_BASE_URL` is configured, so requiring it would leave every PR pending on a repository without a Pact Broker. The reusable Docker workflow reports one context per matrix entry, so the three expanded names above are required instead of the bare `Docker Build` caller job; the script derives them from [`docker-build.yml`](../.github/workflows/docker-build.yml) and fails if the matrix changes without the policy following.
 
 ### Single-maintainer exception (explicit, audited)
 

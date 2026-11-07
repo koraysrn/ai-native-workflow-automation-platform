@@ -66,7 +66,11 @@ REQUIRED_CHECKS=(
   "Secret Scan"
   "Dependency Scan"
   "Code Quality"
-  "Docker Build"
+  # A reusable workflow reports one check per matrix entry under the caller job name.
+  # There is no bare `Docker Build` status context; requiring it would block every PR.
+  "Docker Build / Build Images (awap-backend, backend/Dockerfile, .)"
+  "Docker Build / Build Images (awap-frontend, frontend/Dockerfile, .)"
+  "Docker Build / Build Images (awap-ai-layer, ai-layer/Dockerfile, .)"
   "End-to-End Tests"
   "API Lint"
   "Observability Checks"
@@ -80,6 +84,8 @@ REQUIRED_CHECKS=(
 # pending on repositories without a broker.
 ALLOWED_UNREQUIRED_CHECKS=(
   "Contract Verification"
+  # Caller job of the reusable Docker workflow; the real checks are the matrix entries above.
+  "Docker Build"
 )
 
 # Every executable branch/error path. The node:test suite runs each scenario
@@ -302,6 +308,32 @@ job_names() {
   grep -E '^    name: .+' "$file" | sed -E 's/^    name:[[:space:]]*//; s/[[:space:]]*$//'
 }
 
+# Expand the Docker Build matrix into the status contexts GitHub actually creates:
+# `<caller job name> / <called job name> (<matrix values>)`.
+reusable_matrix_checks() {
+  local workflow="$WORKFLOWS_DIR/docker-build.yml"
+  [ -f "$workflow" ] || return 0
+  awk '
+    /^ {10}- name: / {
+      name = $0
+      sub(/^.*- name:[[:space:]]*/, "", name)
+      item = 1
+      next
+    }
+    item && /^ {12}dockerfile: / {
+      dockerfile = $0
+      sub(/^[^:]*:[[:space:]]*/, "", dockerfile)
+      next
+    }
+    item && /^ {12}context: / {
+      context = $0
+      sub(/^[^:]*:[[:space:]]*/, "", context)
+      printf "Docker Build / Build Images (%s, %s, %s)\n", name, dockerfile, context
+      item = 0
+    }
+  ' "$workflow"
+}
+
 is_required_check() {
   local candidate="$1" check
   for check in "${REQUIRED_CHECKS[@]}"; do
@@ -325,7 +357,7 @@ is_allowed_unrequired() {
 validate_policy() {
   local ci="$WORKFLOWS_DIR/ci.yml"
   local compatibility="$WORKFLOWS_DIR/version-compatibility.yml"
-  local names="" name check
+  local names="" matrix_checks="" available="" name check
 
   if [ ! -f "$ci" ] && [ ! -f "$compatibility" ]; then
     die "error_workflows_missing" \
@@ -333,11 +365,13 @@ validate_policy() {
   fi
 
   names="$(job_names "$ci"; job_names "$compatibility")"
+  matrix_checks="$(reusable_matrix_checks)"
+  available="$(printf '%s\n%s\n' "$names" "$matrix_checks")"
 
   for check in "${REQUIRED_CHECKS[@]}"; do
-    if ! grep -Fxq -- "$check" <<<"$names"; then
+    if ! grep -Fxq -- "$check" <<<"$available"; then
       die "error_unknown_check" \
-        "required check '$check' does not match any job name in '$WORKFLOWS_DIR'."
+        "required check '$check' does not match any workflow job or matrix context in '$WORKFLOWS_DIR'."
     fi
   done
 
@@ -349,6 +383,15 @@ validate_policy() {
     die "error_unlisted_check" \
       "workflow job '$name' is neither required nor listed in ALLOWED_UNREQUIRED_CHECKS; add it to REQUIRED_CHECKS."
   done <<<"$names"
+
+  while IFS= read -r name; do
+    [ -n "$name" ] || continue
+    if is_required_check "$name"; then
+      continue
+    fi
+    die "error_unlisted_check" \
+      "reusable workflow context '$name' is not required; add it to REQUIRED_CHECKS."
+  done <<<"$matrix_checks"
 }
 
 preflight_remote() {

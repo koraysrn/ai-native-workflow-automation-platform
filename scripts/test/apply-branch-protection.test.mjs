@@ -112,8 +112,20 @@ printf 'fake gh: unsupported api endpoint %s\\n' "$endpoint" >&2
 exit 2
 `;
 
+const DOCKER_CHECK_PREFIX = "Docker Build / Build Images (";
+
+function dockerMatrixEntries(names) {
+  return names
+    .filter((name) => name.startsWith(DOCKER_CHECK_PREFIX))
+    .map((name) => {
+      const values = name.slice(DOCKER_CHECK_PREFIX.length, -1).split(", ");
+      return { name: values[0], dockerfile: values[1], context: values[2] };
+    });
+}
+
 async function writeWorkflows(directory, names) {
   await mkdir(directory, { recursive: true });
+  const simpleNames = names.filter((name) => !name.startsWith(DOCKER_CHECK_PREFIX));
   await writeFile(
     path.join(directory, "ci.yml"),
     [
@@ -121,9 +133,32 @@ async function writeWorkflows(directory, names) {
       "on:",
       "  pull_request:",
       "jobs:",
-      ...names.map(
+      ...simpleNames.map(
         (name, index) => `  job-${index}:\n    name: ${name}\n    runs-on: ubuntu-latest`,
       ),
+      "  docker-build:",
+      "    name: Docker Build",
+      "    uses: ./.github/workflows/docker-build.yml",
+      "",
+    ].join("\n"),
+  );
+  await writeFile(
+    path.join(directory, "docker-build.yml"),
+    [
+      "name: Docker Build",
+      "on:",
+      "  workflow_call:",
+      "jobs:",
+      "  build:",
+      "    name: Build Images",
+      "    strategy:",
+      "      matrix:",
+      "        include:",
+      ...dockerMatrixEntries(names).flatMap((entry) => [
+        `          - name: ${entry.name}`,
+        `            dockerfile: ${entry.dockerfile}`,
+        `            context: ${entry.context}`,
+      ]),
       "",
     ].join("\n"),
   );
@@ -224,7 +259,9 @@ test("the committed policy snapshot matches --expected", async () => {
     "Secret Scan",
     "Dependency Scan",
     "Code Quality",
-    "Docker Build",
+    "Docker Build / Build Images (awap-backend, backend/Dockerfile, .)",
+    "Docker Build / Build Images (awap-frontend, frontend/Dockerfile, .)",
+    "Docker Build / Build Images (awap-ai-layer, ai-layer/Dockerfile, .)",
     "End-to-End Tests",
     "API Lint",
     "Observability Checks",
@@ -360,9 +397,25 @@ test("an unknown required check and an unlisted workflow job are rejected", asyn
   const unlisted = runScenario(harness, ["--dry-run", "--workflows-dir", unlistedDir]);
 
   assert.equal(unknown.status, 1);
-  assert.match(unknown.stderr, /required check 'Branch Protection' does not match any job name/);
+  assert.match(
+    unknown.stderr,
+    /required check 'Branch Protection' does not match any workflow job or matrix context/,
+  );
   assert.equal(unlisted.status, 1);
   assert.match(unlisted.stderr, /workflow job 'Rogue Job' is neither required/);
+});
+
+test("a Docker Build matrix change is detected as check-name drift", async () => {
+  const harness = await createHarness();
+  const workflow = path.join(harness.workflows, "docker-build.yml");
+  const content = await readFile(workflow, "utf8");
+  await writeFile(workflow, content.replace("awap-backend", "awap-backend-v2"));
+  const result = runScenario(harness, ["--dry-run"]);
+  assert.equal(result.status, 1);
+  assert.match(
+    result.stderr,
+    /required check 'Docker Build \/ Build Images \(awap-backend, backend\/Dockerfile, \.\)' does not match/,
+  );
 });
 
 test("remote preflight rejects bad auth, scope and admin permission before mutation", async () => {
