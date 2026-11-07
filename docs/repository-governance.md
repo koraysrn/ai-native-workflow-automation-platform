@@ -19,7 +19,7 @@ This document defines the protection of the `main` branch, the issue/PR label ta
 
 ### Required status checks
 
-The names are defined once in the `REQUIRED_CHECKS` array of [`apply-branch-protection.sh`](../scripts/apply-branch-protection.sh). The script validates every name against the job names in [`ci.yml`](../.github/workflows/ci.yml) and [`version-compatibility.yml`](../.github/workflows/version-compatibility.yml); an unknown name or an unlisted unconditional job fails the run, so renaming a workflow cannot leave a PR permanently pending.
+The names are defined once in the `REQUIRED_CHECKS` array of [`apply-branch-protection.sh`](../scripts/apply-branch-protection.sh). The script validates every name against the job names in [`ci.yml`](../.github/workflows/ci.yml) and [`version-compatibility.yml`](../.github/workflows/version-compatibility.yml), and against the per-matrix contexts derived from [`docker-build.yml`](../.github/workflows/docker-build.yml); an unknown name or an unlisted unconditional job/matrix entry fails the run, so renaming or reshaping a workflow cannot leave a PR permanently pending.
 
 - `Backend`
 - `Frontend`
