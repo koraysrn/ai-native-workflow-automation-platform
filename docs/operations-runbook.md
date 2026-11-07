@@ -1005,3 +1005,65 @@ ADR-0005: only when Spring Boot's own BOM manages at least 2.21.7 and 3.1.7.
   compensating control and the decision to accept risk.
 - If the GitHub API call in the notification step fails, the job summary/artifact still contain the
   full result; open the issue manually from the run and mention the failing step in the incident.
+
+## O22 — Branch protection drift and break-glass (issue #178)
+
+**Purpose.** `main` is protected by the live GitHub settings, not only by a document. The desired
+policy is defined once in [`scripts/apply-branch-protection.sh`](../scripts/apply-branch-protection.sh)
+(`REQUIRED_CHECKS` plus the rule values); `settings/branch-protection.json` is a generated snapshot.
+[`branch-protection-drift.yml`](../.github/workflows/branch-protection-drift.yml) verifies the live
+settings daily at 06:00 UTC, on demand, and whenever the workflow, script, tests or snapshot change.
+
+**Token.** The drift job uses the `BRANCH_PROTECTION_TOKEN` repository secret. It needs repository
+admin: read and write (classic token scope `repo`; fine-grained token permission
+`Administration: read and write`). The script preflights the token scopes and the repository admin
+permission before any mutation, so a weak token fails without partially applying the policy.
+
+**Operator commands.**
+
+```sh
+scripts/apply-branch-protection.sh --dry-run --repo owner/repo   # plan, no API mutation
+scripts/apply-branch-protection.sh --apply   --repo owner/repo   # idempotent create/update
+scripts/apply-branch-protection.sh --verify  --repo owner/repo   # exit 1 on drift
+```
+
+**When the drift job fails.**
+
+1. Read the `DRIFT <field>: expected ..., got ...` lines in the job log or the job summary. The field
+   names map directly to the payload in the script (`required_status_checks.strict`,
+   `required_status_checks.contexts`, `required_approving_review_count`, `allow_deletions`, ...).
+2. Run `--dry-run` and attach its payload to the incident ticket or the change PR.
+3. Run `--apply`, then `--verify`. Confirm the next scheduled drift run is green.
+4. If the drift is a check-name change, update `REQUIRED_CHECKS` in the script and the workflow job
+   name together. Never remove a check merely to unblock a red PR; fix or revert the failing job.
+5. If protection was removed entirely, `--verify` reports `branch protection is not configured`.
+   Restore it with `--apply` immediately.
+
+**Break-glass for the single-maintainer exception.** The repository has one maintainer, so the
+required approval count of 1 cannot be satisfied on the maintainer's own PR (GitHub never counts a
+self-approval). The exception is explicit, never silent:
+
+1. Open an incident ticket with the reason, the PR that must merge, the owner who approved the
+   exception and an expiry. No ticket, no exception.
+2. Lower only the approval count, temporarily:
+
+   ```sh
+   gh api -X PATCH repos/owner/repo/branches/main/protection/required_pull_request_reviews \
+     -f required_approving_review_count=0
+   ```
+
+3. Merge the urgent PR with all required checks green.
+4. Immediately restore and prove the policy:
+
+   ```sh
+   scripts/apply-branch-protection.sh --apply --repo owner/repo
+   scripts/apply-branch-protection.sh --verify --repo owner/repo
+   ```
+
+5. Attach the restore output and the green drift run to the ticket, then close it.
+
+The drift workflow is expected to fail while the exception is active; that failure is the reminder
+to restore protection. Do **not** disable `enforce_admins`, required checks, force-push/deletion
+blocks, or delete the protection as a shortcut. Do not change `REQUIRED_CHECKS` to bypass a failing
+check, and do not disable the drift workflow. When a second maintainer is added, enable
+`require_code_owner_reviews` and remove this exception in the same reviewed policy change.

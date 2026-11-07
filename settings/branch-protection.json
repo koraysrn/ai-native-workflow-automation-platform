@@ -10,7 +10,13 @@
       "Secret Scan",
       "Dependency Scan",
       "Code Quality",
-      "Docker Build"
+      "Docker Build",
+      "End-to-End Tests",
+      "API Lint",
+      "Observability Checks",
+      "CDC Checks",
+      "Load Tests",
+      "Branch Protection"
     ]
   },
   "enforce_admins": true,

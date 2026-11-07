@@ -410,6 +410,32 @@ jobs:
         timeout-minutes: 10
         run: node infra/prometheus/validate-live-queries.mjs
 
+  branch-protection:
+    name: Branch Protection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Shell syntax check
+        run: |
+          bash -n scripts/apply-branch-protection.sh
+          bash -n scripts/apply-repo-governance.sh
+      - name: ShellCheck
+        run: |
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y shellcheck
+          fi
+          shellcheck scripts/apply-branch-protection.sh scripts/apply-repo-governance.sh
+      # Issue #178: the suite executes every mode and error path and fails when
+      # BRANCH_PROTECTION_TRACE_FILE is missing any path declared by the script.
+      - name: Policy, drift and every script path are tested
+        run: node --test "scripts/test/apply-branch-protection.test.mjs"
+      - name: Dry run (prints the planned API calls, changes nothing)
+        run: scripts/apply-branch-protection.sh --dry-run --repo "$GITHUB_REPOSITORY"
+
   cdc-deployment:
     name: CDC Checks
     runs-on: ubuntu-latest

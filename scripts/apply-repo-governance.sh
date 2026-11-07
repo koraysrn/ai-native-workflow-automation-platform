@@ -8,7 +8,7 @@
 set -euo pipefail
 
 REPO="${1:-koraysrn/ai-native-workflow-automation-platform}"
-POLICY="settings/branch-protection.json"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 
 if ! command -v gh >/dev/null 2>&1; then
   echo "ERROR: GitHub CLI (gh) is not installed." >&2
@@ -65,13 +65,8 @@ ensure_milestone "Phase 0 - Core MVP" "Phase 0 - core MVP"
 ensure_milestone "Phase 1 - Expansion" "Phase 1 - post-MVP expansion"
 
 echo "[4/4] Branch protection (main)"
-if [ ! -f "$POLICY" ]; then
-  echo "ERROR: missing policy $POLICY" >&2
-  exit 1
-fi
-gh api -X PUT "repos/$REPO/branches/main/protection" \
-  -H "Accept: application/vnd.github+json" \
-  --input "$POLICY" >/dev/null
+# The policy is defined once in scripts/apply-branch-protection.sh.
+"$SCRIPT_DIR/apply-branch-protection.sh" --apply --repo "$REPO"
 
 echo "== Done =="
 echo "Verify with: gh api repos/$REPO/branches/main/protection"
