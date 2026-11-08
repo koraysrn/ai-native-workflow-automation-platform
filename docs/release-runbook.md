@@ -39,8 +39,9 @@ The release job uses a dedicated bot identity. The workflow supports either:
 
 - **GitHub App (preferred):** set the `RELEASE_PLEASE_APP_ID` and `RELEASE_PLEASE_PRIVATE_KEY`
   repository secrets. The workflow mints an installation token with **Contents: Write**,
-  **Pull requests: Write** and **Actions: Write**, then verifies the installation permissions
-  through the `GET /installation` endpoint before release-please runs.
+  **Pull requests: Write** and **Actions: Write**. The mint step only succeeds when the
+  installation grants those permissions, so the preflight passes the minted token to
+  release-please without a second repository permission check.
 - **Fine-grained token fallback:** set `RELEASE_PLEASE_TOKEN` with **Contents: Read and write**,
   **Pull requests: Read and write**, and **Actions: Read and write** if the token itself dispatches
   CD. Classic token: the `repo` scope, plus `workflow` for `workflow_dispatch`.

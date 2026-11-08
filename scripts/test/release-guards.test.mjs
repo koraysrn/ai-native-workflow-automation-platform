@@ -366,39 +366,15 @@ test("token-preflight accepts the preferred token and writes the output", async 
 test("token-preflight accepts a GitHub App installation token", async () => {
   const output = path.join(WORK_DIR, "token-output-app.txt");
   await writeFile(output, "");
-  await withServer(
-    respond(200, { permissions: { contents: "write", pull_requests: "write" } }),
-    async (apiUrl) => {
-      const result = await runAsync(
-        "token",
-        ["--repo", "owner/repo", "--api-url", apiUrl, "--github-output", output],
-        {
-          RELEASE_TRACE_FILE: TOKEN_TRACE,
-          RELEASE_PLEASE_TOKEN: "app-token",
-          RELEASE_TOKEN_SOURCE: "github-app",
-        },
-      );
-      assert.equal(result.status, 0, result.stderr);
-      const written = await readFile(output, "utf8");
-      assert.match(written, /token=app-token/);
-      assert.match(written, /token_source=github-app/);
-    },
-  );
-});
-
-test("token-preflight rejects an under-permissioned GitHub App installation", async () => {
-  await withServer(
-    respond(200, { permissions: { contents: "read", pull_requests: "write" } }),
-    async (apiUrl) => {
-      const result = await runAsync("token", ["--repo", "owner/repo", "--api-url", apiUrl], {
-        RELEASE_TRACE_FILE: TOKEN_TRACE,
-        RELEASE_PLEASE_TOKEN: "app-token",
-        RELEASE_TOKEN_SOURCE: "github-app",
-      });
-      assert.equal(result.status, 1);
-      assert.match(result.stderr, /cannot write Contents and Pull requests/);
-    },
-  );
+  const result = await runAsync("token", ["--repo", "owner/repo", "--github-output", output], {
+    RELEASE_TRACE_FILE: TOKEN_TRACE,
+    RELEASE_PLEASE_TOKEN: "app-token",
+    RELEASE_TOKEN_SOURCE: "github-app",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const written = await readFile(output, "utf8");
+  assert.match(written, /token=app-token/);
+  assert.match(written, /token_source=github-app/);
 });
 
 test("token-preflight reports missing token and repository", () => {
