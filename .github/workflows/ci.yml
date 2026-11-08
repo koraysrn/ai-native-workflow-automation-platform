@@ -388,8 +388,13 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
-      - name: Trivy regression tooling tests
-        run: node --test "scripts/test/*.test.mjs"
+      # The release suite needs a full history checkout and the root commitlint
+      # install, so it runs in the dedicated `release` job instead of here.
+      - name: Trivy and branch-protection tooling tests
+        run: >-
+          node --test
+          "scripts/test/trivy-regression-*.test.mjs"
+          "scripts/test/apply-branch-protection.test.mjs"
       - name: Dashboard and alert rule tests
         run: node --test "infra/grafana/test/*.test.mjs" "infra/prometheus/test/*.test.mjs"
       - name: Validate Prometheus rules
@@ -457,6 +462,8 @@ jobs:
       - name: Install root tooling (commitlint)
         run: pnpm install --frozen-lockfile
       - name: Release tooling contract tests
+        env:
+          RELEASE_TESTS_REQUIRE_COMMITLINT: "1"
         run: node --test "scripts/test/release-*.test.mjs"
       - name: Conventional Commit lint for every commit entering main
         if: github.event_name != 'schedule'
