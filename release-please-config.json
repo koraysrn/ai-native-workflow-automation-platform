@@ -21,6 +21,7 @@
   "packages": {
     ".": {
       "release-type": "node",
+      "package-name": "",
       "changelog-path": "CHANGELOG.md",
       "include-component-in-tag": false,
       "bootstrap-sha": "64a5a7daf6458bd518076cd0462dff9a8a566eb6"
