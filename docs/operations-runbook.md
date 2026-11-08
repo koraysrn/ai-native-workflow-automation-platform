@@ -1111,3 +1111,58 @@ that check or the changelog guard to unblock a pull request.
    (`gh release delete vX.Y.Z --yes --cleanup-tag`) and let release-please recreate it from the
    corrected history. Do not repair the changelog or manifest by hand.
 4. Record the previous digest and the recovery tag in the incident ticket.
+
+## O24 — Repository label and milestone drift (issue #180)
+
+**Purpose.** The label taxonomy, milestone structure and merge policy are live GitHub state, not
+only documentation. The desired state is defined once in
+[`settings/repository-governance.json`](../settings/repository-governance.json); the label and
+milestone tables in
+[`repository-governance.md`](repository-governance.md#labels-and-milestones) are validated against
+it by the test suite.
+[`repository-governance-drift.yml`](../.github/workflows/repository-governance-drift.yml) verifies
+the live state weekly on Monday at 07:00 UTC, on demand, and when the desired state, script, tests,
+workflow or governance document changes.
+
+**Token.** The drift job uses the built-in `GITHUB_TOKEN` with `contents: read` and `issues: read`.
+Verification only needs read access. Applying also changes the merge policy and branch protection,
+so a manual `--apply` needs repository admin (fine-grained: Administration: read/write; classic:
+`repo`). The script preflights the token scopes and the admin permission before any mutation, so a
+weak token fails without partially applying the taxonomy.
+
+**Operator commands.**
+
+```sh
+scripts/apply-repo-governance.sh --dry-run --repo owner/repo              # plan, no GitHub mutation
+scripts/apply-repo-governance.sh --apply   --repo owner/repo              # idempotent create/update
+scripts/apply-repo-governance.sh --verify  --repo owner/repo              # exit 1 on missing/drifted items
+scripts/apply-repo-governance.sh --apply --prune --repo owner/repo        # delete retired labels explicitly
+```
+
+**When the drift job fails.**
+
+1. Read the `DRIFT ...` lines in the job log or summary. A missing label is recreated by `--apply`; a
+   label whose color or description drifted is updated in place. Duplicate milestone titles fail
+   verification and must be reconciled manually.
+2. Run `--dry-run` and attach its payload to the incident ticket or change PR.
+3. Run `--apply`, then `--verify`. Confirm the next scheduled drift run is green.
+4. If a desired milestone description or state changed, the same `--apply` updates the existing
+   milestone instead of creating a duplicate.
+5. `UNKNOWN` labels and milestones are informational. They are never deleted automatically. Do not
+   delete an unknown label merely to make the report shorter; it may belong to Dependabot, a security
+   scanner or an external integration.
+
+**Retire a label without breaking existing issues.**
+
+1. Add the replacement label to the desired state and run `--apply` first.
+2. Update every automation rule, saved filter, dashboard query and external integration to the
+   replacement label while the old label still exists.
+3. Keep the old label during the migration window. `--verify` reports it as `UNKNOWN` but does not
+   fail and does not delete it.
+4. After the window, run `--apply --prune` explicitly. `--prune` deletes only labels absent from the
+   desired state; it never deletes a desired label.
+5. Record the old label, the replacement and the date in the change PR or incident ticket.
+
+**Retire a milestone.** The script never deletes a milestone because deletion silently detaches every
+issue that referenced it. Remove the milestone from the desired state, then close or delete it in
+GitHub manually only after no open issue references it.

@@ -76,30 +76,72 @@ A divergence prints one `DRIFT <field>: expected ..., got ...` line per differin
   is green. `CHANGELOG.md` is bot-owned: a human edit fails the changelog guard. See the
   [release runbook](release-runbook.md).
 
-## Labels
+## Labels and milestones
 
-| Label | Description |
-|---|---|
-| `kind/bug` | Bug fix or correction |
-| `kind/feature` | New feature or request |
-| `kind/chore` | Maintenance, tooling or infra work |
-| `area/backend` | Backend (Java / Spring Boot) |
-| `area/frontend` | Frontend (Next.js / React) |
-| `area/ai` | AI layer (Python / FastAPI) |
-| `priority/p0` | Critical - must ship first |
-| `priority/p1` | High priority |
-| `priority/p2` | Medium priority |
-| `priority/p3` | Low priority |
-| `phase/preparation` | Preparation phase (repo, CI/CD, security foundations) |
-| `phase/core-mvp` | Core MVP phase |
-| `phase/expansion` | Post-MVP expansion |
+The label taxonomy, milestone structure, ownership and merge policy are defined once in [`settings/repository-governance.json`](../settings/repository-governance.json). The tables below are validated against that file by [`scripts/test/apply-repo-governance.test.mjs`](../scripts/test/apply-repo-governance.test.mjs), so the documentation cannot silently diverge from the desired state.
+
+### Labels
+
+| Label | Description | Color | Owner |
+|---|---|---|---|
+| `kind/bug` | Bug fix or correction | `d73a4a` | `@koraysrn` |
+| `kind/feature` | New feature or request | `a2eeef` | `@koraysrn` |
+| `kind/chore` | Maintenance, tooling or infra work | `c5def5` | `@koraysrn` |
+| `area/backend` | Backend (Java / Spring Boot) | `ffa221` | `@koraysrn` |
+| `area/frontend` | Frontend (Next.js / React) | `168700` | `@koraysrn` |
+| `area/ai` | AI layer (Python / FastAPI) | `5319e7` | `@koraysrn` |
+| `priority/p0` | Critical - must ship first | `b60205` | `@koraysrn` |
+| `priority/p1` | High priority | `d93f0b` | `@koraysrn` |
+| `priority/p2` | Medium priority | `fbca04` | `@koraysrn` |
+| `priority/p3` | Low priority | `0e8a16` | `@koraysrn` |
+| `phase/preparation` | Preparation phase (repo, CI/CD, security foundations) | `e4e669` | `@koraysrn` |
+| `phase/core-mvp` | Core MVP phase | `0e8a16` | `@koraysrn` |
+| `phase/expansion` | Post-MVP expansion | `0075ca` | `@koraysrn` |
+
+Every label has an accountable owner. GitHub labels do not store an owner field, so the owner is governance metadata: the person or team that reviews changes to the label, its automation filters and its replacement plan.
 
 > **Note - phase naming:** The planning documents originally used `phase/on-faz`, `phase/faz-0` and `phase/faz-1`. These were renamed to `phase/preparation`, `phase/core-mvp` and `phase/expansion` for clarity and consistency with the milestone names.
 
-## Milestones
+### Milestones
 
-| Milestone | Scope |
-|---|---|
-| `Preparation Phase` | Repo, CI/CD and security foundations |
-| `Phase 0 - Core MVP` | Core MVP |
-| `Phase 1 - Expansion` | Post-MVP expansion |
+| Milestone | Description | Owner |
+|---|---|---|
+| `Preparation Phase` | Preparation phase - repo, CI/CD and security foundations | `@koraysrn` |
+| `Phase 0 - Core MVP` | Phase 0 - core MVP | `@koraysrn` |
+| `Phase 1 - Expansion` | Phase 1 - post-MVP expansion | `@koraysrn` |
+
+### Applying and verifying the taxonomy
+
+[`scripts/apply-repo-governance.sh`](../scripts/apply-repo-governance.sh) reads the desired state and is safe to re-run:
+
+```sh
+scripts/apply-repo-governance.sh --dry-run --repo owner/repo   # plan, no GitHub mutation
+scripts/apply-repo-governance.sh --apply   --repo owner/repo   # create/update labels, milestones and merge policy
+scripts/apply-repo-governance.sh --verify  --repo owner/repo   # exit 1 on missing or drifted items
+```
+
+- `--dry-run` is the default. It validates the JSON and prints every planned call without contacting GitHub.
+- `--apply` is idempotent. It creates missing labels and milestones, updates a label whose description or color drifted, updates a milestone whose description or state drifted, and updates the merge policy only when a value differs. It then applies branch protection through `scripts/apply-branch-protection.sh`.
+- `--verify` fails on a missing or drifted desired item, including duplicate milestone titles. It reports unknown labels and milestones but does not delete them.
+- `--prune` is only valid with `--apply` or `--dry-run`. It deletes live labels that are absent from the desired state. It never deletes a desired label and it never deletes a milestone.
+
+`--verify` only needs read access. The scheduled workflow uses the built-in `GITHUB_TOKEN` with `issues: read`; a manual `--apply` needs repository admin (classic token scope `repo`; fine-grained tokens need Contents: read, Issues: read/write and Administration: read/write).
+
+### Drift detection
+
+[`repository-governance-drift.yml`](../.github/workflows/repository-governance-drift.yml) runs weekly on Monday at 07:00 UTC, on `workflow_dispatch`, and on pushes that change the workflow, the desired state, the script, its tests or this document. It uses the built-in `GITHUB_TOKEN` with `issues: read` and runs:
+
+```sh
+scripts/apply-repo-governance.sh --verify --repo owner/repo
+```
+
+Missing or drifted items fail the job. Unknown labels and milestones are published in the job summary as `UNKNOWN` lines; they are informational and are never deleted automatically. The failure summary points at `--apply`, `--prune` and runbook O24.
+
+### Label and milestone lifecycle
+
+- **Add.** Add the label or milestone to `settings/repository-governance.json` in the same PR that updates this table, then run `--dry-run` and `--apply`.
+- **Change.** Edit the desired description, color, state or owner in the JSON and run `--apply`; an idempotent second run makes no changes.
+- **Rename.** Treat a rename as a new label plus a retirement. GitHub issues and saved filters keep the old name until they are updated. Add the new label first, move the automation and filters, then retire the old label.
+- **Retire a label without breaking existing issues.** Keep the old label during a migration window while both labels exist. `--verify` reports it as `UNKNOWN` but does not fail and does not delete it. Update every automation rule, saved filter, dashboard query and external integration to the replacement label, then run `--apply --prune` explicitly. `--prune` never deletes a label listed in the desired state.
+- **Retire a milestone.** Milestones are never deleted by the script because deleting one silently detaches every issue that referenced it. Remove the milestone from the desired state, then close or delete it manually in GitHub only after no open issue references it.
+- **Revive a retired label.** Add it back to the desired state and run `--apply`; a missing label is recreated with the reviewed color and description.

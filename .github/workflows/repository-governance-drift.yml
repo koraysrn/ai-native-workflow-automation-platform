@@ -1,0 +1,80 @@
+name: Repository Governance Drift
+
+on:
+  schedule:
+    # Weekly, Monday at 07:00 UTC. The live label and milestone state can drift
+    # between releases without any repository change, so this check is separate
+    # from the per-push CI run.
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/repository-governance-drift.yml"
+      - "settings/repository-governance.json"
+      - "scripts/apply-repo-governance.sh"
+      - "scripts/test/apply-repo-governance.test.mjs"
+      - "docs/repository-governance.md"
+
+permissions:
+  contents: read
+  issues: read
+
+concurrency:
+  group: repository-governance-drift
+  cancel-in-progress: true
+
+jobs:
+  drift:
+    name: Repository Governance Drift
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify live labels, milestones and merge policy
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -o pipefail
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::error::GITHUB_TOKEN is not available; labels and milestones cannot be verified."
+            exit 1
+          fi
+          scripts/apply-repo-governance.sh --verify --repo "$GITHUB_REPOSITORY" 2>&1 |
+            tee governance-report.txt
+      - name: Publish the verification report and unknown items
+        if: always()
+        run: |
+          {
+            echo "## Repository governance report"
+            echo ""
+            if [ -f governance-report.txt ]; then
+              echo '```text'
+              cat governance-report.txt
+              echo '```'
+            else
+              echo "The verification step did not produce a report."
+            fi
+            echo ""
+            echo "Unknown labels and milestones are reported above; they are never deleted automatically."
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Write the drift failure summary
+        if: failure()
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ## Repository governance drift
+
+          The live labels, milestones or merge policy do not match
+          `settings/repository-governance.json`.
+
+          1. Review the report above. `UNKNOWN` entries are informational and are
+             never deleted automatically.
+          2. Dry-run the fix: `scripts/apply-repo-governance.sh --dry-run --repo owner/repo`
+          3. Apply it: `scripts/apply-repo-governance.sh --apply --repo owner/repo`
+          4. Re-run: `scripts/apply-repo-governance.sh --verify --repo owner/repo`
+
+          `scripts/apply-repo-governance.sh --apply --prune --repo owner/repo` is
+          required to delete an unknown label, and it must only be used after every
+          automation rule and saved filter has moved to the replacement label. The
+          script never deletes milestones; close or delete a retired milestone
+          manually when no open issues reference it. See runbook O24.
+          EOF

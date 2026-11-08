@@ -1,0 +1,108 @@
+{
+  "merge_policy": {
+    "allow_squash_merge": true,
+    "allow_merge_commit": false,
+    "allow_rebase_merge": false,
+    "delete_branch_on_merge": true
+  },
+  "labels": [
+    {
+      "name": "kind/bug",
+      "description": "Bug fix or correction",
+      "color": "d73a4a",
+      "owner": "@koraysrn"
+    },
+    {
+      "name": "kind/feature",
+      "description": "New feature or request",
+      "color": "a2eeef",
+      "owner": "@koraysrn"
+    },
+    {
+      "name": "kind/chore",
+      "description": "Maintenance, tooling or infra work",
+      "color": "c5def5",
+      "owner": "@koraysrn"
+    },
+    {
+      "name": "area/backend",
+      "description": "Backend (Java / Spring Boot)",
+      "color": "ffa221",
+      "owner": "@koraysrn"
+    },
+    {
+      "name": "area/frontend",
+      "description": "Frontend (Next.js / React)",
+      "color": "168700",
+      "owner": "@koraysrn"
+    },
+    {
+      "name": "area/ai",
+      "description": "AI layer (Python / FastAPI)",
+      "color": "5319e7",
+      "owner": "@koraysrn"
+    },
+    {
+      "name": "priority/p0",
+      "description": "Critical - must ship first",
+      "color": "b60205",
+      "owner": "@koraysrn"
+    },
+    {
+      "name": "priority/p1",
+      "description": "High priority",
+      "color": "d93f0b",
+      "owner": "@koraysrn"
+    },
+    {
+      "name": "priority/p2",
+      "description": "Medium priority",
+      "color": "fbca04",
+      "owner": "@koraysrn"
+    },
+    {
+      "name": "priority/p3",
+      "description": "Low priority",
+      "color": "0e8a16",
+      "owner": "@koraysrn"
+    },
+    {
+      "name": "phase/preparation",
+      "description": "Preparation phase (repo, CI/CD, security foundations)",
+      "color": "e4e669",
+      "owner": "@koraysrn"
+    },
+    {
+      "name": "phase/core-mvp",
+      "description": "Core MVP phase",
+      "color": "0e8a16",
+      "owner": "@koraysrn"
+    },
+    {
+      "name": "phase/expansion",
+      "description": "Post-MVP expansion",
+      "color": "0075ca",
+      "owner": "@koraysrn"
+    }
+  ],
+  "milestones": [
+    {
+      "title": "Preparation Phase",
+      "description": "Preparation phase - repo, CI/CD and security foundations",
+      "state": "open",
+      "owner": "@koraysrn"
+    },
+    {
+      "title": "Phase 0 - Core MVP",
+      "description": "Phase 0 - core MVP",
+      "state": "open",
+      "owner": "@koraysrn"
+    },
+    {
+      "title": "Phase 1 - Expansion",
+      "description": "Phase 1 - post-MVP expansion",
+      "state": "open",
+      "owner": "@koraysrn"
+    }
+  ]
+}
