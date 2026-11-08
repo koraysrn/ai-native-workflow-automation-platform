@@ -35,11 +35,14 @@ manual edit and letting the release PR regenerate the entry.
 
 ### Token
 
-The `RELEASE_PLEASE_TOKEN` repository secret is **required**:
+The release job uses a dedicated bot identity. The workflow supports either:
 
-- Fine-grained token: **Contents: Read and write**, **Pull requests: Read and write**. Add
-  **Actions: Read and write** if the token itself dispatches CD.
-- Classic token: the `repo` scope, plus `workflow` for `workflow_dispatch`.
+- **GitHub App (preferred):** set the `RELEASE_PLEASE_APP_ID` and `RELEASE_PLEASE_PRIVATE_KEY`
+  repository secrets. The workflow mints an installation token with **Contents: Write**,
+  **Pull requests: Write** and **Actions: Write**.
+- **Fine-grained token fallback:** set `RELEASE_PLEASE_TOKEN` with **Contents: Read and write**,
+  **Pull requests: Read and write**, and **Actions: Read and write** if the token itself dispatches
+  CD. Classic token: the `repo` scope, plus `workflow` for `workflow_dispatch`.
 
 The token must belong to a dedicated bot identity - a GitHub App installation token or a machine
 user - not the maintainer's personal PAT. GitHub never counts a self-approval, so a release PR
@@ -47,10 +50,10 @@ authored by the single maintainer could not satisfy the required review.
 
 A regular `GITHUB_TOKEN` cannot be used for the release PR: pull requests created with it do not
 trigger CI, so the release PR would never receive the required checks and could never be merged.
-The preflight fails with an actionable message when the secret is missing or the token cannot push
-to the repository, so the bot never fails halfway through a release. Tags created with a bot token
-do trigger tag-push workflows, but the release job dispatches CD explicitly so the released tag is
-deployed even when a repository restricts token-triggered workflows.
+The preflight fails with an actionable message when neither credential is configured or the token
+cannot push to the repository, so the bot never fails halfway through a release. Tags created with
+a bot token do trigger tag-push workflows, but the release job dispatches CD explicitly so the
+released tag is deployed even when a repository restricts token-triggered workflows.
 
 ## Normal release
 
@@ -127,7 +130,7 @@ Prefer a forward fix. A published tag must never be moved, and `main` must never
 |---|---|
 | `Release Checks` fails with a commitlint error | Amend or rebase the offending commit; the log names the SHA and subject. |
 | `Release Checks` fails with `CHANGELOG.md is generated exclusively by release-please` | Revert the manual changelog edit. |
-| `Release` fails in `Resolve and verify the release token` | Follow the annotation: grant `RELEASE_PLEASE_TOKEN` the permissions listed above. |
+| `Release` fails in `Resolve and verify the release token` | Configure `RELEASE_PLEASE_APP_ID` + `RELEASE_PLEASE_PRIVATE_KEY` (preferred) or grant `RELEASE_PLEASE_TOKEN` the permissions listed above. |
 | `Release` says `main advanced` | The next green CI run releases the newer main commit; nothing to do. |
 | Release PR is not opened | Check the `Release` workflow run for the green `CI` run of the merge commit and the token preflight. |
 | Tag exists but CD did not run | Run the `CD` workflow with the tag, or re-run the release job; `release_created` guards duplicate dispatches. |

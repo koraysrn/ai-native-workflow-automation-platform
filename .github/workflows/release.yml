@@ -90,13 +90,32 @@ jobs:
             --main-sha "$(git rev-parse origin/main)" \
             --github-output "$GITHUB_OUTPUT"
 
+      # Issue #179: prefer a GitHub App installation token. The app credentials
+      # are the dedicated bot identity recommended by the runbook; the
+      # RELEASE_PLEASE_TOKEN secret remains supported as a fallback.
+      - name: Mint a release token from the GitHub App
+        id: app-token
+        if: >-
+          steps.gate.outputs.skip != 'true' &&
+          secrets.RELEASE_PLEASE_APP_ID != '' &&
+          secrets.RELEASE_PLEASE_PRIVATE_KEY != ''
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ secrets.RELEASE_PLEASE_APP_ID }}
+          private-key: ${{ secrets.RELEASE_PLEASE_PRIVATE_KEY }}
+          owner: ${{ github.repository_owner }}
+          repositories: ${{ github.event.repository.name }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-actions: write
+
       - name: Resolve and verify the release token
         id: token
         if: steps.gate.outputs.skip != 'true'
         env:
           # A bot token is mandatory: release PRs opened with GITHUB_TOKEN do not
           # trigger CI and could never satisfy the required checks.
-          RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+          RELEASE_PLEASE_TOKEN: ${{ steps.app-token.outputs.token || secrets.RELEASE_PLEASE_TOKEN }}
         run: >-
           node scripts/release/token-preflight.mjs
           --repo "$GITHUB_REPOSITORY"
