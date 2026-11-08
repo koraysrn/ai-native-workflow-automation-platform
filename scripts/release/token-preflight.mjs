@@ -53,7 +53,7 @@ function usage() {
 Verify that the release token can write to the repository.
 
 Environment:
-  RELEASE_PLEASE_TOKEN  Required bot token (fine-grained: Contents + Pull requests write).
+  RELEASE_PLEASE_TOKEN  Bot token (or the installation token minted from the GitHub App secrets).
 
 Options:
   --repo <owner/repo>      Repository to verify (default: GITHUB_REPOSITORY).
@@ -128,10 +128,11 @@ async function main() {
   if (!token) {
     throw new UsageError(
       "error_missing_token",
-      "RELEASE_PLEASE_TOKEN is required. Releases must be opened by a dedicated bot " +
-        "identity (GitHub App or machine user), not GITHUB_TOKEN and not the " +
-        "maintainer's personal PAT: a GITHUB_TOKEN release PR does not trigger CI and " +
-        "a maintainer-authored release PR cannot self-approve. Store a fine-grained " +
+      "RELEASE_PLEASE_TOKEN is required unless the workflow minted a token from " +
+        "RELEASE_PLEASE_APP_ID and RELEASE_PLEASE_PRIVATE_KEY. Releases must be opened " +
+        "by a dedicated bot identity (GitHub App or machine user), not GITHUB_TOKEN and " +
+        "not the maintainer's personal PAT: a GITHUB_TOKEN release PR does not trigger " +
+        "CI and a maintainer-authored release PR cannot self-approve. Store a fine-grained " +
         `token with ${REQUIRED_PERMISSIONS} as the RELEASE_PLEASE_TOKEN secret.`,
     );
   }
