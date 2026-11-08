@@ -40,6 +40,14 @@ test("the release workflow uses the reviewable release PR flow", async () => {
   assert.match(workflow, /manifest-file: \.release-please-manifest\.json/);
 });
 
+test("the release workflow listens to the actual CI workflow name", async () => {
+  const ci = await readFile(CI_WORKFLOW, "utf8");
+  const release = await readFile(RELEASE_WORKFLOW, "utf8");
+  const ciName = /^name: (.+)$/m.exec(ci)?.[1];
+  assert.ok(ciName, "ci.yml has no workflow name");
+  assert.match(release, new RegExp(`workflows: \\["${ciName}"\\]`));
+});
+
 test("a tag is only created after a green full CI run on main", async () => {
   const workflow = await readFile(RELEASE_WORKFLOW, "utf8");
   assert.match(workflow, /workflow_run:/);
@@ -85,6 +93,9 @@ test("CI runs the release guard, commit lint and dry run", async () => {
 
 test("CD can be dispatched with the released tag", async () => {
   const workflow = await readFile(CD_WORKFLOW, "utf8");
+  const config = JSON.parse(await readFile(CONFIG, "utf8"));
+  assert.equal(config.packages["."]["include-component-in-tag"], false);
+  assert.match(workflow, /tags: \["v\*"\]/);
   assert.match(workflow, /workflow_dispatch:/);
   assert.match(workflow, /tag:/);
   assert.match(workflow, /tag-suffix: \$\{\{ inputs\.tag \|\| github\.ref_name \}\}/);
