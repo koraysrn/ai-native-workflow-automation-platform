@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1](https://github.com/koraysrn/ai-native-workflow-automation-platform/compare/v1.0.0...v1.0.1) (2026-11-08)
+
+
+### Bug Fixes
+
+* **release:** align the release PR component with the manifest ([#179](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/179)) ([#225](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/225)) ([adec124](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/adec124f301b2f54acc16db72d6cbc95ac9a3593))
+* **release:** keep the release PR component empty for the root package ([#179](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/179)) ([#226](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/226)) ([aca2406](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/aca2406478487ee077f7bf472e7c8b9b2df8c5bd))
+
 ## 1.0.0 (2026-11-08)
 
 
