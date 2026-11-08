@@ -128,6 +128,7 @@ jobs:
           # A bot token is mandatory: release PRs opened with GITHUB_TOKEN do not
           # trigger CI and could never satisfy the required checks.
           RELEASE_PLEASE_TOKEN: ${{ steps.app-token.outputs.token || secrets.RELEASE_PLEASE_TOKEN }}
+          RELEASE_TOKEN_SOURCE: ${{ steps.app-token.outputs.token != '' && 'github-app' || 'token' }}
         run: >-
           node scripts/release/token-preflight.mjs
           --repo "$GITHUB_REPOSITORY"

@@ -54,6 +54,7 @@ Verify that the release token can write to the repository.
 
 Environment:
   RELEASE_PLEASE_TOKEN  Bot token (or the installation token minted from the GitHub App secrets).
+  RELEASE_TOKEN_SOURCE  Set to "github-app" when the token was minted from the GitHub App.
 
 Options:
   --repo <owner/repo>      Repository to verify (default: GITHUB_REPOSITORY).
@@ -137,7 +138,66 @@ async function main() {
     );
   }
 
+  const tokenSource = process.env.RELEASE_TOKEN_SOURCE ?? "token";
   const apiUrl = (options["api-url"] ?? "https://api.github.com").replace(/\/$/, "");
+
+  // A GitHub App installation token is verified by the mint step, which only
+  // succeeds when the app installation grants the requested write permissions.
+  // The repository object's `permissions.push` field is not a reliable signal
+  // for installation tokens, so use the installation permissions endpoint.
+  if (tokenSource === "github-app") {
+    let installationResponse;
+    try {
+      installationResponse = await fetch(`${apiUrl}/installation`, {
+        headers: {
+          Accept: "application/vnd.github+json",
+          Authorization: `Bearer ${token}`,
+          "User-Agent": "awap-release-preflight",
+          "X-GitHub-Api-Version": "2022-11-28",
+        },
+        signal: AbortSignal.timeout(15_000),
+      });
+    } catch (error) {
+      throw new UsageError(
+        "error_api_unreachable",
+        `cannot reach ${apiUrl}: ${String(error.message ?? error)}.`,
+      );
+    }
+
+    if (!installationResponse.ok) {
+      const { pathId, message } = classifyStatus(installationResponse.status);
+      throw new UsageError(pathId, message);
+    }
+
+    let installation;
+    try {
+      installation = await installationResponse.json();
+    } catch {
+      throw new UsageError(
+        "error_invalid_response",
+        `the GitHub API response for ${apiUrl}/installation is not valid JSON.`,
+      );
+    }
+
+    const permissions = installation?.permissions ?? {};
+    if (permissions.contents !== "write" || permissions.pull_requests !== "write") {
+      throw new UsageError(
+        "error_insufficient_permissions",
+        `the GitHub App installation cannot write Contents and Pull requests for ${repo}; ` +
+          "grant Contents: Read and write and Pull requests: Read and write.",
+      );
+    }
+
+    console.log(`::add-mask::${token}`);
+    writeGithubOutput(options["github-output"], {
+      token,
+      token_source: "github-app",
+    });
+    console.log(`GitHub App release token verified for ${repo}.`);
+    mark("mode_token_ok");
+    return;
+  }
+
   let response;
   try {
     response = await fetch(`${apiUrl}/repos/${repo}`, {

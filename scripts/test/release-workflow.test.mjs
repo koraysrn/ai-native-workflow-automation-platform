@@ -77,6 +77,7 @@ test("the release workflow verifies the bot token and offers a dry run", async (
   assert.match(workflow, /secrets\.RELEASE_PLEASE_PRIVATE_KEY/);
   assert.match(workflow, /steps\.app-credentials\.outputs\.configured == 'true'/);
   assert.match(workflow, /steps\.app-token\.outputs\.token \|\| secrets\.RELEASE_PLEASE_TOKEN/);
+  assert.match(workflow, /RELEASE_TOKEN_SOURCE: .*'github-app' \|\| 'token'/);
   assert.match(workflow, /inputs\.from/);
   assert.match(workflow, /scripts\/release\/dry-run\.mjs --dry-run/);
   assert.match(
