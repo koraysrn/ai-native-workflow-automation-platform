@@ -122,7 +122,7 @@ scripts/apply-repo-governance.sh --verify  --repo owner/repo   # exit 1 on missi
 
 - `--dry-run` is the default. It validates the JSON and prints every planned call without contacting GitHub.
 - `--apply` is idempotent. It creates missing labels and milestones, updates a label whose description or color drifted, updates a milestone whose description or state drifted, and updates the merge policy only when a value differs. It then applies branch protection through `scripts/apply-branch-protection.sh`.
-- `--verify` fails on a missing or drifted desired item, including duplicate milestone titles. It reports unknown labels and milestones but does not delete them.
+- `--verify` fails on a missing or drifted label or milestone, including duplicate milestone titles. It reports unknown labels and milestones but does not delete them. The read-only check does not verify the merge policy: `--apply` keeps it in sync, but the repository settings fields are not readable with a read-only `GITHUB_TOKEN`.
 - `--prune` is only valid with `--apply` or `--dry-run`. It deletes live labels that are absent from the desired state. It never deletes a desired label and it never deletes a milestone.
 
 `--verify` only needs read access. The scheduled workflow uses the built-in `GITHUB_TOKEN` with `issues: read`; a manual `--apply` needs repository admin (classic token scope `repo`; fine-grained tokens need Contents: read, Issues: read/write and Administration: read/write).
@@ -135,7 +135,7 @@ scripts/apply-repo-governance.sh --verify  --repo owner/repo   # exit 1 on missi
 scripts/apply-repo-governance.sh --verify --repo owner/repo
 ```
 
-Missing or drifted items fail the job. Unknown labels and milestones are published in the job summary as `UNKNOWN` lines; they are informational and are never deleted automatically. The failure summary points at `--apply`, `--prune` and runbook O24.
+Missing or drifted labels or milestones fail the job. Unknown labels and milestones are published in the job summary as `UNKNOWN` lines; they are informational and are never deleted automatically. The failure summary points at `--apply`, `--prune` and runbook O24.
 
 ### Label and milestone lifecycle
 
