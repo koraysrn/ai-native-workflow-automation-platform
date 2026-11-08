@@ -1121,14 +1121,16 @@ milestone tables in
 [`repository-governance.md`](repository-governance.md#labels-and-milestones) are validated against
 it by the test suite.
 [`repository-governance-drift.yml`](../.github/workflows/repository-governance-drift.yml) verifies
-the live state weekly on Monday at 07:00 UTC, on demand, and when the desired state, script, tests,
-workflow or governance document changes.
+the live labels and milestones weekly on Monday at 07:00 UTC, on demand, and when the desired state,
+script, tests, workflow or governance document changes. The merge policy is applied by `--apply`;
+the read-only drift job does not verify it because a `GITHUB_TOKEN` cannot read repository
+administration settings.
 
 **Token.** The drift job uses the built-in `GITHUB_TOKEN` with `contents: read` and `issues: read`.
-Verification only needs read access. Applying also changes the merge policy and branch protection,
-so a manual `--apply` needs repository admin (fine-grained: Administration: read/write; classic:
-`repo`). The script preflights the token scopes and the admin permission before any mutation, so a
-weak token fails without partially applying the taxonomy.
+Verification only needs read access and covers labels and milestones. Applying also changes the
+merge policy and branch protection, so a manual `--apply` needs repository admin (fine-grained:
+Administration: read/write; classic: `repo`). The script preflights the token scopes and the admin
+permission before any mutation, so a weak token fails without partially applying the taxonomy.
 
 **Operator commands.**
 

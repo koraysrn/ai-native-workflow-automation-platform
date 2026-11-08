@@ -583,7 +583,7 @@ verify_governance() {
   local drift=0 unknown_label=0 unknown_milestone=0
   local label_json name description color live_count live_color live_description
   local milestone_json title state match_count number live_description live_state
-  local live_name key want got
+  local live_name
 
   fetch_live_state
 
@@ -664,15 +664,6 @@ verify_governance() {
     fi
   done < <("$JQ_CLI" -r '.[].title' <<<"$LIVE_MILESTONES")
 
-  for key in allow_squash_merge allow_merge_commit allow_rebase_merge delete_branch_on_merge; do
-    want="$("$JQ_CLI" -r --arg key "$key" '.merge_policy[$key]' "$STATE_FILE")"
-    got="$("$JQ_CLI" -r --arg key "$key" '.[$key] // false' <<<"$REPO_BODY")"
-    if [ "$want" != "$got" ]; then
-      printf 'DRIFT merge_policy.%s: expected %s, got %s.\n' "$key" "$want" "$got" >&2
-      drift=$((drift + 1))
-    fi
-  done
-
   if [ "$unknown_label" -eq 1 ]; then
     mark "mode_verify_unknown_label"
   fi
@@ -688,7 +679,7 @@ verify_governance() {
   fi
 
   mark "mode_verify_match"
-  printf 'Repository governance in %s matches the reviewed labels, milestones and merge policy.\n' "$REPO"
+  printf 'Repository governance in %s matches the reviewed labels and milestones.\n' "$REPO"
 }
 
 # ---------------------------------------------------------------------------

@@ -30,7 +30,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Verify live labels, milestones and merge policy
+      - name: Verify live labels and milestones
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -63,7 +63,7 @@ jobs:
           cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
           ## Repository governance drift
 
-          The live labels, milestones or merge policy do not match
+          The live labels or milestones do not match
           `settings/repository-governance.json`.
 
           1. Review the report above. `UNKNOWN` entries are informational and are

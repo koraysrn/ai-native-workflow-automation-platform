@@ -465,7 +465,7 @@ test("verify succeeds and reports unknown labels and milestones without deleting
 
   const result = runScenario(harness, ["--verify"]);
   assert.equal(result.status, 0);
-  assert.match(result.stdout, /matches the reviewed labels, milestones and merge policy/);
+  assert.match(result.stdout, /matches the reviewed labels and milestones/);
   assert.match(result.stderr, /UNKNOWN label 'dependencies'/);
   assert.match(result.stderr, /UNKNOWN milestone 'Ön Faz'/);
   assert.equal(await readLog(harness.mutationLog), "");
@@ -536,13 +536,15 @@ test("verify fails on duplicate milestone titles", async () => {
   assert.match(result.stderr, /DRIFT milestone 'Preparation Phase' has 2 entries/);
 });
 
-test("verify fails on merge policy drift", async () => {
+test("verify ignores merge settings that a read-only token cannot see", async () => {
   const harness = await createHarness();
   const result = runScenario(harness, ["--verify"], {
+    FAKE_GH_ADMIN: "false",
     FAKE_GH_ALLOW_SQUASH_MERGE: "false",
+    FAKE_GH_DELETE_BRANCH_ON_MERGE: "false",
   });
-  assert.equal(result.status, 1);
-  assert.match(result.stderr, /DRIFT merge_policy\.allow_squash_merge: expected true, got false/);
+  assert.equal(result.status, 0);
+  assert.match(result.stdout, /matches the reviewed labels and milestones/);
 });
 
 test("verify works with a read-only token and reports API read failures", async () => {
