@@ -1098,8 +1098,8 @@ that check or the changelog guard to unblock a pull request.
    `.release-please-manifest.json`.
 4. Review and merge the release PR. The tag is still created only after the subsequent green CI
    run on `main`.
-5. If the release workflow did not run, re-run the last green `CI` workflow; `workflow_run`
-   triggers the release job again.
+5. If the release workflow did not run, re-run the last `Release` workflow run for that green CI
+   run (`gh run rerun <run-id>`); do not create the tag manually.
 
 **Bad tag.** Never move a published tag and never force-push `main`.
 

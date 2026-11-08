@@ -40,10 +40,13 @@ jobs:
         with:
           node-version: 24
       - name: Print the next version and changelog entries
+        env:
+          FROM_REF: ${{ inputs.from }}
+          TO_REF: ${{ inputs.to }}
         run: >-
           node scripts/release/dry-run.mjs --dry-run
-          --from "${{ inputs.from }}"
-          --to "${{ inputs.to }}"
+          --from "$FROM_REF"
+          --to "$TO_REF"
 
   release:
     name: Release Please

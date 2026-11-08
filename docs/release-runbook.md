@@ -58,7 +58,7 @@ deployed even when a repository restricts token-triggered workflows.
 # Preview the next version and the generated changelog without changing anything
 pnpm release:dry-run
 
-# Or through the workflow (Actions -> Release -> Run workflow)
+# Or through the workflow (Actions -> Release -> Run workflow), which is dry-run only
 node scripts/release/dry-run.mjs --dry-run --from v0.1.0 --to HEAD
 ```
 
@@ -85,15 +85,16 @@ on unverified code and never bypass branch protection.
    npx release-please@17 release-pr \
      --repo-url "https://github.com/${GITHUB_REPOSITORY}" \
      --token "$RELEASE_PLEASE_TOKEN" \
+     --target-branch main \
      --config-file release-please-config.json \
      --manifest-file .release-please-manifest.json
    ```
 
 4. Review and merge the release PR. The tag is still created only after the subsequent green CI
    run on `main`, because that is what triggers the release workflow.
-5. If the release workflow itself did not run, re-run the last successful `CI` workflow; the
-   `workflow_run` trigger runs the release job again. Do not force-push `main` and do not move a
-   published tag.
+5. If the release workflow itself did not run, re-run the last `Release` workflow run for that
+   green CI run (`gh run rerun <run-id>`); the same event payload and commit SHA are reused. Do
+   not create the tag manually, do not force-push `main` and do not move a published tag.
 
 ## Rollback of a bad tag
 
