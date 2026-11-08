@@ -9,6 +9,8 @@
   },
   "scripts": {
     "commitlint": "commitlint --edit",
+    "release:dry-run": "node scripts/release/dry-run.mjs --dry-run",
+    "release:lint-commits": "node scripts/release/lint-commits.mjs",
     "prepare": "husky"
   },
   "devDependencies": {

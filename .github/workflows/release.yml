@@ -1,24 +1,117 @@
 name: Release
 
+# Issue #179: releases are produced by release-please from Conventional Commits.
+# The release PR carries the version bump and the CHANGELOG entry and is reviewed
+# and tested like any other pull request. A tag is created only after the merged
+# release PR has produced a green full CI run on `main`.
 on:
-  push:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      from:
+        description: "First ref for the dry run (default: last v* tag or bootstrap-sha)"
+        required: false
+        type: string
+      to:
+        description: "Last ref for the dry run (default: HEAD)"
+        required: false
+        type: string
 
 permissions:
   contents: write
   pull-requests: write
+  actions: write
+
+# Serialize releases: two merged PRs must never race on the release PR/version.
+concurrency:
+  group: release-please
+  cancel-in-progress: false
 
 jobs:
-  release-please:
-    name: Create Release
+  dry-run:
+    name: Release Dry Run
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
-      - uses: googleapis/release-please-action@v5
-        id: release
+      - uses: actions/checkout@v7
         with:
-          release-type: simple
-          token: ${{ secrets.GITHUB_TOKEN }}
-          skip-github-pull-request: true
-    outputs:
-      release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
+          fetch-depth: 0
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Print the next version and changelog entries
+        run: >-
+          node scripts/release/dry-run.mjs --dry-run
+          --from "${{ inputs.from }}"
+          --to "${{ inputs.to }}"
+
+  release:
+    name: Release Please
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the CI-verified commit
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      - name: Verify the CI gate for this commit
+        id: gate
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          WORKFLOW_EVENT: ${{ github.event.workflow_run.event }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          node scripts/release/verify-ci-gate.mjs \
+            --event "$EVENT_NAME" \
+            --conclusion "$CONCLUSION" \
+            --workflow-name "$WORKFLOW_NAME" \
+            --workflow-event "$WORKFLOW_EVENT" \
+            --branch "$BRANCH" \
+            --sha "$SHA" \
+            --main-sha "$(git rev-parse origin/main)" \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Resolve and verify the release token
+        id: token
+        env:
+          # A bot token is mandatory: release PRs opened with GITHUB_TOKEN do not
+          # trigger CI and could never satisfy the required checks.
+          RELEASE_PLEASE_TOKEN: ${{ secrets.RELEASE_PLEASE_TOKEN }}
+        run: >-
+          node scripts/release/token-preflight.mjs
+          --repo "$GITHUB_REPOSITORY"
+          --github-output "$GITHUB_OUTPUT"
+
+      - name: Open or update the release PR
+        id: release
+        if: steps.gate.outputs.skip != 'true'
+        uses: googleapis/release-please-action@v5
+        with:
+          token: ${{ steps.token.outputs.token }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+      # Dispatch CD explicitly so the released tag is deployed even when the
+      # repository restricts workflows triggered by bot tags. The dispatch is
+      # guarded by release_created, so a duplicate run cannot deploy twice.
+      - name: Trigger CD for the released tag
+        if: steps.release.outputs.release_created == 'true'
+        env:
+          GH_TOKEN: ${{ steps.token.outputs.token }}
+          TAG_NAME: ${{ steps.release.outputs.tag_name }}
+        run: gh workflow run cd.yml --ref main -f tag="$TAG_NAME"

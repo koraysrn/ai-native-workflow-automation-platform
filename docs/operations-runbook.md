@@ -1067,3 +1067,47 @@ to restore protection. Do **not** disable `enforce_admins`, required checks, for
 blocks, or delete the protection as a shortcut. Do not change `REQUIRED_CHECKS` to bypass a failing
 check, and do not disable the drift workflow. When a second maintainer is added, enable
 `require_code_owner_reviews` and remove this exception in the same reviewed policy change.
+
+## O23 — Release automation, emergency release and tag rollback (issue #179)
+
+**Purpose.** Releases are produced by release-please from Conventional Commits. The version bump,
+the manifest update and the `CHANGELOG.md` entry live in a release pull request that is reviewed
+and tested before a tag exists. Full details are in the [release runbook](release-runbook.md).
+
+**Flow.** Merge to `main` → green `CI` → `Release` workflow (`workflow_run`) opens or updates the
+release PR → review and merge it → the next green `CI` run creates the tag and release exactly
+once → the release job dispatches `CD` with the tag.
+
+**Operator commands.**
+
+```sh
+pnpm release:dry-run                                   # next version + changelog entries
+node scripts/release/lint-commits.mjs --from <sha> --to <sha>
+node scripts/release/dry-run.mjs --dry-run --from v0.1.0 --to HEAD
+```
+
+`CHANGELOG.md` is bot-owned; a human edit fails the required `Release Checks` job. Never disable
+that check or the changelog guard to unblock a pull request.
+
+**Emergency release.** Never tag unverified code or bypass branch protection.
+
+1. Open an incident ticket with the reason, owner and expiry.
+2. Merge the fix through a normal pull request with all required checks green.
+3. Let release-please update the release PR; if the bot is unavailable, run
+   `npx release-please@17 release-pr` locally with `release-please-config.json` and
+   `.release-please-manifest.json`.
+4. Review and merge the release PR. The tag is still created only after the subsequent green CI
+   run on `main`.
+5. If the release workflow did not run, re-run the last green `CI` workflow; `workflow_run`
+   triggers the release job again.
+
+**Bad tag.** Never move a published tag and never force-push `main`.
+
+1. Revert the offending commit with a Conventional Commit (`revert: ...`) so release-please
+   produces the next patch release.
+2. Roll the deployment back to the previous revision/image digest while the patch is prepared
+   (`argocd app rollback awap <previous-revision>`).
+3. If the tag points at the wrong commit, delete the GitHub release and tag
+   (`gh release delete vX.Y.Z --yes --cleanup-tag`) and let release-please recreate it from the
+   corrected history. Do not repair the changelog or manifest by hand.
+4. Record the previous digest and the recovery tag in the incident ticket.

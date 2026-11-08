@@ -436,6 +436,52 @@ jobs:
       - name: Dry run (prints the planned API calls, changes nothing)
         run: scripts/apply-branch-protection.sh --dry-run --repo "$GITHUB_REPOSITORY"
 
+  release:
+    name: Release Checks
+    runs-on: ubuntu-latest
+    # Issue #179: the node:test suite executes every release-tooling branch and
+    # error path, commitlint lints the whole push/PR range, the changelog guard
+    # keeps CHANGELOG.md bot-owned and the dry run prints the next version.
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install root tooling (commitlint)
+        run: pnpm install --frozen-lockfile
+      - name: Release tooling contract tests
+        run: node --test "scripts/test/release-*.test.mjs"
+      - name: Conventional Commit lint for every commit entering main
+        if: github.event_name != 'schedule'
+        env:
+          FROM_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          TO_SHA: ${{ github.sha }}
+        run: |
+          node scripts/release/lint-commits.mjs --from "$FROM_SHA" --to "$TO_SHA"
+      - name: CHANGELOG is generated only by release-please
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          gh api "repos/$GITHUB_REPOSITORY/pulls/${{ github.event.pull_request.number }}/files" \
+            --paginate --jq '.[].filename' > changed-files.txt
+          node scripts/release/changelog-guard.mjs \
+            --event pull_request \
+            --actor "$ACTOR" \
+            --branch "$HEAD_REF" \
+            --changed-files-file changed-files.txt
+      - name: Release dry run (prints the next version and changelog entries)
+        run: node scripts/release/dry-run.mjs --dry-run
+
   cdc-deployment:
     name: CDC Checks
     runs-on: ubuntu-latest
