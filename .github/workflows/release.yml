@@ -92,13 +92,25 @@ jobs:
 
       # Issue #179: prefer a GitHub App installation token. The app credentials
       # are the dedicated bot identity recommended by the runbook; the
-      # RELEASE_PLEASE_TOKEN secret remains supported as a fallback.
+      # RELEASE_PLEASE_TOKEN secret remains supported as a fallback. The
+      # detection step is needed because the secrets context is not available in
+      # a step-level `if` expression.
+      - name: Detect GitHub App credentials
+        id: app-credentials
+        if: steps.gate.outputs.skip != 'true'
+        env:
+          APP_ID: ${{ secrets.RELEASE_PLEASE_APP_ID }}
+          PRIVATE_KEY: ${{ secrets.RELEASE_PLEASE_PRIVATE_KEY }}
+        run: |
+          if [ -n "$APP_ID" ] && [ -n "$PRIVATE_KEY" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Mint a release token from the GitHub App
         id: app-token
-        if: >-
-          steps.gate.outputs.skip != 'true' &&
-          secrets.RELEASE_PLEASE_APP_ID != '' &&
-          secrets.RELEASE_PLEASE_PRIVATE_KEY != ''
+        if: steps.gate.outputs.skip != 'true' && steps.app-credentials.outputs.configured == 'true'
         uses: actions/create-github-app-token@v2
         with:
           app-id: ${{ secrets.RELEASE_PLEASE_APP_ID }}
