@@ -111,9 +111,10 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-      # Dispatch CD explicitly so the released tag is deployed even when the
-      # repository restricts workflows triggered by bot tags. The dispatch is
-      # guarded by release_created, so a duplicate run cannot deploy twice.
+      # Dispatch CD explicitly so the CD pipeline runs for the released tag even
+      # when the repository restricts workflows triggered by bot tags. The
+      # dispatch is guarded by release_created, so a duplicate run cannot trigger
+      # CD twice.
       - name: Trigger CD for the released tag
         if: steps.release.outputs.release_created == 'true'
         env:
