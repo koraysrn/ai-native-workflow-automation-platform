@@ -440,6 +440,13 @@ jobs:
         run: node --test "scripts/test/apply-branch-protection.test.mjs"
       - name: Dry run (prints the planned API calls, changes nothing)
         run: scripts/apply-branch-protection.sh --dry-run --repo "$GITHUB_REPOSITORY"
+      # Issue #180: labels, milestones and the merge policy have the same
+      # every-path coverage gate, and the repository governance dry run proves
+      # the desired-state file is valid without touching GitHub.
+      - name: Repository governance and every script path are tested
+        run: node --test "scripts/test/apply-repo-governance.test.mjs"
+      - name: Repository governance dry run (changes nothing)
+        run: scripts/apply-repo-governance.sh --dry-run --repo "$GITHUB_REPOSITORY"
 
   release:
     name: Release Checks
