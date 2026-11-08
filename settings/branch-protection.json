@@ -18,7 +18,8 @@
       "Observability Checks",
       "CDC Checks",
       "Load Tests",
-      "Branch Protection"
+      "Branch Protection",
+      "Release Checks"
     ]
   },
   "enforce_admins": true,

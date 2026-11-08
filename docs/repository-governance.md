@@ -38,6 +38,7 @@ The names are defined once in the `REQUIRED_CHECKS` array of [`apply-branch-prot
 - `CDC Checks`
 - `Load Tests`
 - `Branch Protection`
+- `Release Checks`
 
 `Contract Verification` (`pact-gate`) is intentionally not required: it only runs once `PACT_BROKER_BASE_URL` is configured, so requiring it would leave every PR pending on a repository without a Pact Broker. The reusable Docker workflow reports one context per matrix entry, so the three expanded names above are required instead of the bare `Docker Build` caller job; the script derives them from [`docker-build.yml`](../.github/workflows/docker-build.yml) and fails if the matrix changes without the policy following.
 
@@ -66,6 +67,14 @@ A divergence prints one `DRIFT <field>: expected ..., got ...` line per differin
 - Squash merge is mandatory; merge commits and rebase are disabled.
 - The head branch is deleted automatically after merge.
 - Commit messages must follow Conventional Commits ([`commitlint.config.cjs`](../commitlint.config.cjs)).
+  The required `Release Checks` job runs commitlint over every commit in the push/PR range,
+  not only over the commit being authored, and validates the pull request title because a
+  squash merge turns it into the final `main` commit message.
+- Releases are produced by release-please from Conventional Commits. The bot opens a release
+  pull request with the version bump and the `CHANGELOG.md` entry; it is reviewed and tested
+  like any other PR and the tag is created only after it merges and the full CI run on `main`
+  is green. `CHANGELOG.md` is bot-owned: a human edit fails the changelog guard. See the
+  [release runbook](release-runbook.md).
 
 ## Labels
 

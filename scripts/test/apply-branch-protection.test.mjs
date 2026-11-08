@@ -268,6 +268,7 @@ test("the committed policy snapshot matches --expected", async () => {
     "CDC Checks",
     "Load Tests",
     "Branch Protection",
+    "Release Checks",
   ]);
 });
 

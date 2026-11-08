@@ -31,9 +31,10 @@ test("the repeated-failure notification is scoped to main and has API permission
   assert.match(workflow, /--mode success/);
 });
 
-test("the regression tooling tests run in CI", async () => {
+test("the regression and governance tooling tests run in CI", async () => {
   const workflow = await readFile(CI, "utf8");
-  assert.match(workflow, /node --test "scripts\/test\/\*\.test\.mjs"/);
+  assert.match(workflow, /node --test\s+"scripts\/test\/trivy-regression-\*\.test\.mjs"/);
+  assert.match(workflow, /"scripts\/test\/apply-branch-protection\.test\.mjs"/);
 });
 
 test("ADR-0005 records the CI-only decision instead of a dashboard", async () => {

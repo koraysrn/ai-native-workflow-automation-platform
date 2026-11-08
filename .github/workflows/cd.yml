@@ -3,6 +3,14 @@ name: CD
 on:
   push:
     tags: ["v*"]
+  # Issue #179: the release workflow dispatches CD explicitly because tags
+  # created with GITHUB_TOKEN do not trigger tag-push workflows.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to deploy (for example v0.1.0)
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -14,7 +22,7 @@ jobs:
     uses: ./.github/workflows/docker-build.yml
     with:
       push: true
-      tag-suffix: ${{ github.ref_name }}
+      tag-suffix: ${{ inputs.tag || github.ref_name }}
     permissions:
       contents: read
       packages: write

@@ -77,6 +77,8 @@ REQUIRED_CHECKS=(
   "CDC Checks"
   "Load Tests"
   "Branch Protection"
+  # Issue #179: commitlint, the changelog guard and the release dry run.
+  "Release Checks"
 )
 
 # Jobs that are intentionally not required: `pact-gate` only runs once a Pact
