@@ -472,6 +472,13 @@ jobs:
           TO_SHA: ${{ github.sha }}
         run: |
           node scripts/release/lint-commits.mjs --from "$FROM_SHA" --to "$TO_SHA"
+      # Squash merge turns the PR title into the main commit message, so the
+      # title must satisfy commitlint before it can enter main.
+      - name: Conventional Commit lint for the squash-merge PR title
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: node scripts/release/lint-commits.mjs --message "$PR_TITLE"
       - name: CHANGELOG is generated only by release-please
         if: github.event_name == 'pull_request'
         env:

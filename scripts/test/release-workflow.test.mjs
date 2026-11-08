@@ -77,6 +77,7 @@ test("CI runs the release guard, commit lint and dry run", async () => {
   assert.match(workflow, /^ {2}release:\n {4}name: Release Checks$/m);
   assert.match(workflow, /node --test "scripts\/test\/release-\*\.test\.mjs"/);
   assert.match(workflow, /node scripts\/release\/lint-commits\.mjs/);
+  assert.match(workflow, /--message "\$PR_TITLE"/);
   assert.match(workflow, /node scripts\/release\/changelog-guard\.mjs/);
   assert.match(workflow, /scripts\/release\/dry-run\.mjs --dry-run/);
   assert.match(workflow, /pull-requests: read/);

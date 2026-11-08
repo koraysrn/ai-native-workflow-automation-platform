@@ -9,6 +9,7 @@
  * Usage:
  *   node scripts/release/lint-commits.mjs --from <sha> --to <sha>
  *   node scripts/release/lint-commits.mjs --commits-file commits.json
+ *   node scripts/release/lint-commits.mjs --message "feat: squash title"
  *   node scripts/release/lint-commits.mjs --list-paths
  */
 import { execFileSync, spawnSync } from "node:child_process";
@@ -53,6 +54,7 @@ Options:
   --from <sha>             First commit of the range (exclusive).
   --to <sha>               Last commit of the range (default: HEAD).
   --commits-file <path>    JSON commit list for tests/offline use.
+  --message <text>         Lint a single message (the squash-merge PR title).
   --commitlint-bin <path>  commitlint binary (default: node_modules/.bin/commitlint).
   --config <path>          commitlint config (default: commitlint.config.cjs).
   --trace-file <path>      Append executed path ids (coverage gate).
@@ -123,7 +125,15 @@ function loadCommitsFromGit(from, to) {
 function main() {
   const options = parseArgs(process.argv.slice(2), {
     flags: ["help", "list-paths"],
-    values: ["from", "to", "commits-file", "commitlint-bin", "config", "trace-file"],
+    values: [
+      "from",
+      "to",
+      "commits-file",
+      "message",
+      "commitlint-bin",
+      "config",
+      "trace-file",
+    ],
   });
 
   if (options["trace-file"]) {
@@ -141,16 +151,21 @@ function main() {
   }
 
   const commitsFile = options["commits-file"];
-  if (commitsFile && (options.from !== undefined || options.to !== undefined)) {
+  const singleMessage = options.message;
+  const hasRange = options.from !== undefined || options.to !== undefined;
+  if ((commitsFile && (hasRange || singleMessage !== undefined)) ||
+      (singleMessage !== undefined && hasRange)) {
     throw new UsageError(
       "error_conflicting_inputs",
-      "--commits-file cannot be combined with --from or --to.",
+      "use exactly one of --from/--to, --commits-file or --message.",
     );
   }
 
-  const commits = commitsFile
-    ? loadCommitsFromFile(commitsFile)
-    : loadCommitsFromGit(options.from, options.to && options.to.length > 0 ? options.to : "HEAD");
+  const commits = singleMessage !== undefined
+    ? [{ sha: "pull-request-title", message: singleMessage }]
+    : commitsFile
+      ? loadCommitsFromFile(commitsFile)
+      : loadCommitsFromGit(options.from, options.to && options.to.length > 0 ? options.to : "HEAD");
 
   if (commits.length === 0) {
     console.log("No commits to lint.");

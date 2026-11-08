@@ -87,6 +87,23 @@ test("lint-commits accepts a conventional range", async () => {
   assert.match(result.stdout, /1 commit\(s\) follow Conventional Commits/);
 });
 
+test("lint-commits validates the squash-merge PR title", () => {
+  const valid = run(
+    "lint",
+    ["--message", "feat(release): an acceptable title", "--commitlint-bin", FAKE_COMMITLINT],
+    { RELEASE_TRACE_FILE: LINT_TRACE },
+  );
+  assert.equal(valid.status, 0, valid.stderr);
+
+  const invalid = run(
+    "lint",
+    ["--message", "not a conventional title", "--commitlint-bin", FAKE_COMMITLINT],
+    { RELEASE_TRACE_FILE: LINT_TRACE, FAKE_COMMITLINT_EXIT: "1" },
+  );
+  assert.equal(invalid.status, 1);
+  assert.match(invalid.stderr, /commit pull-request-title \('not a conventional title'\)/);
+});
+
 test("lint-commits rejects a non-conventional commit", async () => {
   const commits = await jsonFile("lint-bad.json", [
     { sha: "b".repeat(40), message: "some changes" },
@@ -146,7 +163,15 @@ test("lint-commits rejects conflicting inputs and failing git ranges", async () 
     { RELEASE_TRACE_FILE: LINT_TRACE },
   );
   assert.equal(conflicting.status, 1);
-  assert.match(conflicting.stderr, /cannot be combined/);
+  assert.match(conflicting.stderr, /use exactly one/);
+
+  const conflictingMessage = run(
+    "lint",
+    ["--message", "feat: title", "--from", "HEAD"],
+    { RELEASE_TRACE_FILE: LINT_TRACE },
+  );
+  assert.equal(conflictingMessage.status, 1);
+  assert.match(conflictingMessage.stderr, /use exactly one/);
 
   const failedGit = run(
     "lint",

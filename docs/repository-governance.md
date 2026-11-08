@@ -68,7 +68,8 @@ A divergence prints one `DRIFT <field>: expected ..., got ...` line per differin
 - The head branch is deleted automatically after merge.
 - Commit messages must follow Conventional Commits ([`commitlint.config.cjs`](../commitlint.config.cjs)).
   The required `Release Checks` job runs commitlint over every commit in the push/PR range,
-  not only over the commit being authored.
+  not only over the commit being authored, and validates the pull request title because a
+  squash merge turns it into the final `main` commit message.
 - Releases are produced by release-please from Conventional Commits. The bot opens a release
   pull request with the version bump and the `CHANGELOG.md` entry; it is reviewed and tested
   like any other PR and the tag is created only after it merges and the full CI run on `main`
