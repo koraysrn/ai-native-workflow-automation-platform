@@ -20,7 +20,7 @@ export const DEFAULT_SECTIONS = [
 
 const KNOWN_TYPES = new Set(DEFAULT_SECTIONS.map((entry) => entry.type));
 const HEADER_PATTERN = /^([a-z]+)(?:\(([^()]+)\))?(!)?: (.+)$/;
-const BREAKING_FOOTER = /^BREAKING[ -]CHANGE:\s*(.+)$/gim;
+const BREAKING_FOOTER = /^BREAKING[ -]CHANGE:\s*(.+)$/gm;
 
 export class NonConventionalCommitError extends Error {
   constructor(commits) {

@@ -3,8 +3,8 @@
  * Reject manual edits to CHANGELOG.md (issue #179).
  *
  * `CHANGELOG.md` is owned by release-please. A pull request may only change it
- * when it comes from the release-please branch (or from a bot). Every other
- * pull request that touches the file fails the required `Release Checks` job.
+ * when it comes from the release-please branch. Every other pull request that
+ * touches the file fails the required `Release Checks` job.
  *
  * Usage:
  *   node scripts/release/changelog-guard.mjs \
@@ -129,9 +129,10 @@ function main() {
     return;
   }
 
-  const releaseBranch = branch.startsWith("release-please--");
-  const botActor = actor.endsWith("[bot]");
-  if (releaseBranch || botActor) {
+  // The branch name is the reliable signal: with a GitHub App or machine-user
+  // token the pull request author can be a human login, while release-please
+  // always opens `release-please--branches--<base>`.
+  if (branch.startsWith("release-please--")) {
     console.log(`Allowed: '${actor}' on '${branch}' is release automation.`);
     mark("mode_guard_bot");
     return;

@@ -214,19 +214,19 @@ test("changelog-guard allows unchanged and bot-owned files", async () => {
   assert.equal(releaseBranch.status, 0);
   assert.match(releaseBranch.stdout, /Allowed/);
 
-  const botActor = run(
+  const humanOnReleaseBranch = run(
     "guard",
     [
       "--actor",
-      "renovate[bot]",
+      "maintainer",
       "--branch",
-      "renovate/deps",
+      "release-please--branches--main",
       "--changed-files-file",
       changed,
     ],
     { RELEASE_TRACE_FILE: GUARD_TRACE },
   );
-  assert.equal(botActor.status, 0);
+  assert.equal(humanOnReleaseBranch.status, 0);
 });
 
 test("changelog-guard rejects a manual changelog edit", async () => {

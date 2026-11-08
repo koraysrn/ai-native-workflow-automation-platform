@@ -264,6 +264,30 @@ test("an invalid package.json is reported when the manifest has no version", asy
   assert.match(await trace(), /error_package_json_invalid/);
 });
 
+test("a missing package.json is reported when the manifest has no version", async () => {
+  const present = await fixture({ manifest: {} });
+  const result = run(
+    [
+      ...present.args,
+      "--package-json",
+      path.join(present.directory, "missing-package.json"),
+      "--commits-file",
+      present.commitsPath,
+    ],
+    TRACE_ENV,
+  );
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /package\.json is missing/);
+  assert.match(await trace(), /error_package_json_missing/);
+});
+
+test("an empty git range reports no commits", async () => {
+  const present = await fixture();
+  const result = run([...present.args, "--from", "HEAD", "--to", "HEAD"], TRACE_ENV);
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /No commits/);
+});
+
 test("an invalid current version is reported", async () => {
   const present = await fixture();
   const result = run(

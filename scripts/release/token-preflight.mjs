@@ -128,10 +128,11 @@ async function main() {
   if (!token) {
     throw new UsageError(
       "error_missing_token",
-      "RELEASE_PLEASE_TOKEN is required. Releases must be opened by a bot token other " +
-        "than GITHUB_TOKEN, otherwise the release PR does not trigger CI and can never " +
-        "satisfy branch protection. Store a fine-grained token with " +
-        `${REQUIRED_PERMISSIONS} as the RELEASE_PLEASE_TOKEN repository secret.`,
+      "RELEASE_PLEASE_TOKEN is required. Releases must be opened by a dedicated bot " +
+        "identity (GitHub App or machine user), not GITHUB_TOKEN and not the " +
+        "maintainer's personal PAT: a GITHUB_TOKEN release PR does not trigger CI and " +
+        "a maintainer-authored release PR cannot self-approve. Store a fine-grained " +
+        `token with ${REQUIRED_PERMISSIONS} as the RELEASE_PLEASE_TOKEN secret.`,
     );
   }
 

@@ -41,6 +41,10 @@ The `RELEASE_PLEASE_TOKEN` repository secret is **required**:
   **Actions: Read and write** if the token itself dispatches CD.
 - Classic token: the `repo` scope, plus `workflow` for `workflow_dispatch`.
 
+The token must belong to a dedicated bot identity - a GitHub App installation token or a machine
+user - not the maintainer's personal PAT. GitHub never counts a self-approval, so a release PR
+authored by the single maintainer could not satisfy the required review.
+
 A regular `GITHUB_TOKEN` cannot be used for the release PR: pull requests created with it do not
 trigger CI, so the release PR would never receive the required checks and could never be merged.
 The preflight fails with an actionable message when the secret is missing or the token cannot push

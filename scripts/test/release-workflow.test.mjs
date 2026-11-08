@@ -68,7 +68,7 @@ test("the release workflow verifies the bot token and offers a dry run", async (
   assert.match(workflow, /scripts\/release\/dry-run\.mjs --dry-run/);
   assert.match(
     workflow,
-    /permissions:\n {2}contents: write\n {2}pull-requests: write\n {2}actions: write/,
+    /permissions:\n {6}contents: write\n {6}pull-requests: write\n {6}actions: write/,
   );
 });
 

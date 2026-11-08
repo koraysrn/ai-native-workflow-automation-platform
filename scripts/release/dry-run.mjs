@@ -50,6 +50,7 @@ const TRACE_PATHS = [
   "error_manifest_invalid",
   "error_config_missing",
   "error_config_invalid",
+  "error_package_json_missing",
   "error_package_json_invalid",
   "error_invalid_version",
   "error_commits_file_missing",
@@ -126,16 +127,10 @@ function defaultFrom(config) {
 }
 
 function loadCommitsFromGit(from, to) {
-  const range = from === to ? `${to}^..${to}` : `${from}..${to}`;
-  let shas = "";
-  try {
-    shas = git(["rev-list", "--no-merges", range]);
-  } catch (error) {
-    if (from === to) {
-      return [];
-    }
-    throw error;
+  if (from === to) {
+    return [];
   }
+  const shas = git(["rev-list", "--no-merges", `${from}..${to}`]);
   return shas
     .split("\n")
     .filter(Boolean)
@@ -229,12 +224,15 @@ function main() {
   if (currentVersion === undefined) {
     const packageJson = readJson(
       packagePath,
-      "error_manifest_missing",
+      "error_package_json_missing",
       "error_package_json_invalid",
     );
     currentVersion = packageJson.version;
   }
-  if (typeof currentVersion !== "string" || !/^\d+\.\d+\.\d+/.test(currentVersion)) {
+  if (
+    typeof currentVersion !== "string" ||
+    !/^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/.test(currentVersion)
+  ) {
     throw new UsageError(
       "error_invalid_version",
       `current version '${currentVersion}' is not a major.minor.patch version.`,

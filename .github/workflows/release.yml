@@ -20,11 +20,6 @@ on:
         required: false
         type: string
 
-permissions:
-  contents: write
-  pull-requests: write
-  actions: write
-
 # Serialize releases: two merged PRs must never race on the release PR/version.
 concurrency:
   group: release-please
@@ -35,6 +30,8 @@ jobs:
     name: Release Dry Run
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
         with:
@@ -55,6 +52,10 @@ jobs:
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: write
     steps:
       - name: Checkout the CI-verified commit
         uses: actions/checkout@v7
@@ -88,6 +89,7 @@ jobs:
 
       - name: Resolve and verify the release token
         id: token
+        if: steps.gate.outputs.skip != 'true'
         env:
           # A bot token is mandatory: release PRs opened with GITHUB_TOKEN do not
           # trigger CI and could never satisfy the required checks.
