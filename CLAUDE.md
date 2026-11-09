@@ -68,6 +68,11 @@ com.awap.<module>
 └── interfaces          (controller, dto, event listener)
 ```
 
+These are **package-level layers**, not separate Maven modules. ADR-001 is the
+single source of truth; see `docs/backend-module-boundaries.md` for the enforced
+rules, the documented domain mapping-annotation exception and the cycle
+migration baseline.
+
 ---
 
 # Java Rules
