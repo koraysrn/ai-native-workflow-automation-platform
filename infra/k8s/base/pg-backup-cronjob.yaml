@@ -1,9 +1,4 @@
 # PostgreSQL logical backup (pg_dump) + offload to MinIO.
-#
-# Runs nightly (01:00 UTC). The dump container writes a compressed custom-format
-# dump to a shared emptyDir, then the upload container (minio/mc) copies it into
-# the S3-compatible backup bucket. RPO is therefore <= 24h; combined with WAL
-# archiving (see docker-compose postgres command) the practical RPO is much lower.
 apiVersion: batch/v1
 kind: CronJob
 metadata:
@@ -50,7 +45,6 @@ spec:
                 - -ec
                 - |
                   set -e
-                  # DB_URL is a JDBC URL: jdbc:postgresql://host:port/dbname
                   HOST=$(printf '%s' "$DB_URL" | sed -E 's|jdbc:postgresql://([^:/]+)(:([0-9]+))?/(.*)|\1|')
                   PORT=$(printf '%s' "$DB_URL" | sed -E 's|jdbc:postgresql://([^:/]+)(:([0-9]+))?/(.*)|\3|')
                   DB=$(printf '%s' "$DB_URL" | sed -E 's|jdbc:postgresql://([^:/]+)(:([0-9]+))?/(.*)|\4|')
@@ -60,7 +54,6 @@ spec:
                   export PGPASSWORD="$DB_PASSWORD"
                   pg_dump -h "$HOST" -p "$PORT" -U "$DB_USER" -d "$DB" \
                     --format=custom --compress=9 --file="$OUTFILE"
-                  # Non-zero exit on a corrupt/empty dump file so the job is retried.
                   test -s "$OUTFILE"
               volumeMounts:
                 - name: backup
@@ -69,7 +62,7 @@ spec:
               image: minio/mc:latest
               env:
                 - name: MINIO_ENDPOINT
-                  value: http://minio.awap-infra:9000
+                  value: http://minio:9000
                 - name: MINIO_ACCESS_KEY
                   valueFrom:
                     secretKeyRef:

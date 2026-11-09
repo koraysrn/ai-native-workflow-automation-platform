@@ -267,6 +267,7 @@ test("the committed policy snapshot matches --expected", async () => {
     "Observability Checks",
     "CDC Checks",
     "Load Tests",
+    "Kubernetes Overlays",
     "Branch Protection",
     "Release Checks",
   ]);

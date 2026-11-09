@@ -499,6 +499,39 @@ jobs:
         timeout-minutes: 10
         run: node infra/prometheus/validate-live-queries.mjs
 
+  k8s-overlays:
+    name: Kubernetes Overlays
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install root tooling (yaml)
+        run: pnpm install --frozen-lockfile
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+        with:
+          version: v1.31.0
+      - name: Install kubeconform
+        run: |
+          curl -fsSL https://github.com/yannh/kubeconform/releases/latest/download/kubeconform-linux-amd64.tar.gz \
+            | sudo tar -xz -C /usr/local/bin kubeconform
+          kubeconform -v
+      - name: Overlay validation tests
+        run: node --test "infra/k8s/scripts/test/*.test.mjs"
+      - name: Render and validate every overlay
+        run: node infra/k8s/scripts/validate-overlays.mjs --kubeconform
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: awap-overlays
+      - name: Kind server-side dry run for every overlay
+        run: node infra/k8s/scripts/validate-overlays.mjs --kind
+
   branch-protection:
     name: Branch Protection
     runs-on: ubuntu-latest

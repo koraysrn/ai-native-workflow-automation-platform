@@ -76,6 +76,7 @@ REQUIRED_CHECKS=(
   "Observability Checks"
   "CDC Checks"
   "Load Tests"
+  "Kubernetes Overlays"
   "Branch Protection"
   # Issue #179: commitlint, the changelog guard and the release dry run.
   "Release Checks"

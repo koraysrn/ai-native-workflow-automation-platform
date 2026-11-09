@@ -1,40 +1,74 @@
-# Kubernetes Manifests
+# Kubernetes manifests
 
-GitOps-managed manifests for the AWAP platform. Applied by Argo CD from the
-`main` branch; manual `kubectl apply` is only used for local kind clusters.
+GitOps-managed manifests for the AWAP platform. Argo CD renders one overlay per
+environment from the `main` branch; manual `kubectl apply` is only used for local
+kind clusters.
+
+## Layout
+
+```
+infra/k8s/
+├── base/                 # environment-independent resources
+│   ├── backend.yaml
+│   ├── frontend.yaml
+│   ├── ai-layer.yaml
+│   ├── hpa.yaml
+│   ├── ingress.yaml
+│   ├── pg-backup-cronjob.yaml
+│   ├── minio-replication-cronjob.yaml
+│   ├── secrets.yaml
+│   └── kustomization.yaml
+├── overlays/
+│   ├── dev/              # awap-dev, dev.awap.local, 1 replica
+│   ├── staging/          # awap-staging, staging.awap.local, 2 replicas
+│   └── prod/             # awap-prod, awap.example.com, 3 replicas
+├── argocd/applicationset.yaml
+├── scripts/validate-overlays.mjs
+└── debezium-connect.yaml
+```
+
+The base contains only values that are identical everywhere. Namespace, host,
+TLS secret, replicas, HPA bounds, image tags and feature flags live in the
+overlays.
+
+| Environment | Namespace | Host | Backend replicas | HPA |
+|---|---|---|---:|---|
+| dev | `awap-dev` | `dev.awap.local` | 1 | 1–3 |
+| staging | `awap-staging` | `staging.awap.local` | 2 | 2–6 |
+| prod | `awap-prod` | `awap.example.com` | 3 | 3–12 |
+
+## Argo CD
+
+[`argocd/applicationset.yaml`](argocd/applicationset.yaml) generates one
+Application per environment (`awap-dev`, `awap-staging`, `awap-prod`). Each
+application points at `infra/k8s/overlays/<env>` and targets the matching
+namespace. The old single `argo-application.yaml` is removed to avoid two
+applications managing the same manifests.
+
+## Validate locally
+
+```bash
+node --test "infra/k8s/scripts/test/*.test.mjs"
+node infra/k8s/scripts/validate-overlays.mjs --kubeconform
+```
+
+`kubectl kustomize infra/k8s/overlays/dev` renders an overlay manually. CI runs
+`kustomize build` and `kubeconform` for all three overlays, then applies the
+non-secret documents to a throwaway kind cluster with a server-side dry run.
+
+## Promotion
+
+1. Merge to `main`; Argo CD syncs `dev` first.
+2. Verify the dev health endpoints and smoke tests.
+3. Promote the image tags in `overlays/staging/kustomization.yaml` (or let the
+   image updater do it), merge, and verify staging.
+4. Promote the same immutable tags to `overlays/prod/kustomization.yaml`.
+5. Never copy a production host, replica count, TLS secret or feature flag into
+   a lower overlay; the validation script fails on drift.
 
 ## Secrets
 
-Secrets are provisioned exclusively through **Sealed Secrets** (see
-[`secrets.yaml`](secrets.yaml)). The Sealed Secrets controller decrypts them
-into the target `Secret` objects at deploy time. Plain-text `Secret` manifests
-are forbidden and ignored by Git (see the repository root `.gitignore`).
-
-### Sealing workflow
-
-```bash
-# One time: fetch the cluster controller certificate.
-kubeseal --controller-namespace kube-system --fetch-cert > pub-cert.pem
-
-# Seal a value (namespace-wide scope):
-echo -n 'change-me' | kubeseal --cert pub-cert.pem --scope namespace-wide \
-  --namespace awap --name awap-backend-secrets --raw
-```
-
-Paste the returned value into `spec.encryptedData` in
-[`secrets.yaml`](secrets.yaml). The plain-text values are kept only in Vault
-and are injected into the cluster by the GitOps pipeline, never committed.
-
-## Components
-
-| File | Purpose |
-|---|---|
-| [`namespace.yaml`](namespace.yaml) | `awap` and `awap-infra` namespaces. |
-| [`debezium-connect.yaml`](debezium-connect.yaml) | Debezium Connect Deployment/Service, connector ConfigMap and the idempotent `awap-connect-register` Job. |
-| [`backend.yaml`](backend.yaml) | Backend Deployment (2 replicas) + Service. |
-| [`frontend.yaml`](frontend.yaml) | Frontend Deployment + Service. |
-| [`hpa.yaml`](hpa.yaml) | Backend horizontal pod autoscaler (CPU 70%, 2–10). |
-| [`ingress.yaml`](ingress.yaml) | Ingress routes for the frontend and API. |
-| [`secrets.yaml`](secrets.yaml) | SealedSecret manifests (see above). |
-| [`argo-application.yaml`](argo-application.yaml) | Argo CD application definition. |
-| [`kustomization.yaml`](kustomization.yaml) | Kustomize entry point. |
+Secrets are delivered through the mechanism documented in the base
+`secrets.yaml` and the secret-rotation runbook. Plain-text `Secret` manifests
+must never be committed. Issue #188 replaces the current placeholders with
+deployable ciphertext / an external secret operator and adds a preflight check.

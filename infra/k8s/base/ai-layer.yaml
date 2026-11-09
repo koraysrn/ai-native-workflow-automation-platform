@@ -1,0 +1,45 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: awap-ai-layer
+  namespace: awap
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: awap-ai-layer
+  template:
+    metadata:
+      labels:
+        app: awap-ai-layer
+    spec:
+      containers:
+        - name: ai-layer
+          image: ghcr.io/awap/awap-ai-layer:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: AI_LAYER_BUILD_SHA
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['app.kubernetes.io/version']
+          readinessProbe:
+            httpGet:
+              path: /api/v1/health/ready
+              port: 8000
+          livenessProbe:
+            httpGet:
+              path: /api/v1/health/live
+              port: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: awap-ai-layer
+  namespace: awap
+spec:
+  selector:
+    app: awap-ai-layer
+  ports:
+    - port: 8000
+      targetPort: 8000
