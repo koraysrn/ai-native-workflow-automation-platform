@@ -1,0 +1,120 @@
+openapi: 3.1.0
+info:
+  title: AWAP AI Layer
+  version: 0.1.0
+  description: |
+    Versioned contract for the current AI layer capability.
+
+    Implemented today: liveness and readiness endpoints. Not implemented yet:
+    agent execution, workflow AI steps, RAG/vector stores and any LangChain or
+    LangGraph runtime endpoint. The dependencies are pinned and compatibility
+    tested, but they are not exposed through this API.
+servers:
+  - url: http://localhost:8000
+    description: Local AI layer
+paths:
+  /api/v1/health:
+    get:
+      operationId: health
+      summary: Liveness and build metadata
+      description: Returns the documented liveness contract for the AI layer.
+      responses:
+        "200":
+          description: The process is alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+              example:
+                status: UP
+                service: ai-layer
+                version: 0.1.0
+                build: local
+                python: 3.15.0
+  /api/v1/health/live:
+    get:
+      operationId: liveness
+      summary: Kubernetes liveness probe
+      description: Liveness only; it never probes downstream dependencies.
+      responses:
+        "200":
+          description: The process is alive.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+  /api/v1/health/ready:
+    get:
+      operationId: readiness
+      summary: Kubernetes readiness probe
+      description: |
+        Checks the configured dependency (`AI_LAYER_DEPENDENCY_URL`). When the
+        dependency is unreachable the endpoint returns 503 and status DOWN.
+      responses:
+        "200":
+          description: Every configured dependency is healthy.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+              example:
+                status: UP
+                service: ai-layer
+                version: 0.1.0
+                build: local
+                python: 3.15.0
+                dependency: none
+        "503":
+          description: A required dependency is unavailable.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ReadinessResponse"
+              example:
+                status: DOWN
+                service: ai-layer
+                version: 0.1.0
+                build: local
+                python: 3.15.0
+                dependency: ConnectError
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - status
+        - service
+        - version
+        - build
+        - python
+      properties:
+        status:
+          type: string
+          enum: [UP]
+        service:
+          type: string
+          const: ai-layer
+        version:
+          type: string
+          example: 0.1.0
+        build:
+          type: string
+          description: Build SHA from `AI_LAYER_BUILD_SHA`, or `local`.
+        python:
+          type: string
+          example: 3.15.0
+    ReadinessResponse:
+      allOf:
+        - $ref: "#/components/schemas/HealthResponse"
+        - type: object
+          additionalProperties: false
+          required:
+            - dependency
+          properties:
+            status:
+              type: string
+              enum: [UP, DOWN]
+            dependency:
+              type: string
+              description: "`none`, `HTTP <status>`, or the dependency exception name."
