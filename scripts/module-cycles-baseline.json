@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Documented backend module-cycle debt for issue #181. The module dependency check fails when a cycle group is not listed here (new cycle) or when a listed group no longer exists (stale baseline). Remove entries only after the cycle is actually broken.",
+  "allowedCycles": [
+    ["ai", "engine", "identity", "organization", "script", "task", "usage", "webhook", "workflow"]
+  ]
+}

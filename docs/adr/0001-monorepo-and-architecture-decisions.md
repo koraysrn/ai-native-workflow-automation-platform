@@ -33,6 +33,25 @@ developed safely and reproducibly.
 7. **Project language:** English for all code, comments, commit messages, and
    documentation.
 
+## Amendment 2026-11-09 — Backend boundary model (issue #181)
+
+The backend deliberately uses **package-level layers**, not split Maven layer
+modules. This resolves the contradiction with the module checklist:
+
+- No `awap-domain`, `awap-application`, `awap-infrastructure` or
+  `awap-interfaces` Maven modules are created.
+- `common` is the only shared Maven module; feature modules remain package trees
+  under `identity`.
+- `com.awap.<module>.domain` must not depend on `application`,
+  `infrastructure`, `interfaces`, Spring DI/web/security/transaction, or JPA and
+  Hibernate persistence machinery. Mapping annotations are a documented
+  exception (see [backend module boundaries](../backend-module-boundaries.md)).
+- Dependencies point inward: `interfaces/infrastructure -> application -> domain`.
+- ArchUnit enforces the rules, Maven Enforcer bans the split layer modules, and
+  the module dependency graph check fails on new cycles.
+- The target module graph, migration steps and the documented cycle baseline are
+  in [backend-module-boundaries.md](../backend-module-boundaries.md).
+
 ## Consequences
 
 - A single CI pipeline can build and test all layers.

@@ -40,6 +40,11 @@ jobs:
       - name: Build and test (includes Pact provider verification)
         run: mvn -B verify
         working-directory: backend
+      - name: Module dependency graph check
+        # Issue #181: fail on a new backend module cycle and on stale baseline entries.
+        run: |
+          node --test "scripts/test/module-dependency-graph.test.mjs"
+          node scripts/module-dependency-graph.mjs --check
       - name: Format check (Spotless)
         run: mvn -B spotless:check
         working-directory: backend

@@ -328,6 +328,24 @@
                                 <requireJavaVersion>
                                     <version>[25,26)</version>
                                 </requireJavaVersion>
+                                <requireMavenVersion>
+                                    <version>[3.6,)</version>
+                                </requireMavenVersion>
+                                <!-- Issue #181: ADR-001 adopts package-level layers. The split
+                                     layer Maven modules must never be introduced. -->
+                                <bannedDependencies>
+                                    <excludes>
+                                        <exclude>com.awap:awap-domain</exclude>
+                                        <exclude>com.awap:awap-application</exclude>
+                                        <exclude>com.awap:awap-infrastructure</exclude>
+                                        <exclude>com.awap:awap-interfaces</exclude>
+                                    </excludes>
+                                    <message>
+                                        ADR-001 adopts package-level layers; the split Maven layer modules
+                                        (awap-domain, awap-application, awap-infrastructure, awap-interfaces)
+                                        must not be introduced.
+                                    </message>
+                                </bannedDependencies>
                             </rules>
                         </configuration>
                     </execution>
