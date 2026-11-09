@@ -1,6 +1,6 @@
 {
   "name": "awap-monorepo",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "private": true,
   "description": "AI-Native Workflow Automation Platform monorepo",
   "packageManager": "pnpm@12.11.2",

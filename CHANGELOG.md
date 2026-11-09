@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4](https://github.com/koraysrn/ai-native-workflow-automation-platform/compare/v1.0.3...v1.0.4) (2026-11-09)
+
+
+### Bug Fixes
+
+* **ci:** gate on the shipped SBOM and pin the vulnerable transitives ([#239](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/239)) ([eb56652](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/eb5665242d95513bcd896c8d096410a2a9e796e4))
+* **ci:** verify the Argo CD CLI against the release checksum manifest ([#238](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/238)) ([82d35aa](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/82d35aa56f698d957ee2777c8c4f99e5e8fde4e4))
+
 ## [1.0.3](https://github.com/koraysrn/ai-native-workflow-automation-platform/compare/v1.0.2...v1.0.3) (2026-11-09)
 
 
