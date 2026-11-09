@@ -5,6 +5,14 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.3](https://github.com/koraysrn/ai-native-workflow-automation-platform/compare/v1.0.2...v1.0.3) (2026-11-09)
+
+
+### Bug Fixes
+
+* **k8s:** make the HPA effective with requests, behavior and PDBs ([#235](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/235)) ([13dadff](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/13dadff4edf8dc8e69bbba2571073ec7c7fca12a))
+* **security:** deliver secrets from Vault with External Secrets ([#236](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/236)) ([e6cbf75](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/e6cbf75d81d270ecdb74066912b548b3561a70a5))
+
 ## [1.0.2](https://github.com/koraysrn/ai-native-workflow-automation-platform/compare/v1.0.1...v1.0.2) (2026-11-09)
 
 
