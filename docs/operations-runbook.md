@@ -112,7 +112,7 @@ incident ticket. The target is RPO ≤ 24h / RTO ≤ 4h.
 
 ## O5 — Secrets management
 
-- [`base/secrets.yaml`](../infra/k8s/base/secrets.yaml) contains only SealedSecrets; plain text lives in Vault.
+- [`base/external-secrets.yaml`](../infra/k8s/base/external-secrets.yaml) syncs Vault into Kubernetes via External Secrets; plain text never enters Git. Rotation: [`secret-rotation.md`](secret-rotation.md).
 - [`check-secrets.sh`](../scripts/check-secrets.sh) gates the repo: no plain-text `stringData`,
   no committed password/token literals, and a gitleaks full-history scan when available.
 - Secret store unreachable policy: **prod fails fast** (Vault enabled and required), **dev degrades**

@@ -83,16 +83,54 @@ patches:
           - hosts: [dev.awap.local]
             secretName: awap-dev-tls
   - target:
-      kind: SealedSecret
+      kind: SecretStore
+      name: awap-vault
+    patch: |-
+      - op: replace
+        path: /spec/provider/vault/auth/kubernetes/role
+        value: awap-dev
+  - target:
+      kind: ExternalSecret
       name: awap-backend-secrets
     patch: |-
       - op: replace
-        path: /spec/template/metadata/namespace
-        value: awap-dev
+        path: /spec/data/0/remoteRef/key
+        value: awap-dev/backend
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: awap-dev/backend
+      - op: replace
+        path: /spec/data/2/remoteRef/key
+        value: awap-dev/backend
+      - op: replace
+        path: /spec/data/3/remoteRef/key
+        value: awap-dev/backend
+      - op: replace
+        path: /spec/data/4/remoteRef/key
+        value: awap-dev/backend
+      - op: replace
+        path: /spec/data/5/remoteRef/key
+        value: awap-dev/backend
   - target:
-      kind: SealedSecret
+      kind: ExternalSecret
       name: awap-infra-secrets
     patch: |-
       - op: replace
-        path: /spec/template/metadata/namespace
-        value: awap-dev
+        path: /spec/data/0/remoteRef/key
+        value: awap-dev/infra
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: awap-dev/infra
+  - target:
+      kind: ExternalSecret
+      name: awap-dr-secrets
+    patch: |-
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: awap-dev/dr
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: awap-dev/dr
+      - op: replace
+        path: /spec/data/2/remoteRef/key
+        value: awap-dev/dr

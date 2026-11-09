@@ -83,16 +83,54 @@ patches:
           - hosts: [staging.awap.local]
             secretName: awap-staging-tls
   - target:
-      kind: SealedSecret
+      kind: SecretStore
+      name: awap-vault
+    patch: |-
+      - op: replace
+        path: /spec/provider/vault/auth/kubernetes/role
+        value: awap-staging
+  - target:
+      kind: ExternalSecret
       name: awap-backend-secrets
     patch: |-
       - op: replace
-        path: /spec/template/metadata/namespace
-        value: awap-staging
+        path: /spec/data/0/remoteRef/key
+        value: awap-staging/backend
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: awap-staging/backend
+      - op: replace
+        path: /spec/data/2/remoteRef/key
+        value: awap-staging/backend
+      - op: replace
+        path: /spec/data/3/remoteRef/key
+        value: awap-staging/backend
+      - op: replace
+        path: /spec/data/4/remoteRef/key
+        value: awap-staging/backend
+      - op: replace
+        path: /spec/data/5/remoteRef/key
+        value: awap-staging/backend
   - target:
-      kind: SealedSecret
+      kind: ExternalSecret
       name: awap-infra-secrets
     patch: |-
       - op: replace
-        path: /spec/template/metadata/namespace
-        value: awap-staging
+        path: /spec/data/0/remoteRef/key
+        value: awap-staging/infra
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: awap-staging/infra
+  - target:
+      kind: ExternalSecret
+      name: awap-dr-secrets
+    patch: |-
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: awap-staging/dr
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: awap-staging/dr
+      - op: replace
+        path: /spec/data/2/remoteRef/key
+        value: awap-staging/dr

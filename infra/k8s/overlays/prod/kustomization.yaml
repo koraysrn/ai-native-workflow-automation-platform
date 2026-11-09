@@ -104,16 +104,54 @@ patches:
           - hosts: [awap.example.com]
             secretName: awap-prod-tls
   - target:
-      kind: SealedSecret
+      kind: SecretStore
+      name: awap-vault
+    patch: |-
+      - op: replace
+        path: /spec/provider/vault/auth/kubernetes/role
+        value: awap-prod
+  - target:
+      kind: ExternalSecret
       name: awap-backend-secrets
     patch: |-
       - op: replace
-        path: /spec/template/metadata/namespace
-        value: awap-prod
+        path: /spec/data/0/remoteRef/key
+        value: awap-prod/backend
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: awap-prod/backend
+      - op: replace
+        path: /spec/data/2/remoteRef/key
+        value: awap-prod/backend
+      - op: replace
+        path: /spec/data/3/remoteRef/key
+        value: awap-prod/backend
+      - op: replace
+        path: /spec/data/4/remoteRef/key
+        value: awap-prod/backend
+      - op: replace
+        path: /spec/data/5/remoteRef/key
+        value: awap-prod/backend
   - target:
-      kind: SealedSecret
+      kind: ExternalSecret
       name: awap-infra-secrets
     patch: |-
       - op: replace
-        path: /spec/template/metadata/namespace
-        value: awap-prod
+        path: /spec/data/0/remoteRef/key
+        value: awap-prod/infra
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: awap-prod/infra
+  - target:
+      kind: ExternalSecret
+      name: awap-dr-secrets
+    patch: |-
+      - op: replace
+        path: /spec/data/0/remoteRef/key
+        value: awap-prod/dr
+      - op: replace
+        path: /spec/data/1/remoteRef/key
+        value: awap-prod/dr
+      - op: replace
+        path: /spec/data/2/remoteRef/key
+        value: awap-prod/dr

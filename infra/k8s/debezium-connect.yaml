@@ -10,7 +10,8 @@ metadata:
     app.kubernetes.io/name: awap-connect
 type: Opaque
 stringData:
-  # Placeholder only: production values are injected by SealedSecrets/Vault (see runbook O5).
+  # Placeholder only: production values are injected by External Secrets/Vault
+  # (see docs/secret-rotation.md and runbook O5).
   DB_USER: replace-me
   DB_PASSWORD: replace-me
 ---
