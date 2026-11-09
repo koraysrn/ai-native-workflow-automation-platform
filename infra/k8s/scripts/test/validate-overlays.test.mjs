@@ -86,10 +86,14 @@ function docsForEnv(env) {
       data: { ENVIRONMENT: "dev", FEATURE_AI_STEPS: "false" },
     },
     {
-      apiVersion: "bitnami.com/v1alpha1",
-      kind: "SealedSecret",
+      apiVersion: "external-secrets.io/v1",
+      kind: "ExternalSecret",
       metadata: { name: "awap-backend-secrets", namespace: "awap-dev" },
-      spec: { template: { metadata: { namespace: "awap-dev" } } },
+      spec: {
+        secretStoreRef: { name: "awap-vault", kind: "SecretStore" },
+        target: { name: "awap-backend-secrets" },
+        data: [],
+      },
     },
   ];
   for (const doc of docs) {
@@ -116,7 +120,45 @@ function docsForEnv(env) {
   }
   docs[8].data.ENVIRONMENT = env;
   docs[8].data.FEATURE_AI_STEPS = expectation.featureAi;
-  docs[9].spec.template.metadata.namespace = expectation.namespace;
+  docs[9].spec.data = [
+    "db-url",
+    "db-user",
+    "db-password",
+    "jwt-secret",
+    "minio-access-key",
+    "minio-secret-key",
+  ].map((key) => ({
+    secretKey: key,
+    remoteRef: { key: `awap-${env}/backend`, property: key },
+  }));
+  docs.push({
+    apiVersion: "external-secrets.io/v1",
+    kind: "ExternalSecret",
+    metadata: { name: "awap-infra-secrets", namespace: expectation.namespace },
+    spec: {
+      data: ["minio-root-user", "minio-root-password"].map((key) => ({
+        secretKey: key,
+        remoteRef: { key: `awap-${env}/infra`, property: key },
+      })),
+    },
+  });
+  docs.push({
+    apiVersion: "external-secrets.io/v1",
+    kind: "ExternalSecret",
+    metadata: { name: "awap-dr-secrets", namespace: expectation.namespace },
+    spec: {
+      data: ["minio-endpoint", "minio-access-key", "minio-secret-key"].map((key) => ({
+        secretKey: key,
+        remoteRef: { key: `awap-${env}/dr`, property: key },
+      })),
+    },
+  });
+  docs.push({
+    apiVersion: "external-secrets.io/v1",
+    kind: "SecretStore",
+    metadata: { name: "awap-vault", namespace: expectation.namespace },
+    spec: {},
+  });
   for (const index of [1, 2, 3]) {
     const podSpec = docs[index].spec.template.spec;
     podSpec.topologySpreadConstraints = [

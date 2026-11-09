@@ -3,9 +3,10 @@
 # Plain-text secret gate (issue #98, "secrets" item).
 #
 # Fails the build when a plain-text secret leaks into the repository. The primary
-# defence is SealedSecrets in infra/k8s/base/secrets.yaml; this script is the
-# defense-in-depth check that prod configuration must come from Vault / a secret
-# store rather than from committed plain text.
+# delivery mechanism is External Secrets + Vault
+# (infra/k8s/base/external-secrets.yaml); this script is the defense-in-depth
+# check that prod configuration must come from Vault rather than from committed
+# plain text.
 #
 # Usage:
 #   scripts/check-secrets.sh
@@ -17,7 +18,7 @@ cd "$(dirname "$0")/.."
 
 FAILED=0
 
-# 1. SealedSecret manifests must never contain raw `stringData` (plain text).
+# 1. Secret manifests must never contain raw `stringData` (plain text).
 if grep -rEn '^\s+stringData:' infra/k8s 2>/dev/null; then
   echo "check-secrets: FAIL plain-text stringData found in Kubernetes manifests" >&2
   FAILED=1

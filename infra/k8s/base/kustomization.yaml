@@ -9,7 +9,7 @@ resources:
   - ingress.yaml
   - pg-backup-cronjob.yaml
   - minio-replication-cronjob.yaml
-  - secrets.yaml
+  - external-secrets.yaml
 images:
   - name: ghcr.io/awap/awap-backend
     newTag: latest

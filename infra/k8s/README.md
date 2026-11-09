@@ -16,7 +16,7 @@ infra/k8s/
 │   ├── ingress.yaml
 │   ├── pg-backup-cronjob.yaml
 │   ├── minio-replication-cronjob.yaml
-│   ├── secrets.yaml
+│   ├── external-secrets.yaml
 │   └── kustomization.yaml
 ├── overlays/
 │   ├── dev/              # awap-dev, dev.awap.local, 1 replica
@@ -57,8 +57,9 @@ node infra/k8s/scripts/validate-overlays.mjs --kubeconform
 ```
 
 `kubectl kustomize infra/k8s/overlays/dev` renders an overlay manually. CI runs
-`kustomize build` and `kubeconform` for all three overlays, then applies the
-non-secret documents to a throwaway kind cluster with a server-side dry run.
+`kustomize build`, `kubeconform`, the secret-key preflight for all three
+overlays, then installs metrics-server and External Secrets in a throwaway kind
+cluster and applies the dev overlay to verify the secret-delivery resources.
 
 ## Promotion
 
@@ -72,7 +73,18 @@ non-secret documents to a throwaway kind cluster with a server-side dry run.
 
 ## Secrets
 
-Secrets are delivered through the mechanism documented in the base
-`secrets.yaml` and the secret-rotation runbook. Plain-text `Secret` manifests
-must never be committed. Issue #188 replaces the current placeholders with
-deployable ciphertext / an external secret operator and adds a preflight check.
+Secrets are delivered by the **External Secrets Operator (ESO) + Vault** in
+[`base/external-secrets.yaml`](base/external-secrets.yaml). Vault is the only
+source of truth; the committed manifests contain no plaintext and no placeholder
+ciphertext. `SecretStore` authenticates with the `awap-external-secrets` service
+account and the per-environment `awap-<env>` Vault role.
+
+The pre-deploy check proves every workload `secretKeyRef` is provided:
+
+```bash
+node infra/k8s/scripts/check-secret-keys.mjs
+```
+
+Rotation, bootstrap and rollback are documented in
+[`docs/secret-rotation.md`](../../docs/secret-rotation.md). Plain-text `Secret`
+manifests must never be committed.

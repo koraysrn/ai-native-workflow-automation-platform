@@ -525,6 +525,10 @@ jobs:
         run: node --test "infra/k8s/scripts/test/*.test.mjs"
       - name: Render and validate every overlay
         run: node infra/k8s/scripts/validate-overlays.mjs --kubeconform
+      - name: Preflight every referenced secret key
+        # Issue #188: fail before deploy when a workload references a key that
+        # no ExternalSecret provides.
+        run: node infra/k8s/scripts/check-secret-keys.mjs
       - name: Create kind cluster
         uses: helm/kind-action@v1
         with:
@@ -550,6 +554,22 @@ jobs:
           exit 1
       - name: Verify metrics-server precondition
         run: node infra/k8s/scripts/validate-overlays.mjs --metrics
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+      - name: Install External Secrets Operator
+        run: |
+          helm repo add external-secrets https://charts.external-secrets.io
+          helm repo update
+          helm upgrade --install external-secrets external-secrets/external-secrets \
+            --namespace external-secrets --create-namespace \
+            --version 2.14.0 --set installCRDs=true --wait --timeout 5m
+          kubectl -n external-secrets rollout status deployment/external-secrets --timeout=180s
+      - name: Apply the dev overlay with the ESO CRDs present
+        run: kubectl kustomize infra/k8s/overlays/dev | kubectl apply -f -
+      - name: Verify secret delivery resources
+        run: |
+          kubectl -n awap-dev get secretstore awap-vault
+          kubectl -n awap-dev get externalsecret awap-backend-secrets awap-infra-secrets awap-dr-secrets
 
   branch-protection:
     name: Branch Protection

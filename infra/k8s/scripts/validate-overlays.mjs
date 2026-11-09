@@ -184,11 +184,26 @@ export function validateOverlay(env, text) {
     `feature flag FEATURE_AI_STEPS is ${flags?.data?.FEATURE_AI_STEPS}, expected ${expectation.featureAi}`,
   );
 
-  const sealed = findByKindAndName(docs, "SealedSecret", "awap-backend-secrets");
-  check(
-    sealed?.spec?.template?.metadata?.namespace === expectation.namespace,
-    `SealedSecret target namespace is ${sealed?.spec?.template?.metadata?.namespace}, expected ${expectation.namespace}`,
-  );
+  const store = findByKindAndName(docs, "SecretStore", "awap-vault");
+  check(store, "SecretStore awap-vault is missing");
+  for (const name of [
+    "awap-backend-secrets",
+    "awap-infra-secrets",
+    "awap-dr-secrets",
+  ]) {
+    const external = findByKindAndName(docs, "ExternalSecret", name);
+    check(external, `ExternalSecret ${name} is missing`);
+    check(
+      (external?.spec?.data?.length ?? 0) > 0,
+      `ExternalSecret ${name} has no explicit data entries`,
+    );
+    check(
+      external?.spec?.data?.every((entry) =>
+        String(entry.remoteRef?.key ?? "").startsWith(`awap-${env}/`),
+      ),
+      `ExternalSecret ${name} does not use the awap-${env} Vault path`,
+    );
+  }
 
   return { errors, docs };
 }
@@ -275,7 +290,12 @@ export function main(
         }
       }
       const nonSecret = docs
-        .filter((doc) => doc.kind !== "SealedSecret")
+        .filter(
+          (doc) =>
+            doc.kind !== "ExternalSecret" &&
+            doc.kind !== "SecretStore" &&
+            doc.kind !== "ClusterSecretStore",
+        )
         .map((doc) => stringify(doc))
         .join("---\n");
       const apply = exec("kubectl", ["apply", "--dry-run=server", "-f", "-"], {
