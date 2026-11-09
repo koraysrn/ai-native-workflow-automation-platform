@@ -19,9 +19,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
         with:
           node-version: 24
+          cache: pnpm
+      - name: Install root tooling (yaml)
+        run: pnpm install --frozen-lockfile
       - name: Scenario and retry-model unit tests
         run: node --test "load-test/test/*.test.mjs"
       - name: Validate the k6 script bundles
