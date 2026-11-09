@@ -948,13 +948,19 @@ Grafana/Prometheus dashboard because Trivy runs in GitHub Actions and has no Pro
 target; the decision and alternatives are in
 [ADR-0005](adr/0005-jackson-bom-override.md#trivy-regression-signal-issue-162).
 
+**Scan inputs.** Maven is scanned through the aggregate CycloneDX SBOM
+(`backend/target/bom.json`), not through `pom.xml`: the static pom parser cannot resolve the Spring
+Boot BOM imports and reported `jackson-databind 2.19.1` for a build that resolves `2.21.7`. The
+filesystem scan skips `**/pom.xml` and covers everything else (for example `ai-layer/uv.lock`); the
+two reports are merged into `trivy-results.json` before the gate runs.
+
 **Where the signal appears.**
 
 | Surface | Contents |
 |---|---|
 | Job summary (`$GITHUB_STEP_SUMMARY`) | Result, gate severities, CVE counts by CRITICAL/HIGH/MEDIUM/LOW/UNKNOWN, fixable counts and the gated findings |
 | Annotations | One `::error` per gated finding, pointing at the manifest/lockfile |
-| Artifact | `trivy-report` / `trivy-results.json`, retained 30 days |
+| Artifact | `trivy-report` / `trivy-results.json` (SBOM + filesystem merged), retained 30 days |
 | Tracking issue | Opened or updated after two consecutive failing `main` runs; closed by the first green `main` run |
 
 **When the alarm fires.**
@@ -965,12 +971,17 @@ target; the decision and alternatives are in
 
 **Triage.**
 1. Open the failing run → job summary → `trivy-report` artifact. Identify the CVE, severity,
-   package, installed/fixed version and target.
+   package, installed/fixed version and target. A `Java` target comes from the SBOM, so the fix
+   belongs in `backend/pom.xml` (`dependencyManagement` or a BOM override), not in a `.trivyignore`
+   entry.
 2. Reproduce locally with the same scan type and the `Trivy.Version` recorded in the artifact
    (`0.70.0` at the time of writing):
    ```sh
+   cd backend && mvn -B org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom && cd ..
    docker run --rm -v "$PWD:/work" -w /work aquasec/trivy:0.70.0 \
-     fs --severity CRITICAL,HIGH --format table .
+     sbom --severity CRITICAL,HIGH --format table backend/target/bom.json
+   docker run --rm -v "$PWD:/work" -w /work aquasec/trivy:0.70.0 \
+     fs --severity CRITICAL,HIGH --skip-files '**/pom.xml' --format table .
    ```
 3. Upgrade or pin the dependency to a fixed version. Keep the change in a dedicated PR and attach
    the Trivy result to the PR description.

@@ -10,14 +10,17 @@ OUT="$(mktemp)"
 LOG="$(mktemp)"
 trap 'rm -f "$OUT" "$LOG"' EXIT
 
-# A transient repository/network error used to fail the job with no output,
-# because the Maven log was sent to /dev/null. Retry once and surface the log on
-# a real failure so the next flake is diagnosable.
+# `dependency:list` is a standalone goal: it does not build the reactor, so the
+# sibling `awap-common` artifact is only resolvable when package ran in the same
+# invocation. Without that the check failed with
+# "Could not find artifact com.awap:awap-common:jar:0.0.1-SNAPSHOT" depending on
+# leftover build output. Package (skip tests) and list in one invocation, retry
+# once for transient repository errors, and surface the Maven log on failure.
 attempts="${JACKSON_CHECK_ATTEMPTS:-2}"
 for attempt in $(seq 1 "$attempts"); do
   if (
     cd "$BACKEND_DIR"
-    mvn -B -pl identity -am dependency:list \
+    mvn -B -pl identity -am -DskipTests package dependency:list \
       -DincludeGroupIds=com.fasterxml.jackson.core,tools.jackson.core \
       -DoutputFile="$OUT" >"$LOG" 2>&1
   ); then

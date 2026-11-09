@@ -41,6 +41,14 @@ overridden) or be removed too early (CVE reintroduced).
      [`scripts/trivy-regression-notify.mjs`](../../scripts/trivy-regression-notify.mjs).
 
    OWASP Dependency Check remains a separate gate; Trivy stays merge-blocking.
+6. Scan the **shipped dependency graph, not `pom.xml`**. A pom is not a lock file: Trivy's static
+   parser cannot resolve the Spring Boot BOM imports, so it reported `jackson-databind 2.19.1` for a
+   build that resolves `2.21.7` and missed transitive components. The CI job therefore generates the
+   aggregate CycloneDX SBOM (`makeAggregateBom`) and scans that, while the filesystem scan skips
+   `**/pom.xml`.
+7. Keep the remaining transitive floors in `backend/pom.xml` next to the Jackson overrides:
+   guava `33.7.2-jre`, snappy-java `1.1.10.9`, lz4-java `1.11.4` and tomcat-embed `11.0.25`. Each
+   floor is visible in the SBOM, so the Trivy gate fails if one of them disappears or regresses.
 
 ## Trivy regression signal (issue #162)
 
