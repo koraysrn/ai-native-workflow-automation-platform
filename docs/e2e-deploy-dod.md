@@ -20,6 +20,14 @@ proving a real request end to end.
 3. Argo CD applies the manifests in [`infra/k8s`](../infra/k8s) (Kustomize) to
    the `dev` cluster.
 
+The Argo CD CLI is installed from the release named by `ARGOCD_VERSION` and its
+SHA-256 is checked against the release's `cli_checksums.txt` asset before use.
+The `Deploy to Staging` job needs the `ARGOCD_SERVER` and `ARGOCD_AUTH_TOKEN`
+secrets. Until both exist, the run emits an `Argo CD not configured` warning
+annotation and skips the sync (the images are still built and pushed), so the
+acceptance evidence below stays a manual checklist instead of being implied by
+a green pipeline.
+
 ## Acceptance evidence
 
 - [ ] The `v*` tag exists and the CD run reports `argocd app wait awap --health`
