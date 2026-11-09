@@ -397,9 +397,11 @@ jobs:
       - name: Resolve the SonarQube project key
         if: env.SONAR_SKIP != 'true'
         run: |
-          project_key="$(sed -n 's/^sonar\.projectKey=//p' backend/sonar-project.properties | head -1)"
+          # The SonarScanner for Maven reads analysis parameters from the pom
+          # <properties>, so the key is resolved from there and never duplicated.
+          project_key="$(sed -n 's:.*<sonar\.projectKey>\(.*\)</sonar\.projectKey>.*:\1:p' backend/pom.xml | head -1)"
           if [ -z "$project_key" ]; then
-            echo "::error title=SonarQube::backend/sonar-project.properties has no sonar.projectKey."
+            echo "::error title=SonarQube::backend/pom.xml has no sonar.projectKey property."
             exit 1
           fi
           echo "SONAR_PROJECT_KEY=$project_key" >> "$GITHUB_ENV"
