@@ -45,6 +45,10 @@ jobs:
         run: |
           node --test "scripts/test/module-dependency-graph.test.mjs"
           node scripts/module-dependency-graph.mjs --check
+      - name: JaCoCo report guard tests
+        # Issue #182: an empty coverage report must fail instead of suppressing
+        # SonarQube's coverage signal.
+        run: node --test "scripts/test/check-jacoco-report.test.mjs"
       - name: Format check (Spotless)
         run: mvn -B spotless:check
         working-directory: backend
@@ -346,23 +350,80 @@ jobs:
   sonarqube:
     name: Code Quality
     runs-on: ubuntu-latest
+    # Issue #182: this is a required check. Missing secrets, a missing coverage
+    # report or a failed quality gate must fail the PR, never silently skip.
+    env:
+      SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
+      SONAR_BOOTSTRAP: ${{ vars.SONAR_BOOTSTRAP }}
+      SONAR_PROJECT_KEY: awap
+      SONAR_MAVEN_PLUGIN_VERSION: 5.8.0.7211
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: Require SonarQube secrets
+        run: |
+          if [ -z "$SONAR_TOKEN" ] || [ -z "$SONAR_HOST_URL" ]; then
+            if [ "$SONAR_BOOTSTRAP" = "true" ]; then
+              echo "::warning title=SonarQube bootstrap::SONAR_TOKEN/SONAR_HOST_URL are not configured. Analysis is skipped ONLY because the maintainer-only SONAR_BOOTSTRAP repository variable is true. Remove that variable as soon as the secrets exist."
+              echo "SONAR_SKIP=true" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            missing=0
+            if [ -z "$SONAR_TOKEN" ]; then
+              echo "::error title=SonarQube::SONAR_TOKEN is required. Add the repository secret before merging."
+              missing=1
+            fi
+            if [ -z "$SONAR_HOST_URL" ]; then
+              echo "::error title=SonarQube::SONAR_HOST_URL is required (for example https://sonarcloud.io)."
+              missing=1
+            fi
+            echo "See docs/sonarqube.md for bootstrap and local-scanner instructions."
+            exit "$missing"
+          fi
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: "25"
-      - name: SonarQube scan
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-        run: |
-          if [ -z "$SONAR_TOKEN" ] || [ -z "$SONAR_HOST_URL" ]; then
-            echo "SonarQube secrets are not configured; skipping analysis (set SONAR_TOKEN and SONAR_HOST_URL to enable)."
-            exit 0
-          fi
-          mvn -B sonar:sonar -Dsonar.projectKey=awap -Dsonar.host.url="$SONAR_HOST_URL"
+          cache: maven
+      - name: Cache SonarQube scanner
+        uses: actions/cache@v6
+        with:
+          path: ~/.sonar/cache
+          key: sonar-${{ runner.os }}-${{ env.SONAR_MAVEN_PLUGIN_VERSION }}
+      - name: Test and generate JaCoCo coverage
+        if: env.SONAR_SKIP != 'true'
+        run: mvn -B -pl identity -am test jacoco:report
         working-directory: backend
+      - name: Verify coverage reports are present and non-empty
+        if: env.SONAR_SKIP != 'true'
+        run: node scripts/check-jacoco-report.mjs backend/identity/target/site/jacoco/jacoco.xml
+      - name: SonarQube analysis with blocking quality gate
+        if: env.SONAR_SKIP != 'true'
+        working-directory: backend
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_BASE: ${{ github.event.pull_request.base.ref }}
+          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
+        run: |
+          EXTRA=()
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            EXTRA+=("-Dsonar.pullrequest.key=$PR_NUMBER")
+            EXTRA+=("-Dsonar.pullrequest.base=$PR_BASE")
+            EXTRA+=("-Dsonar.pullrequest.branch=$PR_BRANCH")
+            EXTRA+=("-Dsonar.scm.revision=$GITHUB_SHA")
+          fi
+          mvn -B "org.sonarsource.scanner.maven:sonar-maven-plugin:${SONAR_MAVEN_PLUGIN_VERSION}:sonar" \
+            -Dsonar.projectKey="$SONAR_PROJECT_KEY" \
+            -Dsonar.host.url="$SONAR_HOST_URL" \
+            -Dsonar.token="$SONAR_TOKEN" \
+            -Dsonar.qualitygate.wait=true \
+            "${EXTRA[@]}"
+      - name: Publish the quality-gate link
+        if: always() && env.SONAR_SKIP != 'true'
+        run: |
+          echo "::notice title=SonarQube quality gate::${SONAR_HOST_URL}/dashboard?id=${SONAR_PROJECT_KEY}"
 
   docker-build:
     name: Docker Build
