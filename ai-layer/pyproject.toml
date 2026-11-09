@@ -6,6 +6,7 @@ requires-python = ">=3.15.0,<3.16"
 dependencies = [
     "fastapi>=0.135",
     "uvicorn>=0.35",
+    "httpx>=0.28",
     "numpy>=2.3",
     "orjson>=3.11",
     "langchain==1.4.5",
@@ -14,8 +15,14 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "pytest>=8",
+    "pyyaml>=6",
     "ruff>=0.14",
 ]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
 
 [tool.uv]
 # Force a certifi release that fixes GHSA-6q48-6c7w-9gw2 (bundled compromised root CAs).

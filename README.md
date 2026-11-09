@@ -23,7 +23,7 @@ AWAP digitizes operational processes end to end:
 | **Multi-tenancy** | Shared database with PostgreSQL row-level security; every request is tenant-scoped and isolated. |
 | **Enterprise security** | JWT authentication with rotating refresh tokens, RBAC permissions, CSRF protection, HttpOnly cookies, rate limiting, ClamAV file scanning and Vault-backed secrets. |
 | **Event-driven engine** | Transactional outbox to Kafka with DLQ and retry, so workflow events are delivered reliably and in order. |
-| **Agentic AI layer** | A FastAPI service ready for LangChain/LangGraph agents that can execute AI steps inside workflows. |
+| **AI layer scaffold** | A FastAPI health/readiness service. LangChain/LangGraph are pinned and compatibility-tested, but no agent or AI execution endpoint exists yet. |
 | **Observability** | Prometheus metrics, OpenTelemetry tracing, structured JSON logs with correlation IDs, and Grafana dashboards. |
 
 ---
@@ -51,7 +51,7 @@ flowchart LR
 |---|---|---|
 | `backend/` | Identity, organization, workflow definitions, engine, tasks, forms, files | Java 25, Spring Boot 4.1.1, Maven |
 | `frontend/` | Workflow designer, form builder, task/approval screens, admin | Next.js 16, TypeScript 7.0.2, TanStack Query, React Flow, Tailwind |
-| `ai-layer/` | AI execution and agentic steps | Python 3.15.0, FastAPI, LangChain/LangGraph |
+| `ai-layer/` | Health/readiness contract; future AI execution | Python 3.15.0, FastAPI, pinned LangChain/LangGraph |
 | `infra/` | Local stack, Kubernetes manifests, observability | Docker Compose, Kafka + Schema Registry, PostgreSQL, MinIO, OpenSearch, Vault, Prometheus, Grafana |
 
 The authoritative compatibility matrix is maintained in
@@ -65,7 +65,7 @@ The authoritative compatibility matrix is maintained in
 .
 ├── backend/       # Java 25 + Spring Boot 4.1.1 (Maven multi-module: common, identity)
 ├── frontend/      # Next.js 16 + TypeScript (pnpm)
-├── ai-layer/      # Python + FastAPI (agentic AI execution)
+├── ai-layer/      # Python + FastAPI (health/readiness contract today)
 ├── infra/         # Docker Compose, Kubernetes manifests, observability
 ├── docs/          # intent, spec, Architecture Decision Records
 ├── .github/       # CI/CD workflows, PR template, Dependabot
@@ -139,6 +139,28 @@ uv run uvicorn app.main:app --reload
 
 ---
 
+## AI layer capabilities
+
+The AI layer is intentionally small today. The table below is the single
+capability truth; the versioned contract is
+[`docs/openapi/ai-layer-openapi.yaml`](docs/openapi/ai-layer-openapi.yaml).
+
+| Capability | Status |
+|---|---|
+| `GET /api/v1/health` (liveness + version/build metadata) | Implemented |
+| `GET /api/v1/health/live` | Implemented |
+| `GET /api/v1/health/ready` (503 when a configured dependency is down) | Implemented |
+| LangChain 1.4.5 / LangGraph 1.2.15 on Python 3.15 | Pinned, compatibility-tested, not exposed |
+| Workflow AI execution endpoint | Not implemented |
+| Agent/tool runtime | Not implemented |
+| RAG / vector store | Not implemented |
+
+The backend does not call the AI layer yet. See
+[`ai-layer/README.md`](ai-layer/README.md) and
+[`ai-layer/COMPATIBILITY.md`](ai-layer/COMPATIBILITY.md).
+
+---
+
 ## Quality gates
 
 Every pull request passes automated checks: build and tests, ArchUnit/Checkstyle/
@@ -152,6 +174,9 @@ tests, coverage gates and SBOM generation.
 - [`docs/intent.md`](docs/intent.md) — product intent and goals
 - [`docs/spec.md`](docs/spec.md) — technical specification
 - [`docs/adr/`](docs/adr/) — Architecture Decision Records
+- [`docs/openapi/ai-layer-openapi.yaml`](docs/openapi/ai-layer-openapi.yaml) — versioned AI layer contract
+- [`docs/accessibility.md`](docs/accessibility.md) — accessibility coverage matrix
+- [`docs/csp.md`](docs/csp.md) — Content Security Policy
 - [`CLAUDE.md`](CLAUDE.md) — project constitution (binding rules)
 
 ## License

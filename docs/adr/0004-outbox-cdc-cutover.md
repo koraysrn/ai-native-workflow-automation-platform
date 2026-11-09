@@ -33,8 +33,8 @@ the batch size; a sustained write burst can therefore exceed the relay's drain r
 
 ## Compliance
 
-- Triggers are implemented once in [`load-test/lib/cdc-triggers.mjs`](../load-test/lib/cdc-triggers.mjs)
+- Triggers are implemented once in [`load-test/lib/cdc-triggers.mjs`](../../load-test/lib/cdc-triggers.mjs)
   and used by the benchmark and tests.
 - The procedure, reconciliation queries and rollback are in
   [`cdc-cutover-runbook.md`](../cdc-cutover-runbook.md).
-- Alert rules live in [`infra/prometheus/cdc-alert-rules.yml`](../infra/prometheus/cdc-alert-rules.yml).
+- Alert rules live in [`infra/prometheus/cdc-alert-rules.yml`](../../infra/prometheus/cdc-alert-rules.yml).

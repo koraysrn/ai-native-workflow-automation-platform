@@ -278,6 +278,10 @@ jobs:
       - name: Pilot compatibility check
         run: uv run python compat_check.py
         working-directory: ai-layer
+      - name: Health contract tests
+        # Issue #185: documented paths, status/body and version must match the app.
+        run: uv run pytest
+        working-directory: ai-layer
 
   trivy:
     name: Vulnerability Scan
@@ -472,6 +476,11 @@ jobs:
           "scripts/test/apply-branch-protection.test.mjs"
       - name: Dashboard and alert rule tests
         run: node --test "infra/grafana/test/*.test.mjs" "infra/prometheus/test/*.test.mjs"
+      - name: Documentation link tests
+        # Issue #185: every relative Markdown link and anchor must resolve.
+        run: node --test "scripts/test/check-doc-links.test.mjs"
+      - name: Documentation link check
+        run: node scripts/check-doc-links.mjs
       - name: Validate Prometheus rules
         run: |
           docker run --rm -v "$PWD/infra/prometheus:/etc/prometheus" \
