@@ -1,15 +1,18 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 resources:
-  - namespace.yaml
   - backend.yaml
   - frontend.yaml
+  - ai-layer.yaml
   - hpa.yaml
   - ingress.yaml
   - pg-backup-cronjob.yaml
   - minio-replication-cronjob.yaml
+  - secrets.yaml
 images:
-  - name: awap-backend
+  - name: ghcr.io/awap/awap-backend
     newTag: latest
-  - name: awap-frontend
+  - name: ghcr.io/awap/awap-frontend
+    newTag: latest
+  - name: ghcr.io/awap/awap-ai-layer
     newTag: latest

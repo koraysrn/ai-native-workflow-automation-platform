@@ -90,10 +90,10 @@ does not leave `awap-node-timeout-*` threads behind.
 ## O4 — Backup & disaster recovery
 
 - PostgreSQL: nightly logical dumps (`pg_dump`) via
-  [`pg-backup-cronjob.yaml`](../infra/k8s/pg-backup-cronjob.yaml) + WAL archiving enabled in
+  [`base/pg-backup-cronjob.yaml`](../infra/k8s/base/pg-backup-cronjob.yaml) + WAL archiving enabled in
   [`docker-compose.yml`](../infra/docker-compose.yml) (`archive_mode=on`). RPO ≤ 24h, RTO measured.
 - MinIO: object versioning is enabled by `FileService`; the
-  [`minio-replication-cronjob.yaml`](../infra/k8s/minio-replication-cronjob.yaml) mirrors
+  [`base/minio-replication-cronjob.yaml`](../infra/k8s/base/minio-replication-cronjob.yaml) mirrors
   document/file/backup buckets to a DR endpoint.
 - Restore drill: [`restore-drill.sh`](../scripts/restore-drill.sh) restores the latest dump into a
   fresh container, verifies Flyway (`flyway_schema_history`) matches, and prints the measured RTO.
@@ -112,7 +112,7 @@ incident ticket. The target is RPO ≤ 24h / RTO ≤ 4h.
 
 ## O5 — Secrets management
 
-- [`secrets.yaml`](../infra/k8s/secrets.yaml) contains only SealedSecrets; plain text lives in Vault.
+- [`base/secrets.yaml`](../infra/k8s/base/secrets.yaml) contains only SealedSecrets; plain text lives in Vault.
 - [`check-secrets.sh`](../scripts/check-secrets.sh) gates the repo: no plain-text `stringData`,
   no committed password/token literals, and a gitleaks full-history scan when available.
 - Secret store unreachable policy: **prod fails fast** (Vault enabled and required), **dev degrades**

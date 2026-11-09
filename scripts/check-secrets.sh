@@ -3,7 +3,7 @@
 # Plain-text secret gate (issue #98, "secrets" item).
 #
 # Fails the build when a plain-text secret leaks into the repository. The primary
-# defence is SealedSecrets in infra/k8s/secrets.yaml; this script is the
+# defence is SealedSecrets in infra/k8s/base/secrets.yaml; this script is the
 # defense-in-depth check that prod configuration must come from Vault / a secret
 # store rather than from committed plain text.
 #

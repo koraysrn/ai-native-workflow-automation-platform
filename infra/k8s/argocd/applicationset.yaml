@@ -1,0 +1,37 @@
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: awap-environments
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - list:
+        elements:
+          - env: dev
+            namespace: awap-dev
+          - env: staging
+            namespace: awap-staging
+          - env: prod
+            namespace: awap-prod
+  template:
+    metadata:
+      name: "awap-{{.env}}"
+      labels:
+        environment: "{{.env}}"
+    spec:
+      project: default
+      source:
+        repoURL: https://github.com/koraysrn/ai-native-workflow-automation-platform.git
+        targetRevision: main
+        path: "infra/k8s/overlays/{{.env}}"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "{{.namespace}}"
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true

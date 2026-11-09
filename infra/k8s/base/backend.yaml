@@ -18,6 +18,10 @@ spec:
           image: ghcr.io/awap/awap-backend:latest
           ports:
             - containerPort: 8080
+          envFrom:
+            # Each overlay provides its own feature flags.
+            - configMapRef:
+                name: awap-feature-flags
           env:
             - name: DB_URL
               valueFrom:
@@ -40,7 +44,7 @@ spec:
                   name: awap-backend-secrets
                   key: jwt-secret
             - name: MINIO_ENDPOINT
-              value: http://minio.awap-infra:9000
+              value: http://minio:9000
             - name: MINIO_ACCESS_KEY
               valueFrom:
                 secretKeyRef:

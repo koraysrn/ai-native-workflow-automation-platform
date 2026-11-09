@@ -7,9 +7,9 @@ implements in code and configuration, with a focus on retention and right-to-era
 
 | Control | SOC 2 | ISO 27001 | GDPR / KVKK | Implementation |
 |---|---|---|---|---|
-| Backup & DR | CC7.5 | A.12.3 | Art. 32 (resilience) | [`pg-backup-cronjob.yaml`](../infra/k8s/pg-backup-cronjob.yaml): nightly `pg_dump` + WAL archiving + offload to MinIO. RPO ≤ 24h, RTO measured by [`restore-drill.sh`](../scripts/restore-drill.sh). |
-| Replication | CC7.5 | A.17.1 | Art. 32 (availability) | [`minio-replication-cronjob.yaml`](../infra/k8s/minio-replication-cronjob.yaml): `mc mirror` of document/file/backup buckets. |
-| Secrets management | CC6.1 | A.10.1 | Art. 32 | [`secrets.yaml`](../infra/k8s/secrets.yaml) holds only SealedSecrets; plain text lives in Vault. Enforced by [`check-secrets.sh`](../scripts/check-secrets.sh). |
+| Backup & DR | CC7.5 | A.12.3 | Art. 32 (resilience) | [`base/pg-backup-cronjob.yaml`](../infra/k8s/base/pg-backup-cronjob.yaml): nightly `pg_dump` + WAL archiving + offload to MinIO. RPO ≤ 24h, RTO measured by [`restore-drill.sh`](../scripts/restore-drill.sh). |
+| Replication | CC7.5 | A.17.1 | Art. 32 (availability) | [`base/minio-replication-cronjob.yaml`](../infra/k8s/base/minio-replication-cronjob.yaml): `mc mirror` of document/file/backup buckets. |
+| Secrets management | CC6.1 | A.10.1 | Art. 32 | [`base/secrets.yaml`](../infra/k8s/base/secrets.yaml) holds only SealedSecrets; plain text lives in Vault. Enforced by [`check-secrets.sh`](../scripts/check-secrets.sh). |
 | Observability / tracing | CC4.1 | A.12.4 | Art. 30 (logging) | Micrometer Tracing + OTLP; one `traceId` spans HTTP → service → outbox → Kafka. See O2 in [`operations-runbook.md`](../docs/operations-runbook.md). |
 | Retention | CC6.1 | A.8.2 | Art. 5(1)(e) / KVKK Art. 7 | `awap.outbox.retention-days` (default 7) governs outbox purge; purge archives to JSONL before delete (see [`OutboxPurgeScheduler.java`](../backend/identity/src/main/java/com/awap/engine/application/OutboxPurgeScheduler.java)). |
 | Right to erasure | CC6.1 | A.8.2 | GDPR Art. 17 / KVKK Art. 7 | Erasure path deletes/anonymises tenant data within the SLA; retention windows are pinned so deleted data is not kept indefinitely. |

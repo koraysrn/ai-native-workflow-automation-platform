@@ -15,6 +15,13 @@ spec:
                 name: awap-backend
                 port:
                   number: 8080
+          - path: /ai
+            pathType: Prefix
+            backend:
+              service:
+                name: awap-ai-layer
+                port:
+                  number: 8000
           - path: /
             pathType: Prefix
             backend:

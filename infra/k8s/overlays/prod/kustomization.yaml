@@ -1,0 +1,98 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: awap-prod
+resources:
+  - ../../base
+  - namespace.yaml
+images:
+  - name: ghcr.io/awap/awap-backend
+    newTag: prod
+  - name: ghcr.io/awap/awap-frontend
+    newTag: prod
+  - name: ghcr.io/awap/awap-ai-layer
+    newTag: prod
+configMapGenerator:
+  - name: awap-feature-flags
+    literals:
+      - ENVIRONMENT=prod
+      - FEATURE_AI_STEPS=true
+      - FEATURE_ANALYTICS=true
+      - FEATURE_CDC=true
+patches:
+  - target:
+      kind: Deployment
+      name: awap-backend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+  - target:
+      kind: Deployment
+      name: awap-frontend
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 3
+  - target:
+      kind: Deployment
+      name: awap-ai-layer
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 2
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: awap-backend
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 3
+      - op: replace
+        path: /spec/maxReplicas
+        value: 12
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: awap-frontend
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 3
+      - op: replace
+        path: /spec/maxReplicas
+        value: 8
+  - target:
+      kind: HorizontalPodAutoscaler
+      name: awap-ai-layer
+    patch: |-
+      - op: replace
+        path: /spec/minReplicas
+        value: 2
+      - op: replace
+        path: /spec/maxReplicas
+        value: 6
+  - target:
+      kind: Ingress
+      name: awap-ingress
+    patch: |-
+      - op: replace
+        path: /spec/rules/0/host
+        value: awap.example.com
+      - op: add
+        path: /spec/tls
+        value:
+          - hosts: [awap.example.com]
+            secretName: awap-prod-tls
+  - target:
+      kind: SealedSecret
+      name: awap-backend-secrets
+    patch: |-
+      - op: replace
+        path: /spec/template/metadata/namespace
+        value: awap-prod
+  - target:
+      kind: SealedSecret
+      name: awap-infra-secrets
+    patch: |-
+      - op: replace
+        path: /spec/template/metadata/namespace
+        value: awap-prod
