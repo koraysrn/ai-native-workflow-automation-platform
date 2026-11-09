@@ -206,6 +206,20 @@ export function main(
     }
 
     if (argv.includes("--kind")) {
+      // A server-side dry run validates against existing objects; create the
+      // overlay namespace first (the kind cluster is throwaway).
+      const namespaceDoc = docs.find((doc) => doc.kind === "Namespace");
+      if (namespaceDoc) {
+        const created = exec("kubectl", ["apply", "-f", "-"], {
+          cwd,
+          input: stringify(namespaceDoc),
+        });
+        if (created.status !== 0) {
+          log(`FAIL: kind namespace ${env}: ${created.stderr || created.stdout}`);
+          failed = true;
+          continue;
+        }
+      }
       const nonSecret = docs
         .filter((doc) => doc.kind !== "SealedSecret")
         .map((doc) => stringify(doc))

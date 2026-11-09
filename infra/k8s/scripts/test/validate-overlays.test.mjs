@@ -198,3 +198,32 @@ test("main passes when every overlay renders and validates", () => {
   };
   assert.equal(main(["--kubeconform"], process.cwd(), exec, () => {}), 0);
 });
+
+test("kind mode creates the namespace before the server dry run", () => {
+  const calls = [];
+  const exec = (command, args) => {
+    calls.push(args);
+    if (command === "kubectl" && args[0] === "apply") {
+      return { status: 0, stdout: "", stderr: "" };
+    }
+    const env = args[1].split("/").pop();
+    return { status: 0, stdout: render(docsForEnv(env)), stderr: "" };
+  };
+  assert.equal(main(["--kind"], process.cwd(), exec, () => {}), 0);
+  assert.ok(calls.some((args) => args[0] === "apply" && args[1] === "-f"));
+  assert.ok(calls.some((args) => args[0] === "apply" && args[1] === "--dry-run=server"));
+});
+
+test("a failed kind namespace creation fails the run", () => {
+  const exec = (command, args) => {
+    if (command === "kubectl" && args[0] === "apply" && args[1] === "-f") {
+      return { status: 1, stdout: "", stderr: "forbidden" };
+    }
+    if (command === "kubectl" && args[0] === "apply") {
+      return { status: 0, stdout: "", stderr: "" };
+    }
+    const env = args[1].split("/").pop();
+    return { status: 0, stdout: render(docsForEnv(env)), stderr: "" };
+  };
+  assert.equal(main(["--kind"], process.cwd(), exec, () => {}), 1);
+});
