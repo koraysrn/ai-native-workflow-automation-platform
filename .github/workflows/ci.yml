@@ -234,6 +234,15 @@ jobs:
           name: playwright-report
           path: frontend/playwright-report
           retention-days: 14
+      - name: Upload accessibility report
+        # Issue #184: every axe scan is persisted even when a screen fails.
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: a11y-report
+          path: frontend/a11y-report
+          retention-days: 14
+          if-no-files-found: warn
       - name: Upload traces, screenshots and videos
         if: failure()
         uses: actions/upload-artifact@v6

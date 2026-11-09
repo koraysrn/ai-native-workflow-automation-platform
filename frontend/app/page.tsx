@@ -36,12 +36,14 @@ export default function Home() {
       >
         <input
           placeholder="Tenant slug"
+          aria-label="Tenant slug"
           value={tenantSlug}
           onChange={(event) => setTenantSlug(event.target.value)}
           required
         />
         <input
           placeholder="Email"
+          aria-label="Email"
           type="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
@@ -49,6 +51,7 @@ export default function Home() {
         />
         <input
           placeholder="Password"
+          aria-label="Password"
           type="password"
           value={password}
           onChange={(event) => setPassword(event.target.value)}

@@ -128,3 +128,8 @@
     @apply font-sans;
   }
 }
+
+/* React Flow's default #999 attribution fails WCAG AA on white (2.84:1). */
+.react-flow__attribution a {
+  color: #475569 !important;
+}

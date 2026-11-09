@@ -39,6 +39,7 @@ export default function TaskDetail({
       </p>
       <textarea
         placeholder="Comment"
+        aria-label="Decision comment"
         value={comment}
         maxLength={2000}
         onChange={(event) => setComment(event.target.value)}

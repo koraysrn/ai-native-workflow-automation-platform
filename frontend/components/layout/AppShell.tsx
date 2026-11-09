@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
 import { getActiveTenant, logout } from "../../lib/auth";
+
+const subscribeToCookies = () => () => {};
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
@@ -24,6 +26,13 @@ const navItems = [
 export default function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  // `getServerSnapshot` returns null and `getSnapshot` reads the cookie, so the
+  // server markup and the first client render agree without a setState effect.
+  const activeTenant = useSyncExternalStore(
+    subscribeToCookies,
+    () => getActiveTenant(),
+    () => null,
+  );
 
   return (
     <div style={{ display: "flex", minHeight: "100vh" }}>
@@ -67,7 +76,7 @@ export default function AppShell({ children }: { children: ReactNode }) {
             marginBottom: 8,
           }}
         >
-          Tenant: {getActiveTenant() ?? "select"}
+          Tenant: {activeTenant ?? "select"}
         </button>
         <button
           type="button"

@@ -15,6 +15,7 @@
 /pacts
 /playwright-report
 /test-results
+/a11y-report
 
 # next.js
 /.next/

@@ -10,6 +10,7 @@
     "typecheck": "next typegen && tsc --noEmit",
     "test": "jest",
     "test:e2e": "playwright test",
+    "test:a11y": "playwright test e2e/accessibility.spec.ts",
     "pact:generate": "jest --runInBand lib/__tests__/api.pact.spec.ts",
     "pact:copy": "node scripts/copy-pact.mjs"
   },
