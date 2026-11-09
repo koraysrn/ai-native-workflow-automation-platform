@@ -47,6 +47,25 @@
         <jacoco.version>0.8.15</jacoco.version>
         <jjwt.version>0.12.6</jjwt.version>
         <jacoco.skip>false</jacoco.skip>
+
+        <!-- SonarQube analysis (issue #182). The SonarScanner for Maven reads
+             analysis parameters from the <properties> section of the pom; it
+             does not read sonar-project.properties. sonar.organization is
+             mandatory on SonarQube Cloud and sonar.projectKey must match the
+             project bound to this repository. sonar.sources/sonar.tests stay
+             unset so Maven infers them per module. -->
+        <sonar.projectKey>koraysrn_ai-native-workflow-automation-platform</sonar.projectKey>
+        <sonar.organization>koraysrn</sonar.organization>
+        <sonar.projectName>AI-Native Workflow Automation Platform</sonar.projectName>
+        <sonar.java.source>25</sonar.java.source>
+        <sonar.sourceEncoding>UTF-8</sonar.sourceEncoding>
+        <sonar.coverage.jacoco.xmlReportPaths>common/target/site/jacoco/jacoco.xml,identity/target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+        <sonar.junit.reportPaths>common/target/surefire-reports,identity/target/surefire-reports</sonar.junit.reportPaths>
+        <sonar.exclusions>**/target/**,**/generated-sources/**,**/generated-test-sources/**,**/*MapperImpl.java</sonar.exclusions>
+        <sonar.coverage.exclusions>**/interfaces/dto/**,**/config/**,**/IdentityApplication.java</sonar.coverage.exclusions>
+        <sonar.cpd.exclusions>**/interfaces/dto/**,**/generated-sources/**</sonar.cpd.exclusions>
+        <sonar.qualitygate.wait>true</sonar.qualitygate.wait>
+        <sonar.qualitygate.timeout>600</sonar.qualitygate.timeout>
     </properties>
 
     <dependencyManagement>

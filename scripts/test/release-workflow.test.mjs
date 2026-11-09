@@ -107,6 +107,28 @@ test("CD can be dispatched with the released tag", async () => {
   assert.match(workflow, /tag-suffix: \$\{\{ inputs\.tag \|\| github\.ref_name \}\}/);
 });
 
+test("CD verifies the Argo CD CLI against the published checksum manifest", async () => {
+  const workflow = await readFile(CD_WORKFLOW, "utf8");
+  // Argo CD publishes a single cli_checksums.txt per release. There is no
+  // argocd-linux-amd64.sha256 asset, so the old download saved a 404 page and
+  // sha256sum failed with "no properly formatted checksum lines found".
+  assert.match(workflow, /ARGOCD_VERSION: v\d+\.\d+\.\d+/);
+  assert.match(workflow, /curl -fsSL/);
+  assert.match(workflow, /cli_checksums\.txt/);
+  assert.doesNotMatch(workflow, /argocd-linux-amd64\.sha256/);
+  assert.match(workflow, /sha256sum -c -/);
+  assert.match(workflow, /argocd-linux-amd64\$/);
+});
+
+test("CD skips the staging sync with an explicit warning when Argo CD is not configured", async () => {
+  const workflow = await readFile(CD_WORKFLOW, "utf8");
+  assert.match(workflow, /::warning title=Argo CD not configured::/);
+  assert.match(workflow, /echo "enabled=false" >> "\$GITHUB_OUTPUT"/);
+  assert.match(workflow, /steps\.config\.outputs\.enabled == 'true'/);
+  assert.doesNotMatch(workflow, /ARGOCD_SERVER and ARGOCD_AUTH_TOKEN must be configured\./);
+  assert.match(workflow, /argocd app wait awap --health/);
+});
+
 test("the branch protection policy requires the release checks", async () => {
   const script = await readFile(POLICY_SCRIPT, "utf8");
   const snapshot = await readFile(POLICY_SNAPSHOT, "utf8");

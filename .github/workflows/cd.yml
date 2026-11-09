@@ -31,25 +31,47 @@ jobs:
     name: Deploy to Staging
     needs: build-and-push
     runs-on: ubuntu-latest
+    env:
+      ARGOCD_VERSION: v2.14.10
     steps:
-      - name: Install ArgoCD CLI
-        run: |
-          ARGOCD_VERSION=v2.14.10
-          curl -sSL -o /tmp/argocd-linux-amd64 \
-            "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-amd64"
-          curl -sSL -o /tmp/argocd-linux-amd64.sha256 \
-            "https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}/argocd-linux-amd64.sha256"
-          echo "$(cat /tmp/argocd-linux-amd64.sha256)  /tmp/argocd-linux-amd64" | sha256sum -c -
-          sudo install -m 0755 /tmp/argocd-linux-amd64 /usr/local/bin/argocd
-      - name: Sync application
+      - name: Check Argo CD credentials
+        id: config
         env:
           ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
           ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_AUTH_TOKEN }}
         run: |
+          set -euo pipefail
           if [ -z "$ARGOCD_SERVER" ] || [ -z "$ARGOCD_AUTH_TOKEN" ]; then
-            echo "ARGOCD_SERVER and ARGOCD_AUTH_TOKEN must be configured."
+            echo "::warning title=Argo CD not configured::ARGOCD_SERVER and/or ARGOCD_AUTH_TOKEN are missing, so the staging sync is skipped. The images were still built and pushed; add both secrets to enable the deploy (see docs/e2e-deploy-dod.md)."
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "enabled=true" >> "$GITHUB_OUTPUT"
+      - name: Install Argo CD CLI
+        if: steps.config.outputs.enabled == 'true'
+        run: |
+          set -euo pipefail
+          base="https://github.com/argoproj/argo-cd/releases/download/${ARGOCD_VERSION}"
+          # Argo CD publishes one shared cli_checksums.txt per release and no
+          # per-binary checksum file. curl must fail on HTTP errors so a 404 page
+          # can never be fed to sha256sum again.
+          curl -fsSL -o /tmp/argocd-linux-amd64 "${base}/argocd-linux-amd64"
+          curl -fsSL -o /tmp/argocd-cli-checksums.txt "${base}/cli_checksums.txt"
+          expected="$(grep -E '  argocd-linux-amd64$' /tmp/argocd-cli-checksums.txt | cut -d' ' -f1)"
+          if [ -z "$expected" ]; then
+            echo "::error title=Argo CD checksum::cli_checksums.txt has no entry for argocd-linux-amd64 (${ARGOCD_VERSION})."
             exit 1
           fi
+          echo "${expected}  /tmp/argocd-linux-amd64" | sha256sum -c -
+          sudo install -m 0755 /tmp/argocd-linux-amd64 /usr/local/bin/argocd
+          argocd version --client
+      - name: Sync application
+        if: steps.config.outputs.enabled == 'true'
+        env:
+          ARGOCD_SERVER: ${{ secrets.ARGOCD_SERVER }}
+          ARGOCD_AUTH_TOKEN: ${{ secrets.ARGOCD_AUTH_TOKEN }}
+        run: |
+          set -euo pipefail
           argocd login "$ARGOCD_SERVER" --auth-token "$ARGOCD_AUTH_TOKEN" --grpc-web
           argocd app sync awap --async --grpc-web
           argocd app wait awap --health --timeout 300 --grpc-web

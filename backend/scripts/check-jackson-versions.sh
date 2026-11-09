@@ -7,14 +7,32 @@ FLOOR_2="${JACKSON2_FLOOR:-2.21.7}"
 FLOOR_3="${JACKSON3_FLOOR:-3.1.7}"
 BACKEND_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 OUT="$(mktemp)"
-trap 'rm -f "$OUT"' EXIT
+LOG="$(mktemp)"
+trap 'rm -f "$OUT" "$LOG"' EXIT
 
-(
-  cd "$BACKEND_DIR"
-  mvn -q -B -pl identity -am dependency:list \
-    -DincludeGroupIds=com.fasterxml.jackson.core,tools.jackson.core \
-    -DoutputFile="$OUT" >/dev/null
-)
+# A transient repository/network error used to fail the job with no output,
+# because the Maven log was sent to /dev/null. Retry once and surface the log on
+# a real failure so the next flake is diagnosable.
+attempts="${JACKSON_CHECK_ATTEMPTS:-2}"
+for attempt in $(seq 1 "$attempts"); do
+  if (
+    cd "$BACKEND_DIR"
+    mvn -B -pl identity -am dependency:list \
+      -DincludeGroupIds=com.fasterxml.jackson.core,tools.jackson.core \
+      -DoutputFile="$OUT" >"$LOG" 2>&1
+  ); then
+    break
+  fi
+  if [ "$attempt" -eq "$attempts" ]; then
+    echo "FAIL: mvn dependency:list failed after $attempts attempt(s)." >&2
+    echo "---- last 40 log lines ----" >&2
+    tail -40 "$LOG" >&2
+    echo "---------------------------" >&2
+    exit 1
+  fi
+  echo "WARN: mvn dependency:list failed on attempt $attempt; retrying once." >&2
+  sleep 5
+done
 
 version_for() {
   local group="$1" artifact="$2"
@@ -31,6 +49,7 @@ jackson3="$(version_for tools.jackson.core jackson-databind)"
 
 if [ -z "$jackson2" ]; then
   echo "FAIL: com.fasterxml.jackson.core:jackson-databind is not on the resolved classpath." >&2
+  head -20 "$OUT" >&2 || true
   exit 1
 fi
 if ! at_least "$jackson2" "$FLOOR_2"; then
