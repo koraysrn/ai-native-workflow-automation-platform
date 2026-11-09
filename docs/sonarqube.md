@@ -32,11 +32,29 @@ missing secret is a hard failure with an actionable message. Do not leave
 | `SONAR_TOKEN` | Repository secret | User token with *Execute analysis* permission |
 | `SONAR_HOST_URL` | Repository secret | SonarQube/SonarCloud URL, e.g. `https://sonarcloud.io` |
 
-Bind the `awap` project to a quality gate in SonarQube and enable the SonarQube
-GitHub application for PR decoration. The CI job passes
-`sonar.pullrequest.key`, `sonar.pullrequest.base` and
-`sonar.pullrequest.branch` on pull-request events so the analysis lands on the
-PR.
+The project identity lives in
+[`backend/sonar-project.properties`](../backend/sonar-project.properties) and is
+the single source of truth: CI reads `sonar.projectKey` from that file instead of
+duplicating it in the workflow.
+
+- `sonar.organization` is mandatory on **SonarQube Cloud** and ignored by a
+  self-hosted server. A missing value fails the scanner with
+  `You must define the following mandatory properties: sonar.organization`.
+- `sonar.projectKey` must match the project that is bound to this repository
+  (`koraysrn_ai-native-workflow-automation-platform` on SonarQube Cloud). A key
+  for a project that does not exist or is not writable by the token fails the
+  analysis before the gate is evaluated.
+
+Bind that project to a quality gate and enable the SonarQube GitHub application
+for PR decoration. The CI job passes `sonar.pullrequest.key`,
+`sonar.pullrequest.base` and `sonar.pullrequest.branch` on pull-request events
+so the analysis lands on the PR.
+
+> **Automatic Analysis must be off.** SonarQube Cloud refuses a CI scan while the
+> project still uses GitHub Automatic Analysis ("You are running CI analysis
+> while Automatic Analysis is enabled"). Disable it under *Administration →
+> Analysis Method → Automatic Analysis* before the first CI run, otherwise the
+> gate can never pass.
 
 ## Coverage import
 
@@ -62,11 +80,13 @@ node ../scripts/check-jacoco-report.mjs identity/target/site/jacoco/jacoco.xml
 SONAR_HOST_URL="${SONAR_HOST_URL:?set the SonarQube URL}" \
 SONAR_TOKEN="${SONAR_TOKEN:?set a SonarQube token}" \
 mvn -B org.sonarsource.scanner.maven:sonar-maven-plugin:5.8.0.7211:sonar \
-  -Dsonar.projectKey=awap \
   -Dsonar.host.url="$SONAR_HOST_URL" \
   -Dsonar.token="$SONAR_TOKEN" \
   -Dsonar.qualitygate.wait=true
 ```
+
+The project key and organization come from `sonar-project.properties`, so the
+local command scans exactly the same project as CI.
 
 The scanner version is pinned in CI (`SONAR_MAVEN_PLUGIN_VERSION`) and in this
 document. Upgrade it through Renovate together with the SonarQube server

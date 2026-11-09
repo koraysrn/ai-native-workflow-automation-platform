@@ -369,7 +369,6 @@ jobs:
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
       SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
       SONAR_BOOTSTRAP: ${{ vars.SONAR_BOOTSTRAP }}
-      SONAR_PROJECT_KEY: awap
       SONAR_MAVEN_PLUGIN_VERSION: 5.8.0.7211
     steps:
       - uses: actions/checkout@v7
@@ -395,6 +394,16 @@ jobs:
             echo "See docs/sonarqube.md for bootstrap and local-scanner instructions."
             exit "$missing"
           fi
+      - name: Resolve the SonarQube project key
+        if: env.SONAR_SKIP != 'true'
+        run: |
+          project_key="$(sed -n 's/^sonar\.projectKey=//p' backend/sonar-project.properties | head -1)"
+          if [ -z "$project_key" ]; then
+            echo "::error title=SonarQube::backend/sonar-project.properties has no sonar.projectKey."
+            exit 1
+          fi
+          echo "SONAR_PROJECT_KEY=$project_key" >> "$GITHUB_ENV"
+          echo "Analysing SonarQube project: $project_key"
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
