@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -17,7 +18,17 @@ export const metadata: Metadata = {
   description: "AI-Native Workflow Automation Platform",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+// Cache Components blocks dynamic header reads during prerendering unless the
+// route explicitly opts into blocking. The nonce policy requires every HTML
+// response to be rendered per request.
+export const instant = false;
+
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // Reading request headers opts the tree into dynamic rendering. A statically
+  // prerendered page cannot carry the per-request CSP nonce, so Next.js would
+  // emit nonce-less scripts and hydration would be blocked by the policy.
+  await headers();
+
   return (
     <html
       lang="en"
