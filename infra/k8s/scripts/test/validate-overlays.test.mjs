@@ -86,7 +86,7 @@ function docsForEnv(env) {
       data: { ENVIRONMENT: "dev", FEATURE_AI_STEPS: "false" },
     },
     {
-      apiVersion: "external-secrets.io/v1beta1",
+      apiVersion: "external-secrets.io/v1",
       kind: "ExternalSecret",
       metadata: { name: "awap-backend-secrets", namespace: "awap-dev" },
       spec: {
@@ -132,7 +132,7 @@ function docsForEnv(env) {
     remoteRef: { key: `awap-${env}/backend`, property: key },
   }));
   docs.push({
-    apiVersion: "external-secrets.io/v1beta1",
+    apiVersion: "external-secrets.io/v1",
     kind: "ExternalSecret",
     metadata: { name: "awap-infra-secrets", namespace: expectation.namespace },
     spec: {
@@ -143,7 +143,7 @@ function docsForEnv(env) {
     },
   });
   docs.push({
-    apiVersion: "external-secrets.io/v1beta1",
+    apiVersion: "external-secrets.io/v1",
     kind: "ExternalSecret",
     metadata: { name: "awap-dr-secrets", namespace: expectation.namespace },
     spec: {
@@ -154,7 +154,7 @@ function docsForEnv(env) {
     },
   });
   docs.push({
-    apiVersion: "external-secrets.io/v1beta1",
+    apiVersion: "external-secrets.io/v1",
     kind: "SecretStore",
     metadata: { name: "awap-vault", namespace: expectation.namespace },
     spec: {},
