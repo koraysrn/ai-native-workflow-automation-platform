@@ -13,11 +13,25 @@ spec:
       labels:
         app: awap-ai-layer
     spec:
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: topology.kubernetes.io/zone
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: awap-ai-layer
       containers:
         - name: ai-layer
           image: ghcr.io/awap/awap-ai-layer:latest
           ports:
             - containerPort: 8000
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
           env:
             - name: AI_LAYER_BUILD_SHA
               valueFrom:

@@ -21,6 +21,7 @@ export const OVERLAY_EXPECTATIONS = {
     tlsSecret: "awap-dev-tls",
     replicas: { backend: 1, frontend: 1, ai: 1 },
     hpa: { backend: [1, 3], frontend: [1, 3], ai: [1, 2] },
+    pdbMinAvailable: 1,
     featureAi: "false",
   },
   staging: {
@@ -29,6 +30,7 @@ export const OVERLAY_EXPECTATIONS = {
     tlsSecret: "awap-staging-tls",
     replicas: { backend: 2, frontend: 2, ai: 1 },
     hpa: { backend: [2, 6], frontend: [2, 4], ai: [1, 3] },
+    pdbMinAvailable: 1,
     featureAi: "true",
   },
   prod: {
@@ -37,6 +39,7 @@ export const OVERLAY_EXPECTATIONS = {
     tlsSecret: "awap-prod-tls",
     replicas: { backend: 3, frontend: 3, ai: 2 },
     hpa: { backend: [3, 12], frontend: [3, 8], ai: [2, 6] },
+    pdbMinAvailable: 2,
     featureAi: "true",
   },
 };
@@ -118,10 +121,23 @@ export function validateOverlay(env, text) {
       deployment?.spec?.replicas === expectation.replicas[key],
       `${name} replicas is ${deployment?.spec?.replicas}, expected ${expectation.replicas[key]}`,
     );
-    const renderedImage = deployment?.spec?.template?.spec?.containers?.[0]?.image;
+    const container = deployment?.spec?.template?.spec?.containers?.[0];
+    const renderedImage = container?.image;
     check(
       renderedImage === `${image}:${env}`,
       `${name} image is ${renderedImage}, expected ${image}:${env}`,
+    );
+    check(
+      container?.resources?.requests?.cpu && container?.resources?.requests?.memory,
+      `${name} is missing CPU/memory requests; the HPA cannot scale on utilization`,
+    );
+    check(
+      container?.resources?.limits?.cpu && container?.resources?.limits?.memory,
+      `${name} is missing CPU/memory limits`,
+    );
+    check(
+      (deployment?.spec?.template?.spec?.topologySpreadConstraints?.length ?? 0) > 0,
+      `${name} is missing topologySpreadConstraints`,
     );
   }
 
@@ -136,6 +152,23 @@ export function validateOverlay(env, text) {
     check(
       hpa?.spec?.minReplicas === min && hpa?.spec?.maxReplicas === max,
       `${name} HPA is ${hpa?.spec?.minReplicas}-${hpa?.spec?.maxReplicas}, expected ${min}-${max}`,
+    );
+    check(
+      (hpa?.spec?.behavior?.scaleUp?.policies?.length ?? 0) > 0,
+      `${name} HPA is missing scaleUp behavior policies`,
+    );
+    check(
+      (hpa?.spec?.behavior?.scaleDown?.policies?.length ?? 0) > 0 &&
+        hpa?.spec?.behavior?.scaleDown?.stabilizationWindowSeconds > 0,
+      `${name} HPA is missing scaleDown stabilization`,
+    );
+  }
+
+  for (const deployment of ["awap-backend", "awap-frontend", "awap-ai-layer"]) {
+    const pdb = findByKindAndName(docs, "PodDisruptionBudget", `${deployment}-pdb`);
+    check(
+      pdb?.spec?.minAvailable === expectation.pdbMinAvailable,
+      `${deployment}-pdb minAvailable is ${pdb?.spec?.minAvailable}, expected ${expectation.pdbMinAvailable}`,
     );
   }
 
@@ -171,6 +204,27 @@ export function main(
   log = console.log,
 ) {
   let failed = false;
+
+  if (argv.includes("--metrics")) {
+    const metrics = exec(
+      "kubectl",
+      [
+        "get",
+        "apiservice",
+        "v1beta1.metrics.k8s.io",
+        "-o",
+        "jsonpath={.status.conditions[?(@.type=='Available')].status}",
+      ],
+      { cwd },
+    );
+    if (metrics.status !== 0 || metrics.stdout.trim() !== "True") {
+      log(`FAIL: metrics-server is not available: ${metrics.stderr || metrics.stdout}`);
+      failed = true;
+    } else {
+      log("OK: metrics-server is available.");
+    }
+  }
+
   for (const env of ENVIRONMENTS) {
     const result = exec("kubectl", ["kustomize", `infra/k8s/overlays/${env}`], { cwd });
     if (result.status !== 0) {

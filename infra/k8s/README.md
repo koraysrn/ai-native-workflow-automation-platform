@@ -31,6 +31,10 @@ The base contains only values that are identical everywhere. Namespace, host,
 TLS secret, replicas, HPA bounds, image tags and feature flags live in the
 overlays.
 
+Workloads declare CPU/memory requests and limits, HPA scale behavior,
+topology-spread constraints and PodDisruptionBudgets. See
+[`docs/capacity-planning.md`](../../docs/capacity-planning.md).
+
 | Environment | Namespace | Host | Backend replicas | HPA |
 |---|---|---|---:|---|
 | dev | `awap-dev` | `dev.awap.local` | 1 | 1–3 |

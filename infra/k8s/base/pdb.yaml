@@ -1,0 +1,32 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: awap-backend-pdb
+  namespace: awap
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: awap-backend
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: awap-frontend-pdb
+  namespace: awap
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: awap-frontend
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: awap-ai-layer-pdb
+  namespace: awap
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: awap-ai-layer
