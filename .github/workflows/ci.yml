@@ -554,9 +554,15 @@ jobs:
           exit 1
       - name: Verify metrics-server precondition
         run: node infra/k8s/scripts/validate-overlays.mjs --metrics
+      - name: Install Helm
+        uses: azure/setup-helm@v4
       - name: Install External Secrets Operator
         run: |
-          kubectl apply -f https://github.com/external-secrets/external-secrets/releases/latest/download/install.yaml
+          helm repo add external-secrets https://charts.external-secrets.io
+          helm repo update
+          helm upgrade --install external-secrets external-secrets/external-secrets \
+            --namespace external-secrets --create-namespace \
+            --version 2.14.0 --set installCRDs=true --wait --timeout 5m
           kubectl -n external-secrets rollout status deployment/external-secrets --timeout=180s
       - name: Apply the dev overlay with the ESO CRDs present
         run: kubectl kustomize infra/k8s/overlays/dev | kubectl apply -f -
