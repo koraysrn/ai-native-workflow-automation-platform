@@ -5,6 +5,7 @@ resources:
   - frontend.yaml
   - ai-layer.yaml
   - hpa.yaml
+  - pdb.yaml
   - ingress.yaml
   - pg-backup-cronjob.yaml
   - minio-replication-cronjob.yaml

@@ -71,6 +71,27 @@ patches:
         path: /spec/maxReplicas
         value: 6
   - target:
+      kind: PodDisruptionBudget
+      name: awap-backend-pdb
+    patch: |-
+      - op: replace
+        path: /spec/minAvailable
+        value: 2
+  - target:
+      kind: PodDisruptionBudget
+      name: awap-frontend-pdb
+    patch: |-
+      - op: replace
+        path: /spec/minAvailable
+        value: 2
+  - target:
+      kind: PodDisruptionBudget
+      name: awap-ai-layer-pdb
+    patch: |-
+      - op: replace
+        path: /spec/minAvailable
+        value: 2
+  - target:
       kind: Ingress
       name: awap-ingress
     patch: |-

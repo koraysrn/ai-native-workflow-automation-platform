@@ -117,6 +117,33 @@ function docsForEnv(env) {
   docs[8].data.ENVIRONMENT = env;
   docs[8].data.FEATURE_AI_STEPS = expectation.featureAi;
   docs[9].spec.template.metadata.namespace = expectation.namespace;
+  for (const index of [1, 2, 3]) {
+    const podSpec = docs[index].spec.template.spec;
+    podSpec.topologySpreadConstraints = [
+      { maxSkew: 1, topologyKey: "topology.kubernetes.io/zone", whenUnsatisfiable: "ScheduleAnyway" },
+    ];
+    podSpec.containers[0].resources = {
+      requests: { cpu: "100m", memory: "128Mi" },
+      limits: { cpu: "1", memory: "1Gi" },
+    };
+  }
+  for (const index of [5, 6, 7]) {
+    docs[index].spec.behavior = {
+      scaleUp: { policies: [{ type: "Pods", value: 1, periodSeconds: 30 }] },
+      scaleDown: {
+        stabilizationWindowSeconds: 300,
+        policies: [{ type: "Pods", value: 1, periodSeconds: 60 }],
+      },
+    };
+  }
+  for (const name of ["awap-backend-pdb", "awap-frontend-pdb", "awap-ai-layer-pdb"]) {
+    docs.push({
+      apiVersion: "policy/v1",
+      kind: "PodDisruptionBudget",
+      metadata: { name, namespace: expectation.namespace },
+      spec: { minAvailable: expectation.pdbMinAvailable },
+    });
+  }
   return docs;
 }
 
@@ -149,6 +176,17 @@ test("wrong replicas, image tags and HPA bounds are rejected", () => {
   assert.ok(result.errors.some((error) => error.includes("awap-backend replicas")));
   assert.ok(result.errors.some((error) => error.includes("awap-frontend image")));
   assert.ok(result.errors.some((error) => error.includes("awap-backend HPA")));
+});
+
+test("missing requests, HPA behavior and PDBs are rejected", () => {
+  const docs = docsForEnv("dev");
+  docs[1].spec.template.spec.containers[0].resources = {};
+  docs[5].spec.behavior = {};
+  docs.pop();
+  const result = validateOverlay("dev", render(docs));
+  assert.ok(result.errors.some((error) => error.includes("missing CPU/memory requests")));
+  assert.ok(result.errors.some((error) => error.includes("missing scaleUp behavior")));
+  assert.ok(result.errors.some((error) => error.includes("awap-ai-layer-pdb")));
 });
 
 test("a resource in the wrong namespace is rejected", () => {
