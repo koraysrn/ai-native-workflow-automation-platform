@@ -505,9 +505,13 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
       - uses: actions/setup-node@v6
         with:
           node-version: 24
+          cache: pnpm
+      - name: Install root tooling (yaml)
+        run: pnpm install --frozen-lockfile
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
         with:
