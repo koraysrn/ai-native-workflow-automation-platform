@@ -5,6 +5,7 @@ import { test } from "node:test";
 const CI = new URL("../../.github/workflows/ci.yml", import.meta.url);
 const ADR = new URL("../../docs/adr/0005-jackson-bom-override.md", import.meta.url);
 const RUNBOOK = new URL("../../docs/operations-runbook.md", import.meta.url);
+const POM = new URL("../../backend/pom.xml", import.meta.url);
 const REPORT_SCRIPT = new URL("../trivy-regression-report.mjs", import.meta.url);
 const NOTIFY_SCRIPT = new URL("../trivy-regression-notify.mjs", import.meta.url);
 
@@ -12,11 +13,39 @@ test("the Trivy job emits the summary, artifact and gate", async () => {
   const workflow = await readFile(CI, "utf8");
   assert.match(workflow, /^ {2}trivy:\n {4}name: Vulnerability Scan$/m);
   assert.match(workflow, /format: json/);
-  assert.match(workflow, /output: trivy-results\.json/);
+  assert.match(workflow, /output: trivy-fs-results\.json/);
   assert.match(workflow, /node scripts\/trivy-regression-report\.mjs/);
   assert.match(workflow, /--fail-on CRITICAL,HIGH/);
   assert.match(workflow, /name: trivy-report/);
   assert.match(workflow, /path: trivy-results\.json/);
+});
+
+test("the Trivy job scans the Maven SBOM instead of the pom files", async () => {
+  const workflow = await readFile(CI, "utf8");
+  // pom.xml is not a lock file: Trivy's static parser cannot resolve the Spring
+  // Boot BOM imports and reported jackson-databind 2.19.1 for a build that
+  // resolves 2.21.7. The CycloneDX SBOM reflects what actually ships.
+  assert.match(workflow, /makeAggregateBom/);
+  assert.match(workflow, /scan-type: sbom/);
+  assert.match(workflow, /scan-ref: backend\/target\/bom\.json/);
+  assert.match(workflow, /skip-files: "\*\*\/pom\.xml"/);
+  assert.match(workflow, /trivy-fs-results\.json trivy-sbom-results\.json > trivy-results\.json/);
+});
+
+test("the pom pins the transitive dependencies the Trivy gate flags", async () => {
+  const pom = await readFile(POM, "utf8");
+  assert.match(pom, /<guava\.version>33\.7\.2-jre<\/guava\.version>/);
+  assert.match(pom, /<snappy-java\.version>1\.1\.10\.9<\/snappy-java\.version>/);
+  assert.match(pom, /<lz4-java\.version>1\.11\.4<\/lz4-java\.version>/);
+  assert.match(pom, /<tomcat\.version>11\.0\.25<\/tomcat\.version>/);
+  for (const artifact of [
+    "<artifactId>guava</artifactId>",
+    "<artifactId>snappy-java</artifactId>",
+    "<artifactId>lz4-java</artifactId>",
+    "<artifactId>tomcat-embed-core</artifactId>",
+  ]) {
+    assert.match(pom, new RegExp(`<dependencyManagement>[\\s\\S]*${artifact}[\\s\\S]*</dependencyManagement>`));
+  }
 });
 
 test("the repeated-failure notification is scoped to main and has API permissions", async () => {

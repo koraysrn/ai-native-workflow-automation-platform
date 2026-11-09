@@ -298,15 +298,42 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 24
-      - name: Scan filesystem (JSON)
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+      - name: Generate the aggregate SBOM
+        # pom.xml is not a dependency lock: Trivy's pom parser cannot resolve the
+        # Spring Boot BOM imports, so it reported jackson-databind 2.19.1 while
+        # the build resolves the patched 2.21.7. Scan the CycloneDX SBOM instead:
+        # it reflects exactly what ships.
+        run: mvn -B org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom
+        working-directory: backend
+      - name: Scan the Maven SBOM (JSON)
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: sbom
+          scan-ref: backend/target/bom.json
+          format: json
+          output: trivy-sbom-results.json
+          exit-code: 0
+      - name: Scan the rest of the filesystem (JSON)
         uses: aquasecurity/trivy-action@v0.36.0
         with:
           scan-type: fs
           scan-ref: .
+          # Maven is covered by the SBOM above.
+          skip-files: "**/pom.xml"
           format: json
-          output: trivy-results.json
+          output: trivy-fs-results.json
           # The report step owns the gate so it can emit the summary/annotations first.
           exit-code: 0
+      - name: Merge the SBOM and filesystem reports
+        run: |
+          jq -s '.[0].Results = ((.[0].Results // []) + (.[1].Results // [])) | .[0]' \
+            trivy-fs-results.json trivy-sbom-results.json > trivy-results.json
+          jq '.Results | length' trivy-results.json
       - name: Report results and enforce the gate
         run: >-
           node scripts/trivy-regression-report.mjs

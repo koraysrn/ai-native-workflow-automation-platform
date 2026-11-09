@@ -48,6 +48,16 @@
         <jjwt.version>0.12.6</jjwt.version>
         <jacoco.skip>false</jacoco.skip>
 
+        <!-- Security floors for transitive dependencies. CI scans the aggregate
+             CycloneDX SBOM, so these versions are exactly what ships:
+             guava 33.4.8-jre / snappy-java 1.1.10.7 / lz4-java 1.10.1 and
+             tomcat-embed 11.0.24 all carry HIGH advisories that the fixed
+             versions below resolve. -->
+        <guava.version>33.7.2-jre</guava.version>
+        <snappy-java.version>1.1.10.9</snappy-java.version>
+        <lz4-java.version>1.11.4</lz4-java.version>
+        <tomcat.version>11.0.25</tomcat.version>
+
         <!-- SonarQube analysis (issue #182). The SonarScanner for Maven reads
              analysis parameters from the <properties> section of the pom; it
              does not read sonar-project.properties. sonar.organization is
@@ -92,6 +102,36 @@
                 <artifactId>archunit-junit5</artifactId>
                 <version>${archunit.version}</version>
                 <scope>test</scope>
+            </dependency>
+            <dependency>
+                <groupId>com.google.guava</groupId>
+                <artifactId>guava</artifactId>
+                <version>${guava.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.xerial.snappy</groupId>
+                <artifactId>snappy-java</artifactId>
+                <version>${snappy-java.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>at.yawk.lz4</groupId>
+                <artifactId>lz4-java</artifactId>
+                <version>${lz4-java.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-core</artifactId>
+                <version>${tomcat.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-el</artifactId>
+                <version>${tomcat.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.apache.tomcat.embed</groupId>
+                <artifactId>tomcat-embed-websocket</artifactId>
+                <version>${tomcat.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
