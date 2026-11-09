@@ -29,6 +29,7 @@ export default function StartWorkflowDialog({
       <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px" }}>Start workflow</h2>
       <textarea
         placeholder="Context JSON"
+        aria-label="Workflow context JSON"
         value={contextJson}
         onChange={(event) => setContextJson(event.target.value)}
         style={{ display: "block", width: "100%", minHeight: 96, marginBottom: 12 }}

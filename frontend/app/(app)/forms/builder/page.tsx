@@ -75,6 +75,7 @@ export default function FormBuilderPage() {
       <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
         <input
           placeholder="Form name"
+          aria-label="Form name"
           value={name}
           onChange={(event) => setName(event.target.value)}
         />

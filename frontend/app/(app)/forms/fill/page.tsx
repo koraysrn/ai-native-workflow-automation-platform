@@ -68,7 +68,11 @@ export default function FillFormPage() {
       <h1 style={{ fontSize: 24, fontWeight: 700 }}>Fill Form</h1>
 
       <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-        <select value={formId} onChange={(event) => setFormId(event.target.value)}>
+        <select
+          aria-label="Form"
+          value={formId}
+          onChange={(event) => setFormId(event.target.value)}
+        >
           <option value="">Select a form</option>
           {forms.map((form) => (
             <option key={form.id} value={form.id}>
@@ -76,7 +80,11 @@ export default function FillFormPage() {
             </option>
           ))}
         </select>
-        <select value={instanceId} onChange={(event) => setInstanceId(event.target.value)}>
+        <select
+          aria-label="Workflow instance"
+          value={instanceId}
+          onChange={(event) => setInstanceId(event.target.value)}
+        >
           <option value="">(optional) Workflow instance</option>
           {instances.map((instance) => (
             <option key={instance.id} value={instance.id}>

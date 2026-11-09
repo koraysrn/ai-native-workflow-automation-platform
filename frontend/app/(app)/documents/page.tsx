@@ -89,6 +89,7 @@ export default function DocumentsPage() {
       </p>
       <input
         type="file"
+        aria-label="Upload a document"
         disabled={upload.isPending}
         onChange={(event) => {
           const file = event.target.files?.[0];
