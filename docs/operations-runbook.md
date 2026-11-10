@@ -1071,13 +1071,23 @@ self-approval). The exception is explicit, never silent:
    scripts/apply-branch-protection.sh --verify --repo owner/repo
    ```
 
-5. Attach the restore output and the green drift run to the ticket, then close it.
+5. Append the merge to [`settings/break-glass-log.json`](../settings/break-glass-log.json) and
+   [`docs/break-glass-log.md`](break-glass-log.md) in the same governance change: incident, PR,
+   full merge SHA, merge time, green-check confirmation, `--apply` result and `--verify` result.
+6. Attach the restore output, the green drift run and the green `main` CI run to the ticket, then
+   close it. The incident cannot authorise any later merge; a new break-glass window needs a new
+   incident. The committed log is validated by the branch-protection test suite.
 
 The drift workflow is expected to fail while the exception is active; that failure is the reminder
 to restore protection. Do **not** disable `enforce_admins`, required checks, force-push/deletion
 blocks, or delete the protection as a shortcut. Do not change `REQUIRED_CHECKS` to bypass a failing
 check, and do not disable the drift workflow. When a second maintainer is added, enable
 `require_code_owner_reviews` and remove this exception in the same reviewed policy change.
+
+The current implementation and full audit trail of the single-maintainer exception are in
+[`docs/break-glass-log.md`](break-glass-log.md) and
+[`settings/break-glass-log.json`](../settings/break-glass-log.json). The tests assert that every
+covered merge has a full SHA, green checks, both restore results and a restored approval count.
 
 ## O23 — Release automation, emergency release and tag rollback (issue #179)
 

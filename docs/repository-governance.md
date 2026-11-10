@@ -48,6 +48,7 @@ The repository currently has one maintainer (`@koraysrn`). GitHub never counts a
 
 - Do **not** permanently set the approval count to 0, disable admin enforcement, remove required checks or delete the protection.
 - Break-glass is a temporary, audited change documented in runbook [O22](operations-runbook.md#o22--branch-protection-drift-and-break-glass-issue-178): open an incident ticket, lower only the approval count, merge the urgent PR, then restore the policy immediately with `--apply` and prove it with `--verify`.
+- Every break-glass merge is appended to [`settings/break-glass-log.json`](../settings/break-glass-log.json) and [`docs/break-glass-log.md`](break-glass-log.md). The branch-protection test suite rejects a missing or incomplete entry, an unrestored approval count, or a log that diverges from the committed JSON.
 - The scheduled drift job fails while the exception is active. That failure is the reminder to restore protection; do not mute it.
 - When a second maintainer is added, enable `require_code_owner_reviews` and remove this exception in the same policy change.
 - Automation that must merge without an interactive review (for example release automation) should use a dedicated GitHub App with the minimum required permissions. Never disable protection globally to unblock a bot.

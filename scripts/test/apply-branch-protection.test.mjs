@@ -14,6 +14,12 @@ const DRIFT_WORKFLOW = fileURLToPath(
 const CI_WORKFLOW = fileURLToPath(new URL("../../.github/workflows/ci.yml", import.meta.url));
 const RUNBOOK = fileURLToPath(new URL("../../docs/operations-runbook.md", import.meta.url));
 const GOVERNANCE = fileURLToPath(new URL("../../docs/repository-governance.md", import.meta.url));
+const BREAK_GLASS_JSON = fileURLToPath(
+  new URL("../../settings/break-glass-log.json", import.meta.url),
+);
+const BREAK_GLASS_DOC = fileURLToPath(
+  new URL("../../docs/break-glass-log.md", import.meta.url),
+);
 
 const BASE_ENV = {
   PATH: process.env.PATH ?? "/usr/local/bin:/usr/bin:/bin",
@@ -534,6 +540,54 @@ test("CI runs bash -n, shellcheck, the coverage suite and a dry run", async () =
   assert.match(workflow, /shellcheck scripts\/apply-branch-protection\.sh/);
   assert.match(workflow, /node --test "scripts\/test\/apply-branch-protection\.test\.mjs"/);
   assert.match(workflow, /scripts\/apply-branch-protection\.sh --dry-run --repo "\$GITHUB_REPOSITORY"/);
+});
+
+test("break-glass log fully records incident #243 and its restores", async () => {
+  const log = JSON.parse(await readFile(BREAK_GLASS_JSON, "utf8"));
+  assert.equal(log.incident, 243);
+  assert.equal(log.owner, "koraysrn");
+  assert.equal(log.expiry, "2026-11-11T23:59:59Z");
+  assert.equal(log.restore.approval_count_after, 1);
+  assert.equal(log.restore.enforce_admins_after, true);
+  assert.equal(log.post_incident.approval_count, 1);
+  assert.equal(log.post_incident.enforce_admins, true);
+  assert.match(log.scope, /only required_approving_review_count/i);
+
+  const expected = [
+    [189, 241],
+    [190, 242],
+    [191, 245],
+    [192, 246],
+    [193, 247],
+    [194, 248],
+    [195, 249],
+    [196, 250],
+  ];
+  assert.deepEqual(
+    log.merges.map((merge) => [merge.issue, merge.pr]),
+    expected,
+  );
+  for (const merge of log.merges) {
+    assert.match(merge.merge_sha, /^[0-9a-f]{40}$/);
+    assert.match(merge.merged_at, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/);
+    assert.equal(merge.checks_green, true);
+    assert.equal(merge.restore_apply, "updated");
+    assert.equal(merge.restore_verify, "matches");
+  }
+
+  const doc = await readFile(BREAK_GLASS_DOC, "utf8");
+  for (const merge of log.merges) {
+    assert.match(doc, new RegExp(`#${merge.pr}`));
+    assert.ok(doc.includes(merge.merge_sha), `missing ${merge.merge_sha} in break-glass doc`);
+  }
+  assert.match(doc, /Incident #243 is closed/);
+  assert.match(doc, /cannot authorise any\s+further merge/);
+
+  const runbook = await readFile(RUNBOOK, "utf8");
+  assert.match(runbook, /break-glass-log\.md/);
+  assert.match(runbook, /Append the merge/);
+  const governance = await readFile(GOVERNANCE, "utf8");
+  assert.match(governance, /break-glass-log\.md/);
 });
 
 test("governance docs document the single-maintainer exception and break-glass path", async () => {

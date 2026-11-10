@@ -1,0 +1,96 @@
+{
+  "incident": 243,
+  "title": "chore(governance): break-glass merges for issues #189-#196",
+  "reason": "Single maintainer; GitHub never counts a self-approval against required_approving_review_count=1.",
+  "owner": "koraysrn",
+  "opened_at": "2026-11-10T13:00:00Z",
+  "expiry": "2026-11-11T23:59:59Z",
+  "scope": "Only required_approving_review_count is lowered to 0 for the duration of a single merge. enforce_admins, required status checks, force-push/deletion blocks and the drift workflow stay unchanged.",
+  "restore": {
+    "apply_command": "scripts/apply-branch-protection.sh --apply",
+    "verify_command": "scripts/apply-branch-protection.sh --verify",
+    "approval_count_after": 1,
+    "enforce_admins_after": true
+  },
+  "merges": [
+    {
+      "issue": 189,
+      "pr": 241,
+      "merge_sha": "74a74df82da0a5f101c4aaa5363ba74070ad6527",
+      "merged_at": "2026-11-10T13:38:45Z",
+      "checks_green": true,
+      "restore_apply": "updated",
+      "restore_verify": "matches"
+    },
+    {
+      "issue": 190,
+      "pr": 242,
+      "merge_sha": "344cc72870fa79985c8c99c5b7abd22b745038ee",
+      "merged_at": "2026-11-10T14:31:50Z",
+      "checks_green": true,
+      "restore_apply": "updated",
+      "restore_verify": "matches"
+    },
+    {
+      "issue": 191,
+      "pr": 245,
+      "merge_sha": "90323439a7befe62185dae6dec2845c06b380668",
+      "merged_at": "2026-11-10T15:14:50Z",
+      "checks_green": true,
+      "restore_apply": "updated",
+      "restore_verify": "matches"
+    },
+    {
+      "issue": 192,
+      "pr": 246,
+      "merge_sha": "3c67c63e709bbf1e607ed839a1b3b8eecc131bc7",
+      "merged_at": "2026-11-10T15:44:22Z",
+      "checks_green": true,
+      "restore_apply": "updated",
+      "restore_verify": "matches"
+    },
+    {
+      "issue": 193,
+      "pr": 247,
+      "merge_sha": "bc135de7d1298b8f10b1f445a3df821be9920546",
+      "merged_at": "2026-11-10T16:22:20Z",
+      "checks_green": true,
+      "restore_apply": "updated",
+      "restore_verify": "matches"
+    },
+    {
+      "issue": 194,
+      "pr": 248,
+      "merge_sha": "ada3d8f765d4c6461001b54c1549e069f3f9de5a",
+      "merged_at": "2026-11-10T17:45:05Z",
+      "checks_green": true,
+      "restore_apply": "updated",
+      "restore_verify": "matches"
+    },
+    {
+      "issue": 195,
+      "pr": 249,
+      "merge_sha": "cd4699294a62fb2b4d50efe4dbaca419b6f5cc8c",
+      "merged_at": "2026-11-10T18:44:06Z",
+      "checks_green": true,
+      "restore_apply": "updated",
+      "restore_verify": "matches"
+    },
+    {
+      "issue": 196,
+      "pr": 250,
+      "merge_sha": "06fce80a3c3f0b3f8248e7f2e11e3fce2cd3cb71",
+      "merged_at": "2026-11-10T19:19:57Z",
+      "checks_green": true,
+      "restore_apply": "updated",
+      "restore_verify": "matches"
+    }
+  ],
+  "post_incident": {
+    "approval_count": 1,
+    "enforce_admins": true,
+    "expected_drift_failure_run": 42878185620,
+    "final_drift_success_run": 42884190955,
+    "main_ci_sha": "06fce80a3c3f0b3f8248e7f2e11e3fce2cd3cb71"
+  }
+}
