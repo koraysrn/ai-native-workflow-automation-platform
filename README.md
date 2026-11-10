@@ -208,6 +208,7 @@ tests, coverage gates and SBOM generation.
 - [`docs/spec.md`](docs/spec.md) — technical specification
 - [`docs/adr/`](docs/adr/) — Architecture Decision Records
 - [`docs/openapi/ai-layer-openapi.yaml`](docs/openapi/ai-layer-openapi.yaml) — versioned AI layer contract
+- [`docs/correlation-ids.md`](docs/correlation-ids.md) — correlation-ID contract and PII masking
 - [`docs/accessibility.md`](docs/accessibility.md) — accessibility coverage matrix
 - [`docs/csp.md`](docs/csp.md) — Content Security Policy
 - [`CLAUDE.md`](CLAUDE.md) — project constitution (binding rules)

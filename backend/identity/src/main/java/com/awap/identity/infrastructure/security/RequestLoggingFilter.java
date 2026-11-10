@@ -33,13 +33,14 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
     } finally {
       long duration = System.currentTimeMillis() - start;
       log.info(
-          "HTTP {} {} -> status={} durationMs={} tenant={} traceId={}",
+          "HTTP {} {} -> status={} durationMs={} tenant={} traceId={} correlationId={}",
           request.getMethod(),
           request.getRequestURI(),
           response.getStatus(),
           duration,
           request.getHeader("X-Tenant-Id"),
-          MDC.get("traceId"));
+          MDC.get("traceId"),
+          MDC.get(com.awap.common.correlation.CorrelationId.MDC_KEY));
     }
   }
 }

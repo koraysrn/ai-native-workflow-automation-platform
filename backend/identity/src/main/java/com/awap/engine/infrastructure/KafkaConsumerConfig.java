@@ -75,6 +75,9 @@ public class KafkaConsumerConfig {
     // re-delivered instead of being silently lost.
     factory.getContainerProperties().setAckMode(ContainerProperties.AckMode.RECORD);
     factory.getContainerProperties().setAsyncAcks(false);
+    // Issue #191: restore X-Correlation-Id from the record headers for the listener and clear the
+    // MDC afterwards, including the failure path.
+    factory.setRecordInterceptor(new CorrelationIdRecordInterceptor());
 
     // Per-topic DLQ: every consumed topic gets its own "<topic>.dlq" so a poison record in
     // analytics cannot hide behind workflow failures and vice versa.

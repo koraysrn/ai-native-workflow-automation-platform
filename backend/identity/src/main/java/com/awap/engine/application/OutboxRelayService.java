@@ -8,6 +8,7 @@ import java.time.Duration;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.ObjectProvider;
@@ -236,9 +237,15 @@ public class OutboxRelayService {
   private boolean send(
       KafkaTemplate<String, String> kafkaTemplate, OutboxClaimStore.ClaimedOutboxEvent event) {
     try {
-      kafkaTemplate
-          .send(topicFor(event.eventType()), event.aggregateId().toString(), event.payloadJson())
-          .get(SEND_TIMEOUT.toSeconds(), TimeUnit.SECONDS);
+      ProducerRecord<String, String> record =
+          new ProducerRecord<>(
+              topicFor(event.eventType()),
+              null,
+              event.aggregateId().toString(),
+              event.payloadJson());
+      com.awap.engine.infrastructure.CorrelationIdKafkaHeaders.withCorrelationId(
+          record, event.correlationId());
+      kafkaTemplate.send(record).get(SEND_TIMEOUT.toSeconds(), TimeUnit.SECONDS);
       return true;
     } catch (InterruptedException ex) {
       Thread.currentThread().interrupt();

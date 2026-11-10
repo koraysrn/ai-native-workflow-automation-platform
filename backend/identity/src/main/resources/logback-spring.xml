@@ -2,7 +2,10 @@
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
 
-    <appender name="JSON_CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+    <!-- PiiMaskingConsoleAppender masks emails, credentials and long tokens before the JSON
+         encoder serialises the event (issue #191). JsonEncoder emits the MDC map, so every line
+         carries correlationId and traceId. -->
+    <appender name="JSON_CONSOLE" class="com.awap.common.logging.PiiMaskingConsoleAppender">
         <encoder class="ch.qos.logback.classic.encoder.JsonEncoder"/>
     </appender>
 

@@ -18,9 +18,11 @@ import java.time.Duration;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.beans.factory.ObjectProvider;
@@ -68,7 +70,7 @@ class OutboxRelayServiceTest {
   private static OutboxClaimStore.ClaimedOutboxEvent claimed(
       String eventType, String payload, UUID aggregateId, UUID token) {
     return new OutboxClaimStore.ClaimedOutboxEvent(
-        UUID.randomUUID(), eventType, aggregateId, payload, token);
+        UUID.randomUUID(), eventType, aggregateId, payload, token, null);
   }
 
   @Test
@@ -79,12 +81,20 @@ class OutboxRelayServiceTest {
     OutboxClaimStore.ClaimedOutboxEvent event =
         claimed("TASK_COMPLETED", "{\"ok\":true}", aggregateId, token);
     when(claimStore.claimBatch(100, LEASE, MAX_ATTEMPTS)).thenReturn(List.of(event));
-    when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenReturn(sent());
+    when(kafkaTemplate.send(
+            org.mockito.ArgumentMatchers
+                .<org.apache.kafka.clients.producer.ProducerRecord<String, String>>any()))
+        .thenReturn(sent());
     when(claimStore.markPublished(event.id(), token)).thenReturn(true);
 
     service.relayEvents();
 
-    verify(kafkaTemplate).send("workflow.task.events", aggregateId.toString(), "{\"ok\":true}");
+    ArgumentCaptor<ProducerRecord<String, String>> captor =
+        ArgumentCaptor.forClass(ProducerRecord.class);
+    verify(kafkaTemplate).send(captor.capture());
+    assertThat(captor.getValue().topic()).isEqualTo("workflow.task.events");
+    assertThat(captor.getValue().key()).isEqualTo(aggregateId.toString());
+    assertThat(captor.getValue().value()).isEqualTo("{\"ok\":true}");
     verify(claimStore).markPublished(event.id(), token);
     verify(claimStore, never()).release(any(), any());
     assertThat(meterRegistry.find(OutboxMetrics.PUBLISH_FAILURES).counters()).isEmpty();
@@ -98,13 +108,20 @@ class OutboxRelayServiceTest {
     OutboxClaimStore.ClaimedOutboxEvent event =
         claimed("SAGA_COMPENSATION_DLQ", "{\"sagaId\":\"x\"}", aggregateId, token);
     when(claimStore.claimBatch(100, LEASE, MAX_ATTEMPTS)).thenReturn(List.of(event));
-    when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenReturn(sent());
+    when(kafkaTemplate.send(
+            org.mockito.ArgumentMatchers
+                .<org.apache.kafka.clients.producer.ProducerRecord<String, String>>any()))
+        .thenReturn(sent());
     when(claimStore.markPublished(event.id(), token)).thenReturn(true);
 
     service.relayEvents();
 
-    verify(kafkaTemplate)
-        .send("workflow.saga.events.dlq", aggregateId.toString(), "{\"sagaId\":\"x\"}");
+    ArgumentCaptor<ProducerRecord<String, String>> captor =
+        ArgumentCaptor.forClass(ProducerRecord.class);
+    verify(kafkaTemplate).send(captor.capture());
+    assertThat(captor.getValue().topic()).isEqualTo("workflow.saga.events.dlq");
+    assertThat(captor.getValue().key()).isEqualTo(aggregateId.toString());
+    assertThat(captor.getValue().value()).isEqualTo("{\"sagaId\":\"x\"}");
   }
 
   @Test
@@ -113,7 +130,9 @@ class OutboxRelayServiceTest {
     OutboxClaimStore.ClaimedOutboxEvent event =
         claimed("FORM_SUBMITTED", "{\"ok\":true}", UUID.randomUUID(), UUID.randomUUID());
     when(claimStore.claimBatch(100, LEASE, MAX_ATTEMPTS)).thenReturn(List.of(event));
-    when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+    when(kafkaTemplate.send(
+            org.mockito.ArgumentMatchers
+                .<org.apache.kafka.clients.producer.ProducerRecord<String, String>>any()))
         .thenReturn(CompletableFuture.failedFuture(new RuntimeException("broker down")));
 
     service.relayEvents();
@@ -156,7 +175,10 @@ class OutboxRelayServiceTest {
     OutboxClaimStore.ClaimedOutboxEvent event =
         claimed("TASK_COMPLETED", "{\"ok\":true}", UUID.randomUUID(), UUID.randomUUID());
     when(claimStore.claimBatch(100, LEASE, MAX_ATTEMPTS)).thenReturn(List.of(event));
-    when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenReturn(sent());
+    when(kafkaTemplate.send(
+            org.mockito.ArgumentMatchers
+                .<org.apache.kafka.clients.producer.ProducerRecord<String, String>>any()))
+        .thenReturn(sent());
     when(claimStore.markPublished(event.id(), event.claimToken())).thenReturn(false);
 
     service.relayEvents();
@@ -180,14 +202,20 @@ class OutboxRelayServiceTest {
     when(claimStore.claimBatch(100, LEASE, MAX_ATTEMPTS))
         .thenReturn(List.of(event))
         .thenReturn(List.of());
-    when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenReturn(sent());
+    when(kafkaTemplate.send(
+            org.mockito.ArgumentMatchers
+                .<org.apache.kafka.clients.producer.ProducerRecord<String, String>>any()))
+        .thenReturn(sent());
     when(claimStore.markPublished(event.id(), event.claimToken())).thenReturn(true);
 
     service.relayEvents();
     service.relayEvents();
 
     verify(claimStore, times(2)).claimBatch(100, LEASE, MAX_ATTEMPTS);
-    verify(kafkaTemplate, times(1)).send(anyString(), anyString(), anyString());
+    verify(kafkaTemplate, times(1))
+        .send(
+            org.mockito.ArgumentMatchers
+                .<org.apache.kafka.clients.producer.ProducerRecord<String, String>>any());
     verify(claimStore, times(1)).markPublished(event.id(), event.claimToken());
   }
 

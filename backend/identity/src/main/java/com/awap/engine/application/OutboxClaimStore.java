@@ -53,7 +53,12 @@ public interface OutboxClaimStore {
 
   /** An outbox row leased by this relay, with the fencing token required to complete it. */
   record ClaimedOutboxEvent(
-      UUID id, String eventType, UUID aggregateId, String payloadJson, UUID claimToken) {}
+      UUID id,
+      String eventType,
+      UUID aggregateId,
+      String payloadJson,
+      UUID claimToken,
+      String correlationId) {}
 
   /** A stale claim that reconciliation released, with the age of the abandoned lease. */
   record ReleasedOutboxClaim(UUID id, UUID tenantId, double claimAgeSeconds) {}

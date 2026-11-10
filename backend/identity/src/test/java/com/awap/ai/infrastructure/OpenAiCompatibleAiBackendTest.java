@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.awap.ai.application.LocalHeuristicAiBackend;
 import com.awap.common.api.AwapException;
+import com.awap.common.correlation.CorrelationId;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
@@ -19,6 +20,7 @@ import java.util.function.Consumer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 
 class OpenAiCompatibleAiBackendTest {
 
@@ -71,12 +73,14 @@ class OpenAiCompatibleAiBackendTest {
     AtomicReference<String> method = new AtomicReference<>();
     AtomicReference<String> authorization = new AtomicReference<>();
     AtomicReference<String> body = new AtomicReference<>();
+    AtomicReference<String> correlation = new AtomicReference<>();
     respond(
         200,
         "{\"choices\":[{\"message\":{\"content\":\"FINANCE\"}}]}",
         exchange -> {
           method.set(exchange.getRequestMethod());
           authorization.set(exchange.getRequestHeaders().getFirst("Authorization"));
+          correlation.set(exchange.getRequestHeaders().getFirst(CorrelationId.HEADER));
           try {
             body.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
           } catch (IOException ex) {
@@ -84,11 +88,18 @@ class OpenAiCompatibleAiBackendTest {
           }
         });
 
-    String content = backend("sk-test", baseUrl).complete("classify: invoice payment", 16);
+    MDC.put(CorrelationId.MDC_KEY, "corr-ai");
+    String content;
+    try {
+      content = backend("sk-test", baseUrl).complete("classify: invoice payment", 16);
+    } finally {
+      MDC.clear();
+    }
 
     assertThat(content).isEqualTo("FINANCE");
     assertThat(method.get()).isEqualTo("POST");
     assertThat(authorization.get()).isEqualTo("Bearer sk-test");
+    assertThat(correlation.get()).isEqualTo("corr-ai");
     assertThat(body.get())
         .contains("\"model\":\"test-model\"")
         .contains("classify: invoice payment");

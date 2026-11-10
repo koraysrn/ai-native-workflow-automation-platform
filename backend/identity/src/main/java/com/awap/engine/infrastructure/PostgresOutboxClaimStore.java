@@ -30,7 +30,7 @@ import org.springframework.stereotype.Repository;
 public class PostgresOutboxClaimStore implements OutboxClaimStore {
 
   private static final String CLAIM_SQL =
-      "SELECT id, event_type, aggregate_id, payload_json, claim_token"
+      "SELECT id, event_type, aggregate_id, payload_json, claim_token, correlation_id"
           + " FROM awap_claim_outbox_batch(?::int, ?::int, ?::int)";
 
   private static final String MARK_PUBLISHED_SQL =
@@ -64,7 +64,8 @@ public class PostgresOutboxClaimStore implements OutboxClaimStore {
                 rs.getString("event_type"),
                 rs.getObject("aggregate_id", UUID.class),
                 rs.getString("payload_json"),
-                rs.getObject("claim_token", UUID.class)),
+                rs.getObject("claim_token", UUID.class),
+                rs.getString("correlation_id")),
         Math.max(1, limit),
         Math.max(1, (int) lease.toSeconds()),
         Math.max(1, maxAttempts));

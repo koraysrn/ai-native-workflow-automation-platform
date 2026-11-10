@@ -156,6 +156,12 @@ awap:
   ai:
     # Fail-closed: the AI workflow node refuses to run until an operator enables it.
     node-enabled: ${AI_NODE_ENABLED:false}
+    # Issue #191: forwards X-Correlation-Id to the Python AI layer and checks the echo in the
+    # actuator health indicator. Disabled by default so a stack without the AI layer stays healthy.
+    layer:
+      enabled: ${AI_LAYER_ENABLED:false}
+      base-url: ${AI_LAYER_URL:http://localhost:8000}
+      timeout-ms: ${AI_LAYER_TIMEOUT_MS:2000}
     # local (deterministic heuristic) or openai (OpenAI-compatible endpoint).
     provider: ${AI_PROVIDER:local}
     openai:

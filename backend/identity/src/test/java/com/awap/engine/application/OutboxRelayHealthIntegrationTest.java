@@ -1,7 +1,6 @@
 package com.awap.engine.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 import com.awap.engine.domain.OutboxEvent;
@@ -10,6 +9,7 @@ import com.awap.engine.infrastructure.OutboxRelayHealthIndicator;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -59,7 +59,8 @@ class OutboxRelayHealthIntegrationTest {
         .containsEntry("lastSuccessfulPublish", "none");
 
     OutboxEvent event = newEvent("TASK_COMPLETED");
-    when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenReturn(sent());
+    when(kafkaTemplate.send(org.mockito.ArgumentMatchers.<ProducerRecord<String, String>>any()))
+        .thenReturn(sent());
 
     relayService.relayEvents();
 
@@ -70,7 +71,7 @@ class OutboxRelayHealthIntegrationTest {
     assertThat(healthIndicator.health().getDetails()).containsEntry("publishedEvents", 1L);
 
     OutboxEvent failing = newEvent("TASK_COMPLETED");
-    when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+    when(kafkaTemplate.send(org.mockito.ArgumentMatchers.<ProducerRecord<String, String>>any()))
         .thenReturn(CompletableFuture.failedFuture(new RuntimeException("broker down")));
 
     relayService.relayEvents();
@@ -81,7 +82,8 @@ class OutboxRelayHealthIntegrationTest {
         .containsEntry("consecutiveFailures", 1)
         .containsEntry("lastFailureReason", "send_failed");
 
-    when(kafkaTemplate.send(anyString(), anyString(), anyString())).thenReturn(sent());
+    when(kafkaTemplate.send(org.mockito.ArgumentMatchers.<ProducerRecord<String, String>>any()))
+        .thenReturn(sent());
 
     relayService.relayEvents();
 

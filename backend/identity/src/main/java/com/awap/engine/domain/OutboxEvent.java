@@ -33,6 +33,10 @@ public class OutboxEvent {
   @Column(name = "payload_json", nullable = false, columnDefinition = "TEXT")
   private String payloadJson;
 
+  /** Correlation ID captured from the request that produced the event (issue #191). */
+  @Column(name = "correlation_id")
+  private String correlationId;
+
   @Column(nullable = false)
   private Instant createdAt;
 
@@ -62,12 +66,23 @@ public class OutboxEvent {
 
   public OutboxEvent(
       UUID tenantId, String aggregateType, UUID aggregateId, String eventType, String payloadJson) {
+    this(tenantId, aggregateType, aggregateId, eventType, payloadJson, null);
+  }
+
+  public OutboxEvent(
+      UUID tenantId,
+      String aggregateType,
+      UUID aggregateId,
+      String eventType,
+      String payloadJson,
+      String correlationId) {
     this.id = UUID.randomUUID();
     this.tenantId = tenantId;
     this.aggregateType = aggregateType;
     this.aggregateId = aggregateId;
     this.eventType = eventType;
     this.payloadJson = payloadJson;
+    this.correlationId = correlationId;
     this.createdAt = Instant.now();
     this.published = false;
     this.publishAttempts = 0;
@@ -126,6 +141,10 @@ public class OutboxEvent {
 
   public String getPayloadJson() {
     return payloadJson;
+  }
+
+  public String getCorrelationId() {
+    return correlationId;
   }
 
   public Instant getCreatedAt() {

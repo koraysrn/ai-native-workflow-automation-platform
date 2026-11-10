@@ -15,7 +15,10 @@
     <description>Shared kernel: RFC 7807 error handling, error catalog, API versioning</description>
 
     <properties>
-        <jacoco.skip>true</jacoco.skip>
+        <!-- Issue #191: the shared correlation/logging classes must appear in the Sonar coverage
+             report, but the common module does not own a bundle coverage gate. -->
+        <jacoco.skip>false</jacoco.skip>
+        <jacoco.skip.check>true</jacoco.skip.check>
     </properties>
 
     <dependencies>
