@@ -13,6 +13,8 @@ public interface OrganizationUserRepository extends JpaRepository<OrganizationUs
 
   List<OrganizationUser> findByTenantIdAndTeamIdAndDeletedFalse(UUID tenantId, UUID teamId);
 
+  List<OrganizationUser> findByTenantIdAndPositionIdAndDeletedFalse(UUID tenantId, UUID positionId);
+
   Optional<OrganizationUser> findByIdAndTenantIdAndDeletedFalse(UUID id, UUID tenantId);
 
   long countByTenantIdAndDeletedFalse(UUID tenantId);

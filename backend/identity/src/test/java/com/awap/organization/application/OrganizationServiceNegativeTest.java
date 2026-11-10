@@ -7,8 +7,10 @@ import static org.mockito.Mockito.when;
 import com.awap.common.api.AwapException;
 import com.awap.engine.application.OutboxEventPublisher;
 import com.awap.identity.application.QuotaService;
+import com.awap.identity.infrastructure.UserRepository;
 import com.awap.organization.infrastructure.CompanyRepository;
 import com.awap.organization.infrastructure.DepartmentRepository;
+import com.awap.organization.infrastructure.OrganizationAuditEventRepository;
 import com.awap.organization.infrastructure.OrganizationUserRepository;
 import com.awap.organization.infrastructure.PositionRepository;
 import com.awap.organization.infrastructure.TeamRepository;
@@ -41,7 +43,9 @@ class OrganizationServiceNegativeTest {
             mock(OrganizationUserRepository.class),
             mock(QuotaService.class),
             mock(OutboxEventPublisher.class),
-            mock(OrganizationMapper.class));
+            mock(OrganizationMapper.class),
+            mock(UserRepository.class),
+            mock(OrganizationAuditEventRepository.class));
   }
 
   @Test

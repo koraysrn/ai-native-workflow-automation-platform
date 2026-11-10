@@ -4,13 +4,17 @@ import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
 import com.awap.engine.application.OutboxEventPublisher;
 import com.awap.identity.application.QuotaService;
+import com.awap.identity.domain.Role;
+import com.awap.identity.infrastructure.UserRepository;
 import com.awap.organization.domain.Company;
 import com.awap.organization.domain.Department;
+import com.awap.organization.domain.OrganizationAuditEvent;
 import com.awap.organization.domain.OrganizationUser;
 import com.awap.organization.domain.Position;
 import com.awap.organization.domain.Team;
 import com.awap.organization.infrastructure.CompanyRepository;
 import com.awap.organization.infrastructure.DepartmentRepository;
+import com.awap.organization.infrastructure.OrganizationAuditEventRepository;
 import com.awap.organization.infrastructure.OrganizationUserRepository;
 import com.awap.organization.infrastructure.PositionRepository;
 import com.awap.organization.infrastructure.TeamRepository;
@@ -25,9 +29,12 @@ import com.awap.organization.interfaces.dto.OrgUserResponse;
 import com.awap.organization.interfaces.dto.OrganizationMapper;
 import com.awap.organization.interfaces.dto.PositionRequest;
 import com.awap.organization.interfaces.dto.PositionResponse;
+import com.awap.organization.interfaces.dto.PositionRoleRequest;
 import com.awap.organization.interfaces.dto.TeamRequest;
 import com.awap.organization.interfaces.dto.TeamResponse;
 import com.awap.organization.interfaces.dto.TeamTreeResponse;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -48,6 +55,8 @@ public class OrganizationService {
   private final QuotaService quotaService;
   private final OutboxEventPublisher outboxEventPublisher;
   private final OrganizationMapper organizationMapper;
+  private final UserRepository userRepository;
+  private final OrganizationAuditEventRepository auditEventRepository;
 
   public OrganizationService(
       CompanyRepository companyRepository,
@@ -57,7 +66,9 @@ public class OrganizationService {
       OrganizationUserRepository organizationUserRepository,
       QuotaService quotaService,
       OutboxEventPublisher outboxEventPublisher,
-      OrganizationMapper organizationMapper) {
+      OrganizationMapper organizationMapper,
+      UserRepository userRepository,
+      OrganizationAuditEventRepository auditEventRepository) {
     this.companyRepository = companyRepository;
     this.departmentRepository = departmentRepository;
     this.teamRepository = teamRepository;
@@ -66,6 +77,8 @@ public class OrganizationService {
     this.quotaService = quotaService;
     this.outboxEventPublisher = outboxEventPublisher;
     this.organizationMapper = organizationMapper;
+    this.userRepository = userRepository;
+    this.auditEventRepository = auditEventRepository;
   }
 
   @Transactional
@@ -134,15 +147,104 @@ public class OrganizationService {
   }
 
   @Transactional
-  public PositionResponse createPosition(UUID tenantId, PositionRequest request) {
-    Position position = new Position(tenantId, request.name());
+  public PositionResponse createPosition(
+      UUID tenantId, PositionRequest request, String callerRole) {
+    Role role = request.role() == null ? Role.EMPLOYEE : request.role();
+    assertCanAssign(callerRole, role);
+    Position position = new Position(tenantId, request.name(), role);
     positionRepository.save(position);
     publish(
         tenantId,
         "organization.position.created",
         position.getId(),
-        Map.of("tenantId", tenantId, "entityId", position.getId(), "name", position.getName()));
+        Map.of(
+            "tenantId", tenantId,
+            "entityId", position.getId(),
+            "name", position.getName(),
+            "role", position.getRole().name()));
     return organizationMapper.toResponse(position);
+  }
+
+  /**
+   * Changes the role attached to a position and recalculates the effective authorities of every
+   * user currently placed in it (issue #194). The change is audited and published to the outbox.
+   */
+  @Transactional
+  public PositionResponse updatePositionRole(
+      UUID tenantId,
+      UUID positionId,
+      PositionRoleRequest request,
+      String callerRole,
+      UUID actorId) {
+    Position position =
+        positionRepository
+            .findByIdAndTenantIdAndDeletedFalse(positionId, tenantId)
+            .orElseThrow(() -> notFound("Position not found."));
+    Role target = request.role();
+    assertCanAssign(callerRole, target);
+    Role previous = position.getRole();
+    if (previous == target) {
+      return organizationMapper.toResponse(position);
+    }
+    position.changeRole(target);
+    List<UUID> affectedUsers = propagateRole(tenantId, positionId, target);
+    auditEventRepository.save(
+        new OrganizationAuditEvent(
+            tenantId,
+            "POSITION",
+            positionId,
+            "ROLE_CHANGED",
+            previous.name(),
+            target.name(),
+            actorId));
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("tenantId", tenantId);
+    payload.put("entityId", positionId);
+    payload.put("oldRole", previous.name());
+    payload.put("newRole", target.name());
+    payload.put("affectedUserIds", affectedUsers);
+    publish(tenantId, "organization.position.role_changed", positionId, payload);
+    return organizationMapper.toResponse(position);
+  }
+
+  private List<UUID> propagateRole(UUID tenantId, UUID positionId, Role role) {
+    List<UUID> affected = new ArrayList<>();
+    for (OrganizationUser member :
+        organizationUserRepository.findByTenantIdAndPositionIdAndDeletedFalse(
+            tenantId, positionId)) {
+      userRepository
+          .findByTenantIdAndEmailRls(tenantId, member.getEmail())
+          .ifPresent(
+              user -> {
+                user.assignRole(role);
+                userRepository.save(user);
+                affected.add(user.getId());
+              });
+    }
+    return affected;
+  }
+
+  private void assertCanAssign(String callerRole, Role target) {
+    if (target == null) {
+      throw new AwapException(
+          ErrorCode.VALIDATION_FAILED, HttpStatus.BAD_REQUEST, "A position role is required.");
+    }
+    if (callerRole == null || callerRole.isBlank()) {
+      return;
+    }
+    Role caller;
+    try {
+      caller = Role.valueOf(callerRole);
+    } catch (IllegalArgumentException ex) {
+      throw new AwapException(
+          ErrorCode.FORBIDDEN, HttpStatus.FORBIDDEN, "Unknown caller role for role assignment.");
+    }
+    if (!caller.canAssign(target)) {
+      throw new AwapException(
+          ErrorCode.FORBIDDEN,
+          HttpStatus.FORBIDDEN,
+          "Cannot assign a role above the caller's authority.");
+    }
   }
 
   public List<PositionResponse> listPositions(UUID tenantId) {
@@ -154,10 +256,20 @@ public class OrganizationService {
   @Transactional
   public OrgUserResponse createUser(UUID tenantId, OrgUserRequest request) {
     quotaService.assertCanCreateUser(tenantId);
+    Position position = null;
+    if (request.positionId() != null) {
+      position =
+          positionRepository
+              .findByIdAndTenantIdAndDeletedFalse(request.positionId(), tenantId)
+              .orElseThrow(() -> notFound("Position not found."));
+    }
     OrganizationUser user =
         new OrganizationUser(
             tenantId, request.email(), request.fullName(), request.teamId(), request.positionId());
     organizationUserRepository.save(user);
+    if (position != null) {
+      applyPositionRole(tenantId, request.email(), position);
+    }
     publish(
         tenantId,
         "organization.user.created",
@@ -233,6 +345,16 @@ public class OrganizationService {
         user.getId(),
         Map.of("tenantId", tenantId, "entityId", user.getId(), "teamId", teamId));
     return organizationMapper.toResponse(user);
+  }
+
+  private void applyPositionRole(UUID tenantId, String email, Position position) {
+    userRepository
+        .findByTenantIdAndEmailRls(tenantId, email)
+        .ifPresent(
+            user -> {
+              user.assignRole(position.getRole());
+              userRepository.save(user);
+            });
   }
 
   private void publish(UUID tenantId, String eventType, UUID entityId, Object snapshot) {

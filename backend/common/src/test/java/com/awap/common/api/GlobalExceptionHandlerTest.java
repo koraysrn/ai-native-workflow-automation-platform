@@ -6,8 +6,10 @@ import static org.mockito.Mockito.when;
 
 import jakarta.servlet.http.HttpServletRequest;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpInputMessage;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 
 /** Verifies RFC 7807 Problem Details mapping for every handled exception type. */
@@ -41,6 +43,22 @@ class GlobalExceptionHandlerTest {
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
     assertThat(response.getBody().code()).isEqualTo(ErrorCode.VALIDATION_FAILED.code());
+  }
+
+  @Test
+  void mapsUnreadableBodyToBadRequest() {
+    HttpServletRequest request = mock(HttpServletRequest.class);
+    when(request.getRequestURI()).thenReturn("/api/v1/organizations/positions/1/role");
+
+    HttpMessageNotReadableException ex =
+        new HttpMessageNotReadableException(
+            "Cannot deserialize value of type Role", (HttpInputMessage) null);
+
+    ResponseEntity<ProblemDetails> response = handler.handleUnreadableMessage(ex, request);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+    assertThat(response.getBody().code()).isEqualTo(ErrorCode.VALIDATION_FAILED.code());
+    assertThat(response.getBody().detail()).doesNotContain("Cannot deserialize");
   }
 
   @Test

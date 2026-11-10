@@ -599,6 +599,8 @@ paths:
               properties:
                 name:
                   type: string
+                role:
+                  $ref: "#/components/schemas/Role"
       responses:
         "201":
           description: Position created.
@@ -606,6 +608,56 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/PositionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/organizations/positions/{id}/role:
+    put:
+      operationId: updatePositionRole
+      summary: Change a position role
+      description: >-
+        Changes the role attached to a position and recalculates the effective authorities of every
+        user currently placed in it. The change is audited and published to the outbox. A caller
+        cannot assign a role above their own authority; a position from another tenant returns 404.
+      tags: [Organizations]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [role]
+              properties:
+                role:
+                  $ref: "#/components/schemas/Role"
+            examples:
+              promoteToManager:
+                value:
+                  role: MANAGER
+      responses:
+        "200":
+          description: Updated position.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PositionResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   /api/v1/organizations/users:
     get:
@@ -2665,8 +2717,17 @@ components:
         name:
           type: string
 
+    Role:
+      type: string
+      enum: [SYSTEM_ADMIN, TENANT_ADMIN, MANAGER, OPERATIONS, EMPLOYEE]
+      description: >-
+        Authority order: SYSTEM_ADMIN > TENANT_ADMIN > MANAGER > OPERATIONS > EMPLOYEE.
+        A caller may assign its own role or a lower one. When a position is created without a
+        role, the server applies EMPLOYEE.
+
     PositionResponse:
       type: object
+      required: [id, tenantId, name, role]
       properties:
         id:
           type: string
@@ -2676,6 +2737,8 @@ components:
           format: uuid
         name:
           type: string
+        role:
+          $ref: "#/components/schemas/Role"
 
     OrgUserResponse:
       type: object

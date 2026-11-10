@@ -13,6 +13,7 @@ import com.awap.organization.interfaces.dto.OrgUserRequest;
 import com.awap.organization.interfaces.dto.OrgUserResponse;
 import com.awap.organization.interfaces.dto.PositionRequest;
 import com.awap.organization.interfaces.dto.PositionResponse;
+import com.awap.organization.interfaces.dto.PositionRoleRequest;
 import com.awap.organization.interfaces.dto.TeamAssignRequest;
 import com.awap.organization.interfaces.dto.TeamRequest;
 import com.awap.organization.interfaces.dto.TeamResponse;
@@ -25,6 +26,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -92,7 +94,16 @@ public class OrganizationController {
   public ResponseEntity<PositionResponse> createPosition(
       @Valid @RequestBody PositionRequest request) {
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(organizationService.createPosition(currentTenantId(), request));
+        .body(organizationService.createPosition(currentTenantId(), request, currentRole()));
+  }
+
+  @PutMapping("/positions/{id}/role")
+  @PreAuthorize("hasAuthority('USER_MANAGE')")
+  public ResponseEntity<PositionResponse> updatePositionRole(
+      @PathVariable UUID id, @Valid @RequestBody PositionRoleRequest request) {
+    return ResponseEntity.ok(
+        organizationService.updatePositionRole(
+            currentTenantId(), id, request, currentRole(), currentUserId()));
   }
 
   @GetMapping("/positions")
@@ -125,6 +136,28 @@ public class OrganizationController {
   private UUID currentTenantId() {
     return TenantContext.current()
         .map(TenantContext.Context::tenantId)
+        .orElseThrow(
+            () ->
+                new AwapException(
+                    ErrorCode.UNAUTHORIZED,
+                    HttpStatus.UNAUTHORIZED,
+                    "Authentication is required."));
+  }
+
+  private String currentRole() {
+    return TenantContext.current()
+        .map(TenantContext.Context::role)
+        .orElseThrow(
+            () ->
+                new AwapException(
+                    ErrorCode.UNAUTHORIZED,
+                    HttpStatus.UNAUTHORIZED,
+                    "Authentication is required."));
+  }
+
+  private UUID currentUserId() {
+    return TenantContext.current()
+        .map(TenantContext.Context::userId)
         .orElseThrow(
             () ->
                 new AwapException(
