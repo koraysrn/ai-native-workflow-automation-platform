@@ -5,8 +5,8 @@
     "branch": 0.6
   },
   "bundle": {
-    "line": 0.9675324675324676,
-    "branch": 0.84375
+    "line": 0.965,
+    "branch": 0.84
   },
   "packages": {
     "com.awap.common.api": {

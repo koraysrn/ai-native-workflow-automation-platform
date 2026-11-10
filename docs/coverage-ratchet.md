@@ -27,6 +27,11 @@ The full per-package snapshot is committed in
 [`docs/coverage/trend.json`](coverage/trend.json) and
 [`docs/coverage/trend-common.json`](coverage/trend-common.json).
 
+The recorded bundle baseline is deliberately floored below the local measurement
+(identity 85.50% / 71.50%, common 96.50% / 84.00%) to absorb small environment
+variance while still failing any meaningful regression. The active JaCoCo minimum
+(80% line / 60% branch) remains the hard gate.
+
 ## Ratchet steps
 
 | Step | Bundle line | Bundle branch | Status | Target date | Activation |
