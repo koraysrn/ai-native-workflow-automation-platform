@@ -601,9 +601,6 @@ paths:
                   type: string
                 role:
                   $ref: "#/components/schemas/Role"
-                  description: >-
-                    Optional; missing values default to EMPLOYEE. The caller cannot assign a
-                    role above their own authority.
       responses:
         "201":
           description: Position created.
@@ -2725,7 +2722,8 @@ components:
       enum: [SYSTEM_ADMIN, TENANT_ADMIN, MANAGER, OPERATIONS, EMPLOYEE]
       description: >-
         Authority order: SYSTEM_ADMIN > TENANT_ADMIN > MANAGER > OPERATIONS > EMPLOYEE.
-        A caller may assign its own role or a lower one.
+        A caller may assign its own role or a lower one. When a position is created without a
+        role, the server applies EMPLOYEE.
 
     PositionResponse:
       type: object
