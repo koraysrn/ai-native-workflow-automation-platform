@@ -61,6 +61,19 @@ test("a tag is only created after a green full CI run on main", async () => {
   assert.match(workflow, /steps\.gate\.outputs\.skip != 'true'/);
 });
 
+test("release SBOM generation uses the backend POM and has a recovery path", async () => {
+  const workflow = await readFile(RELEASE_WORKFLOW, "utf8");
+  // Regression from the v1.1.0 release: Maven ran at the repository root, where
+  // there is no POM, so the release failed after creating the tag.
+  assert.match(workflow, /mvn -B -f backend\/pom\.xml org\.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom/);
+  assert.match(workflow, /recover_tag:/);
+  assert.match(workflow, /name: Release SBOM Recovery/);
+  assert.match(workflow, /ref: \$\{\{ inputs\.recover_tag \}\}/);
+  assert.match(workflow, /--version "\$\{\{ inputs\.recover_tag \}\}"/);
+  assert.match(workflow, /gh release upload "\$TAG_NAME" sbom\/\*\.cdx\.json sbom\/\*\.bundle --clobber/);
+  assert.match(workflow, /contents: write\n {6}id-token: write/);
+});
+
 test("release runs are serialized and cannot create a second tag or CD dispatch", async () => {
   const workflow = await readFile(RELEASE_WORKFLOW, "utf8");
   assert.match(workflow, /concurrency:\n {2}group: release-please\n {2}cancel-in-progress: false/);
