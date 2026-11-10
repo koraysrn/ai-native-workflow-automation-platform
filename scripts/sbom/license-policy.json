@@ -1,0 +1,39 @@
+{
+  "description": "License policy for the merged runtime SBOM. Strong copyleft is denied; weak copyleft and permissive licenses are allowed. Components without license metadata are reported but do not fail the release.",
+  "allow": [
+    "0BSD",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "BlueOak-1.0.0",
+    "CC0-1.0",
+    "CC-BY-4.0",
+    "CDDL-1.0",
+    "CDDL-1.1",
+    "EPL-1.0",
+    "EPL-2.0",
+    "ISC",
+    "LGPL-2.1-only",
+    "LGPL-2.1-or-later",
+    "LGPL-3.0-only",
+    "LGPL-3.0-or-later",
+    "MIT",
+    "MIT-0",
+    "MPL-2.0",
+    "PSF-2.0",
+    "Python-2.0",
+    "Unlicense",
+    "WTFPL",
+    "Zlib"
+  ],
+  "deny": [
+    "AGPL-3.0-only",
+    "AGPL-3.0-or-later",
+    "GPL-2.0-only",
+    "GPL-2.0-or-later",
+    "GPL-3.0-only",
+    "GPL-3.0-or-later",
+    "SSPL-1.0"
+  ]
+}

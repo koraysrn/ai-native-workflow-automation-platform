@@ -67,6 +67,8 @@ REQUIRED_CHECKS=(
   "Vulnerability Scan"
   "Secret Scan"
   "Dependency Scan"
+  # Issue #193: a missing, invalid or policy-violating release SBOM blocks the merge.
+  "SBOM"
   "Code Quality"
   # A reusable workflow reports one check per matrix entry under the caller job name.
   # There is no bare `Docker Build` status context; requiring it would block every PR.

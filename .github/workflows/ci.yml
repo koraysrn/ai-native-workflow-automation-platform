@@ -526,6 +526,87 @@ jobs:
           node infra/scripts/provision-connector.mjs --dry-run
           node infra/scripts/check-provision-trace.mjs "$AWAP_PROVISION_TRACE_FILE"
 
+  sbom:
+    name: SBOM
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: "25"
+          cache: maven
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: astral-sh/setup-uv@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.15"
+      - name: Install Syft
+        uses: anchore/sbom-action/download-syft@v0
+      - name: SBOM tooling tests
+        # Issue #193: every validation, merge and license branch is exercised.
+        run: node --test "scripts/test/sbom.test.mjs"
+      - name: Generate the backend SBOM (CycloneDX Maven)
+        run: mvn -B org.cyclonedx:cyclonedx-maven-plugin:makeAggregateBom
+        working-directory: backend
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: frontend
+      - name: Sync AI layer dependencies
+        run: uv sync --locked
+        working-directory: ai-layer
+      - name: Generate frontend and AI layer SBOMs (Syft)
+        run: |
+          mkdir -p sbom
+          cp backend/target/bom.json sbom/backend.cdx.json
+          syft dir:frontend -o cyclonedx-json=sbom/frontend.cdx.json
+          syft dir:ai-layer -o cyclonedx-json=sbom/ai-layer.cdx.json
+      - name: Validate each layer SBOM
+        run: |
+          node scripts/sbom/sbom.mjs validate --file sbom/backend.cdx.json --layer backend
+          node scripts/sbom/sbom.mjs validate --file sbom/frontend.cdx.json --layer frontend
+          node scripts/sbom/sbom.mjs validate --file sbom/ai-layer.cdx.json --layer ai-layer
+      - name: Merge the release inventory
+        run: >-
+          node scripts/sbom/sbom.mjs merge
+          --backend sbom/backend.cdx.json
+          --frontend sbom/frontend.cdx.json
+          --ai sbom/ai-layer.cdx.json
+          --version "${GITHUB_SHA::12}"
+          --output sbom/awap-sbom.cdx.json
+      - name: Enforce the license policy
+        run: node scripts/sbom/sbom.mjs licenses --file sbom/awap-sbom.cdx.json
+      - name: Validate against the CycloneDX schema
+        run: |
+          curl -fsSL https://github.com/CycloneDX/cyclonedx-cli/releases/latest/download/cyclonedx-linux-x64 \
+            -o /usr/local/bin/cyclonedx
+          chmod +x /usr/local/bin/cyclonedx
+          for file in sbom/*.cdx.json; do
+            cyclonedx validate --input-file "$file" --input-format json
+          done
+      - name: Scan the merged SBOM for vulnerabilities
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: sbom
+          scan-ref: sbom/awap-sbom.cdx.json
+          format: table
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: 0
+      - name: Upload the SBOM inventory
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: sbom-inventory
+          path: sbom
+          retention-days: 30
+          if-no-files-found: error
+
   openapi:
     name: API Lint
     runs-on: ubuntu-latest

@@ -259,6 +259,7 @@ test("the committed policy snapshot matches --expected", async () => {
     "Vulnerability Scan",
     "Secret Scan",
     "Dependency Scan",
+    "SBOM",
     "Code Quality",
     "Docker Build / Build Images (awap-backend, backend/Dockerfile, .)",
     "Docker Build / Build Images (awap-frontend, frontend/Dockerfile, .)",
