@@ -436,6 +436,8 @@ services:
       FILE_SCAN_INTERVAL_MS: ${FILE_SCAN_INTERVAL_MS:-60000}
       OUTBOX_RELAY_INTERVAL_MS: ${OUTBOX_RELAY_INTERVAL_MS:-5000}
       OUTBOX_RELAY_INITIAL_DELAY_MS: ${OUTBOX_RELAY_INITIAL_DELAY_MS:-5000}
+      # Issue #190: the local Prometheus scrapes /actuator/prometheus without a user token.
+      AWAP_METRICS_PUBLIC: ${AWAP_METRICS_PUBLIC:-true}
     ports:
       - "8080:8080"
     healthcheck:

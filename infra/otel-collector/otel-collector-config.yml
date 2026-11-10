@@ -13,7 +13,9 @@ exporters:
   prometheus:
     endpoint: "0.0.0.0:8889"
   debug:
-    verbosity: basic
+    # `detailed` prints each span including its trace ID. The local/CI observability proof reads
+    # that ID from the collector logs to prove the span arrived (issue #190).
+    verbosity: detailed
 
 service:
   pipelines:

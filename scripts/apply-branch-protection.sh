@@ -76,6 +76,8 @@ REQUIRED_CHECKS=(
   "End-to-End Tests"
   "API Lint"
   "Observability Checks"
+  # Issue #190: the live metric/trace/log proof is a merge gate.
+  "Observability Proof"
   "CDC Checks"
   "Load Tests"
   "Kubernetes Overlays"
