@@ -1,0 +1,213 @@
+{
+  "updated": "2026-11-10",
+  "minimum": {
+    "line": 0.8,
+    "branch": 0.6
+  },
+  "bundle": {
+    "line": 0.8572293411361114,
+    "branch": 0.7192575406032483
+  },
+  "packages": {
+    "com.awap.ai.application": {
+      "line": 0.891156462585034,
+      "branch": 0.7592592592592593
+    },
+    "com.awap.ai.domain": {
+      "line": 0.828125,
+      "branch": 0.95
+    },
+    "com.awap.ai.infrastructure": {
+      "line": 0.8823529411764706,
+      "branch": 0.8846153846153846
+    },
+    "com.awap.analytics.application": {
+      "line": 0.8083333333333333,
+      "branch": 0.6481481481481481
+    },
+    "com.awap.analytics.domain": {
+      "line": 0.8214285714285714,
+      "branch": 0
+    },
+    "com.awap.analytics.infrastructure.opensearch": {
+      "line": 0.7793427230046949,
+      "branch": 0.7222222222222222
+    },
+    "com.awap.analytics.interfaces.api": {
+      "line": 0.13636363636363635,
+      "branch": 0
+    },
+    "com.awap.document.application": {
+      "line": 0.8534031413612565,
+      "branch": 0.7647058823529411
+    },
+    "com.awap.document.domain": {
+      "line": 0.8333333333333334,
+      "branch": 0
+    },
+    "com.awap.document.interfaces.api": {
+      "line": 0.6352941176470588,
+      "branch": 0.5
+    },
+    "com.awap.engine.application": {
+      "line": 0.8726708074534162,
+      "branch": 0.7582260371959942
+    },
+    "com.awap.engine.domain": {
+      "line": 0.9191780821917809,
+      "branch": 0.7604790419161677
+    },
+    "com.awap.engine.infrastructure": {
+      "line": 0.8687196110210696,
+      "branch": 0.8054054054054054
+    },
+    "com.awap.engine.interfaces.api": {
+      "line": 0.5833333333333334,
+      "branch": 0
+    },
+    "com.awap.file.application": {
+      "line": 0.9155313351498637,
+      "branch": 0.7398373983739838
+    },
+    "com.awap.file.domain": {
+      "line": 0.865979381443299,
+      "branch": 0.7916666666666666
+    },
+    "com.awap.file.infrastructure": {
+      "line": 0.12195121951219512,
+      "branch": 0
+    },
+    "com.awap.file.interfaces.api": {
+      "line": 0.21428571428571427,
+      "branch": 0
+    },
+    "com.awap.form.application": {
+      "line": 0.8057553956834532,
+      "branch": 0.7054263565891473
+    },
+    "com.awap.form.domain": {
+      "line": 0.9622641509433962,
+      "branch": 0
+    },
+    "com.awap.form.interfaces.api": {
+      "line": 0.3684210526315789,
+      "branch": 0
+    },
+    "com.awap.identity.api": {
+      "line": 0.5,
+      "branch": 0
+    },
+    "com.awap.identity.application": {
+      "line": 0.775,
+      "branch": 0.575
+    },
+    "com.awap.identity.domain": {
+      "line": 0.9038461538461539,
+      "branch": 0.7857142857142857
+    },
+    "com.awap.identity.infrastructure.security": {
+      "line": 0.8708708708708709,
+      "branch": 0.6428571428571429
+    },
+    "com.awap.identity.interfaces.api": {
+      "line": 0.7227722772277227,
+      "branch": 0.21428571428571427
+    },
+    "com.awap.notification.application": {
+      "line": 0.9238845144356955,
+      "branch": 0.8131313131313131
+    },
+    "com.awap.notification.domain": {
+      "line": 0.9616724738675958,
+      "branch": 0.9166666666666666
+    },
+    "com.awap.notification.infrastructure": {
+      "line": 0.45454545454545453,
+      "branch": 0.42857142857142855
+    },
+    "com.awap.notification.interfaces.api": {
+      "line": 1,
+      "branch": 1
+    },
+    "com.awap.organization.application": {
+      "line": 1,
+      "branch": 1
+    },
+    "com.awap.organization.domain": {
+      "line": 1,
+      "branch": 1
+    },
+    "com.awap.organization.interfaces.api": {
+      "line": 1,
+      "branch": 0
+    },
+    "com.awap.script.application": {
+      "line": 0.823321554770318,
+      "branch": 0.602510460251046
+    },
+    "com.awap.script.domain": {
+      "line": 1,
+      "branch": 0
+    },
+    "com.awap.task.application": {
+      "line": 0.7542372881355932,
+      "branch": 0.5769230769230769
+    },
+    "com.awap.task.domain": {
+      "line": 0.898989898989899,
+      "branch": 0.7941176470588235
+    },
+    "com.awap.task.interfaces.api": {
+      "line": 0.6785714285714286,
+      "branch": 0.75
+    },
+    "com.awap.usage.application": {
+      "line": 0.9631901840490797,
+      "branch": 0.8541666666666666
+    },
+    "com.awap.usage.domain": {
+      "line": 0.7101449275362319,
+      "branch": 0.75
+    },
+    "com.awap.usage.infrastructure": {
+      "line": 0.8918918918918919,
+      "branch": 0.625
+    },
+    "com.awap.usage.interfaces.api": {
+      "line": 0.92,
+      "branch": 0.9
+    },
+    "com.awap.usage.interfaces.event": {
+      "line": 1,
+      "branch": 0.75
+    },
+    "com.awap.webhook.application": {
+      "line": 0.9294117647058824,
+      "branch": 0.8333333333333334
+    },
+    "com.awap.webhook.domain": {
+      "line": 0.9640287769784173,
+      "branch": 0.7432432432432432
+    },
+    "com.awap.webhook.infrastructure": {
+      "line": 0.4588744588744589,
+      "branch": 0.3
+    },
+    "com.awap.webhook.interfaces.api": {
+      "line": 1,
+      "branch": 0.75
+    },
+    "com.awap.workflow.application": {
+      "line": 0.84251968503937,
+      "branch": 0.6229508196721312
+    },
+    "com.awap.workflow.domain": {
+      "line": 0.8629032258064516,
+      "branch": 0.4
+    },
+    "com.awap.workflow.interfaces.api": {
+      "line": 1,
+      "branch": 0
+    }
+  }
+}

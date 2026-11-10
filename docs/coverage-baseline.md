@@ -1,28 +1,32 @@
 # Coverage Baseline
 
-Measured from `mvn verify` (JaCoCo, `awap-identity` bundle) after the product-module
-implementation (issue #97).
+Current measured baseline from `mvn verify` (JaCoCo, 2026-11-10) after the
+organization coverage work in issue #195.
 
-| Metric | Covered / Total | Percentage |
-|--------|-----------------|------------|
-| Line   | 1612 / 2917     | 55.3%      |
-| Branch | 268 / 693       | 38.7%      |
+| Module | Metric | Covered / Total | Percentage |
+|--------|--------|-----------------|------------|
+| `awap-identity` (gated bundle) | Line | 8758 / 10206 | 85.72% |
+| `awap-identity` (gated bundle) | Branch | 2196 / 3059 | 71.93% |
+| `awap-common` (trend only) | Line | 149 / 160 | 93.12% |
+| `awap-common` (trend only) | Branch | 27 / 32 | 84.38% |
 
-> The denominator dropped versus the historical Phase-1 baseline because the JaCoCo
-> gate excludes `config` / `interfaces.dto` / `IdentityApplication` classes.
+> The denominator excludes `config` / `interfaces.dto` / `IdentityApplication`
+> classes for the gated identity bundle, matching the JaCoCo rule.
 
 ## Target
 
-Per [`CLAUDE.md`](../CLAUDE.md): line ≥ 80%, branch ≥ 95%.
+Per [`CLAUDE.md`](../CLAUDE.md): line ≥ 80%, branch ≥ 95%. The active ratchet and
+target dates are in [`docs/coverage-ratchet.md`](coverage-ratchet.md); step 1 now
+enforces 80% line / 60% branch (previously 55/35).
 
-## Ratchet plan (issue #96)
+## Historical ratchet (issue #96)
 
 | Step | LINE minimum | BRANCH minimum | Note |
 |------|-------------|----------------|------|
-| 1 (current) | 0.55 | 0.35 | Measured-safe ratchet from 0.50; branch limit introduced. |
-| 2 | 0.60 | 0.45 | After Auth/Tenant/WorkflowDefinition branch tests land. |
-| 3 | 0.70 | 0.55 | After the negative/unhappy-path matrix (issue #93). |
-| 4 | 0.80 | 0.60 | Heading toward the constitution target. |
+| 1 (superseded) | 0.55 | 0.35 | Measured-safe ratchet from 0.50; branch limit introduced. |
+| 2 (superseded) | 0.60 | 0.45 | After Auth/Tenant/WorkflowDefinition branch tests land. |
+| 3 (superseded) | 0.70 | 0.55 | After the negative/unhappy-path matrix (issue #93). |
+| 4 (active, raised) | 0.80 | 0.60 | Issue #196 step 1. |
 
 `scripts/jacoco-rank.sh` parses `target/site/jacoco/jacoco.csv` and lists the
 lowest-covered classes so each ratchet step targets the right services.
