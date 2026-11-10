@@ -79,6 +79,13 @@
         <sonar.cpd.exclusions>**/interfaces/dto/**,**/generated-sources/**</sonar.cpd.exclusions>
         <sonar.qualitygate.wait>true</sonar.qualitygate.wait>
         <sonar.qualitygate.timeout>600</sonar.qualitygate.timeout>
+
+        <!-- Issue #196 coverage ratchet. Step 1 is active: the measured baseline is
+             85.7% line / 71.9% branch, so the gate now enforces 80/60 instead of the
+             old 55/35. Activate later steps with -Pcoverage-step2 / -Pcoverage-step3
+             (see docs/coverage-ratchet.md for dates and ownership). -->
+        <coverage.bundle.line.min>0.80</coverage.bundle.line.min>
+        <coverage.bundle.branch.min>0.60</coverage.bundle.branch.min>
     </properties>
 
     <dependencyManagement>
@@ -267,20 +274,17 @@
                                         <limit>
                                             <counter>LINE</counter>
                                             <value>COVEREDRATIO</value>
-                                            <!-- CLAUDE.md targets 0.80 bundle and 0.95 critical
-                                                 modules. The gate is ratcheted to the current
-                                                 measured baseline and must be raised toward the
-                                                 constitution target as coverage grows. -->
-                                            <minimum>0.55</minimum>
+                                            <!-- Issue #196: ratcheted from 0.55 to the project
+                                                 target 0.80. The measured baseline is 0.857. -->
+                                            <minimum>${coverage.bundle.line.min}</minimum>
                                         </limit>
                                         <limit>
                                             <counter>BRANCH</counter>
                                             <value>COVEREDRATIO</value>
-                                            <!-- Branch ratchet introduced with issue #96. The
-                                                 measured baseline is ~0.39; the minimum is pinned
-                                                 slightly below it so CI stays green while the
-                                                 branch-focused test plan raises it. -->
-                                            <minimum>0.35</minimum>
+                                            <!-- Step 1 of the branch ratchet (measured 0.719).
+                                                 Step 2 (0.75) and step 3 (0.90) are encoded as
+                                                 Maven profiles. -->
+                                            <minimum>${coverage.bundle.branch.min}</minimum>
                                         </limit>
                                     </limits>
                                     <excludes>
@@ -368,6 +372,31 @@
                                         <include>com.awap.organization.application</include>
                                         <include>com.awap.organization.domain</include>
                                         <include>com.awap.organization.interfaces.api</include>
+                                    </includes>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.95</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.90</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
+                                <!-- Issue #196: additional critical-class gates. These classes
+                                     already meet the 95% line / 90% branch target and must not
+                                     regress. -->
+                                <rule>
+                                    <element>CLASS</element>
+                                    <includes>
+                                        <include>com.awap.ai.application.AiBudgetGuard</include>
+                                        <include>com.awap.ai.application.AiNodeService</include>
+                                        <include>com.awap.file.application.FileScanEventBus</include>
+                                        <include>com.awap.webhook.infrastructure.WebhookVerifier</include>
+                                        <include>com.awap.engine.application.NodeTimeoutHandler</include>
                                     </includes>
                                     <limits>
                                         <limit>
@@ -474,6 +503,20 @@
     </build>
 
     <profiles>
+        <profile>
+            <id>coverage-step2</id>
+            <properties>
+                <coverage.bundle.line.min>0.80</coverage.bundle.line.min>
+                <coverage.bundle.branch.min>0.75</coverage.bundle.branch.min>
+            </properties>
+        </profile>
+        <profile>
+            <id>coverage-step3</id>
+            <properties>
+                <coverage.bundle.line.min>0.80</coverage.bundle.line.min>
+                <coverage.bundle.branch.min>0.90</coverage.bundle.branch.min>
+            </properties>
+        </profile>
         <profile>
             <id>pit</id>
             <build>

@@ -27,6 +27,9 @@ jobs:
     needs: frontend
     steps:
       - uses: actions/checkout@v7
+        with:
+          # Issue #196: changed-line coverage needs the merge base with the PR target.
+          fetch-depth: 0
       - uses: actions/setup-java@v6
         with:
           distribution: temurin
@@ -39,6 +42,13 @@ jobs:
           path: backend/identity/src/test/resources/pacts
       - name: Build and test (includes Pact provider verification)
         run: mvn -B verify
+        working-directory: backend
+      - name: Report coverage minimums
+        # Issue #196: the exact active ratchet values must be visible in the CI log.
+        run: |
+          LINE=$(mvn -q -Dexpression=coverage.bundle.line.min help:evaluate -DforceStdout)
+          BRANCH=$(mvn -q -Dexpression=coverage.bundle.branch.min help:evaluate -DforceStdout)
+          echo "Bundle coverage minimums (ratchet step 1): line=${LINE} branch=${BRANCH}"
         working-directory: backend
       - name: Upload JaCoCo reports
         if: always()
@@ -57,6 +67,48 @@ jobs:
         # Issue #182: an empty coverage report must fail instead of suppressing
         # SonarQube's coverage signal.
         run: node --test "scripts/test/check-jacoco-report.test.mjs"
+      - name: Coverage gate tooling tests
+        # Issue #196: prove the changed-line and trend gates fail on uncovered or regressed input.
+        run: >-
+          node --test
+          "scripts/test/check-changed-line-coverage.test.mjs"
+          "scripts/test/coverage-trend.test.mjs"
+      - name: Changed-line coverage
+        # Issue #196: a changed executable Java line without a test fails the build.
+        if: github.event_name == 'pull_request'
+        run: >-
+          node scripts/check-changed-line-coverage.mjs
+          --base "origin/${{ github.base_ref }}"
+          --xml backend/identity/target/site/jacoco/jacoco.xml
+          --xml backend/common/target/site/jacoco/jacoco.xml
+          --threshold 100
+          --summary "$GITHUB_STEP_SUMMARY"
+      - name: Coverage trend (identity)
+        # Issue #196: print and publish the trend; fail when the bundle regresses.
+        run: >-
+          node scripts/coverage-trend.mjs
+          --csv backend/identity/target/site/jacoco/jacoco.csv
+          --baseline docs/coverage/trend.json
+          --check
+          --emit backend/identity/target/coverage-trend.json
+          --summary "$GITHUB_STEP_SUMMARY"
+      - name: Coverage trend (common)
+        # Issue #196: the shared kernel has no bundle gate, so the trend check is its regression guard.
+        run: >-
+          node scripts/coverage-trend.mjs
+          --csv backend/common/target/site/jacoco/jacoco.csv
+          --baseline docs/coverage/trend-common.json
+          --check
+          --emit backend/common/target/coverage-trend.json
+          --summary "$GITHUB_STEP_SUMMARY"
+      - name: Upload coverage trend
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-trend
+          path: |
+            backend/identity/target/coverage-trend.json
+            backend/common/target/coverage-trend.json
       - name: Format check (Spotless)
         run: mvn -B spotless:check
         working-directory: backend
