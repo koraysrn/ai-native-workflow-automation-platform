@@ -338,6 +338,27 @@
                                         </limit>
                                     </limits>
                                 </rule>
+                                <!-- Issue #194: position-based role assignment domain and service
+                                     must stay above 95% line / 90% branch. -->
+                                <rule>
+                                    <element>CLASS</element>
+                                    <includes>
+                                        <include>com.awap.organization.domain.Position</include>
+                                        <include>com.awap.organization.application.OrganizationService</include>
+                                    </includes>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.95</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.90</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
                                 <!-- Issue #133: the saga orchestrator and its state machine must
                                      stay above the stated 95% line / 90% branch gate. -->
                                 <rule>
@@ -442,6 +463,7 @@
                                  must be mutation-tested. -->
                             <targetClasses>
                                 <param>com.awap.task.domain.Task</param>
+                                <param>com.awap.organization.domain.Position</param>
                                 <param>com.awap.engine.domain.WorkflowInstance</param>
                                 <param>com.awap.engine.domain.NodeExecution</param>
                                 <param>com.awap.workflow.domain.WorkflowDefinition</param>
@@ -452,6 +474,7 @@
                             </targetClasses>
                             <targetTests>
                                 <param>com.awap.task.domain.TaskTest</param>
+                                <param>com.awap.organization.domain.*</param>
                                 <param>com.awap.engine.domain.*</param>
                                 <param>com.awap.workflow.domain.*</param>
                                 <param>com.awap.form.domain.*</param>

@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
@@ -33,6 +34,22 @@ public class GlobalExceptionHandler {
             ErrorCode.VALIDATION_FAILED,
             HttpStatus.BAD_REQUEST,
             "One or more request fields are invalid.",
+            request.getRequestURI());
+    return ResponseEntity.badRequest().body(body);
+  }
+
+  /**
+   * Maps malformed or unparsable request bodies (for example an unknown enum constant) to a 400
+   * instead of letting them fall through to the generic 500 handler.
+   */
+  @ExceptionHandler(HttpMessageNotReadableException.class)
+  public ResponseEntity<ProblemDetails> handleUnreadableMessage(
+      HttpMessageNotReadableException ex, HttpServletRequest request) {
+    ProblemDetails body =
+        build(
+            ErrorCode.VALIDATION_FAILED,
+            HttpStatus.BAD_REQUEST,
+            "Request body is malformed or contains an unsupported value.",
             request.getRequestURI());
     return ResponseEntity.badRequest().body(body);
   }

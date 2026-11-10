@@ -54,4 +54,12 @@ public enum Role {
   public boolean hasPermission(Permission permission) {
     return permissions.contains(permission);
   }
+
+  /**
+   * A caller may assign its own role or a lower one. The enum order is the authority order
+   * (SYSTEM_ADMIN highest), so assigning an earlier constant is an escalation (issue #194).
+   */
+  public boolean canAssign(Role target) {
+    return target != null && target.ordinal() >= ordinal();
+  }
 }
