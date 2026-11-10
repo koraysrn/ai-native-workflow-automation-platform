@@ -14,4 +14,7 @@ public interface DepartmentRepository extends JpaRepository<Department, UUID> {
   List<Department> findByTenantIdAndDeletedFalse(UUID tenantId);
 
   Optional<Department> findByIdAndTenantIdAndDeletedFalse(UUID id, UUID tenantId);
+
+  boolean existsByTenantIdAndCompanyIdAndNameAndDeletedFalse(
+      UUID tenantId, UUID companyId, String name);
 }

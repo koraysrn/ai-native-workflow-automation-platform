@@ -6,6 +6,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.user;
 import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -16,7 +17,11 @@ import com.awap.identity.IdentityApplication;
 import com.awap.identity.domain.Role;
 import com.awap.identity.infrastructure.security.TenantContext;
 import com.awap.organization.application.OrganizationService;
+import com.awap.organization.interfaces.dto.CompanyResponse;
+import com.awap.organization.interfaces.dto.DepartmentResponse;
+import com.awap.organization.interfaces.dto.OrgUserResponse;
 import com.awap.organization.interfaces.dto.PositionResponse;
+import com.awap.organization.interfaces.dto.TeamResponse;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -117,6 +122,293 @@ class OrganizationControllerWebMvcTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"))
         .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void createCompanyReturns201() throws Exception {
+    UUID tenantId = TenantContext.requireTenantId();
+    when(organizationService.createCompany(any(), any()))
+        .thenReturn(new CompanyResponse(UUID.randomUUID(), tenantId, "Acme"));
+
+    mockMvc
+        .perform(
+            post("/api/v1/organizations/companies")
+                .with(csrf())
+                .with(user("u").authorities(new SimpleGrantedAuthority("USER_MANAGE")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"Acme\"}"))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.name").value("Acme"));
+  }
+
+  @Test
+  void listCompaniesReturns200() throws Exception {
+    UUID tenantId = TenantContext.requireTenantId();
+    when(organizationService.listCompanies(any()))
+        .thenReturn(List.of(new CompanyResponse(UUID.randomUUID(), tenantId, "Acme")));
+
+    mockMvc
+        .perform(
+            get("/api/v1/organizations/companies")
+                .with(user("u").authorities(new SimpleGrantedAuthority("USER_MANAGE"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].name").value("Acme"));
+  }
+
+  @Test
+  void createDepartmentReturns201() throws Exception {
+    UUID tenantId = TenantContext.requireTenantId();
+    UUID companyId = UUID.randomUUID();
+    when(organizationService.createDepartment(any(), any()))
+        .thenReturn(new DepartmentResponse(UUID.randomUUID(), tenantId, companyId, null, "IT"));
+
+    mockMvc
+        .perform(
+            post("/api/v1/organizations/departments")
+                .with(csrf())
+                .with(user("u").authorities(new SimpleGrantedAuthority("USER_MANAGE")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"companyId\":\"" + companyId + "\",\"name\":\"IT\"}"))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.name").value("IT"));
+  }
+
+  @Test
+  void listDepartmentsReturns200() throws Exception {
+    UUID tenantId = TenantContext.requireTenantId();
+    UUID companyId = UUID.randomUUID();
+    when(organizationService.listDepartments(any(), any()))
+        .thenReturn(
+            List.of(new DepartmentResponse(UUID.randomUUID(), tenantId, companyId, null, "IT")));
+
+    mockMvc
+        .perform(
+            get("/api/v1/organizations/departments")
+                .param("companyId", companyId.toString())
+                .with(user("u").authorities(new SimpleGrantedAuthority("USER_MANAGE"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].name").value("IT"));
+  }
+
+  @Test
+  void createTeamReturns201() throws Exception {
+    UUID tenantId = TenantContext.requireTenantId();
+    UUID departmentId = UUID.randomUUID();
+    when(organizationService.createTeam(any(), any()))
+        .thenReturn(new TeamResponse(UUID.randomUUID(), tenantId, departmentId, "Core"));
+
+    mockMvc
+        .perform(
+            post("/api/v1/organizations/teams")
+                .with(csrf())
+                .with(user("u").authorities(new SimpleGrantedAuthority("USER_MANAGE")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"departmentId\":\"" + departmentId + "\",\"name\":\"Core\"}"))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.name").value("Core"));
+  }
+
+  @Test
+  void listTeamsReturns200() throws Exception {
+    UUID tenantId = TenantContext.requireTenantId();
+    UUID departmentId = UUID.randomUUID();
+    when(organizationService.listTeams(any(), any()))
+        .thenReturn(List.of(new TeamResponse(UUID.randomUUID(), tenantId, departmentId, "Core")));
+
+    mockMvc
+        .perform(
+            get("/api/v1/organizations/teams")
+                .param("departmentId", departmentId.toString())
+                .with(user("u").authorities(new SimpleGrantedAuthority("USER_MANAGE"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].name").value("Core"));
+  }
+
+  @Test
+  void createPositionReturns201() throws Exception {
+    UUID tenantId = TenantContext.requireTenantId();
+    when(organizationService.createPosition(any(), any(), any()))
+        .thenReturn(new PositionResponse(UUID.randomUUID(), tenantId, "Finance", Role.MANAGER));
+
+    mockMvc
+        .perform(
+            post("/api/v1/organizations/positions")
+                .with(csrf())
+                .with(user("u").authorities(new SimpleGrantedAuthority("USER_MANAGE")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"Finance\",\"role\":\"MANAGER\"}"))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.role").value("MANAGER"));
+  }
+
+  @Test
+  void listPositionsReturns200() throws Exception {
+    UUID tenantId = TenantContext.requireTenantId();
+    when(organizationService.listPositions(any()))
+        .thenReturn(
+            List.of(new PositionResponse(UUID.randomUUID(), tenantId, "Finance", Role.EMPLOYEE)));
+
+    mockMvc
+        .perform(
+            get("/api/v1/organizations/positions")
+                .with(user("u").authorities(new SimpleGrantedAuthority("USER_MANAGE"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].name").value("Finance"));
+  }
+
+  @Test
+  void createUserReturns201() throws Exception {
+    UUID tenantId = TenantContext.requireTenantId();
+    when(organizationService.createUser(any(), any()))
+        .thenReturn(
+            new OrgUserResponse(UUID.randomUUID(), tenantId, "a@acme.com", "A", null, null));
+
+    mockMvc
+        .perform(
+            post("/api/v1/organizations/users")
+                .with(csrf())
+                .with(user("u").authorities(new SimpleGrantedAuthority("USER_MANAGE")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"email\":\"a@acme.com\",\"fullName\":\"A\"}"))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.email").value("a@acme.com"));
+  }
+
+  @Test
+  void listUsersReturns200() throws Exception {
+    UUID tenantId = TenantContext.requireTenantId();
+    when(organizationService.listUsers(any()))
+        .thenReturn(
+            List.of(
+                new OrgUserResponse(UUID.randomUUID(), tenantId, "a@acme.com", "A", null, null)));
+
+    mockMvc
+        .perform(
+            get("/api/v1/organizations/users")
+                .with(user("u").authorities(new SimpleGrantedAuthority("USER_MANAGE"))))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].email").value("a@acme.com"));
+  }
+
+  @Test
+  void assignUserToTeamReturns200() throws Exception {
+    UUID tenantId = TenantContext.requireTenantId();
+    UUID teamId = UUID.randomUUID();
+    UUID userId = UUID.randomUUID();
+    when(organizationService.assignToTeam(any(), any(), any()))
+        .thenReturn(new OrgUserResponse(userId, tenantId, "a@acme.com", "A", teamId, null));
+
+    mockMvc
+        .perform(
+            post("/api/v1/organizations/users/{id}/assign", userId)
+                .with(csrf())
+                .with(user("u").authorities(new SimpleGrantedAuthority("USER_MANAGE")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"teamId\":\"" + teamId + "\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.teamId").value(teamId.toString()));
+  }
+
+  @Test
+  void aBlankCompanyNameReturns400() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/v1/organizations/companies")
+                .with(csrf())
+                .with(user("u").authorities(new SimpleGrantedAuthority("USER_MANAGE")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\" \"}"))
+        .andExpect(status().isBadRequest());
+  }
+
+  @Test
+  void anOrganizationEndpointRequiresUserManage() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/v1/organizations/companies")
+                .with(csrf())
+                .with(user("u").authorities(new SimpleGrantedAuthority("TASK_MANAGE")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"Acme\"}"))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void aMissingParentReturns404() throws Exception {
+    when(organizationService.createDepartment(any(), any()))
+        .thenThrow(
+            new AwapException(
+                ErrorCode.RESOURCE_NOT_FOUND, HttpStatus.NOT_FOUND, "Company not found."));
+
+    mockMvc
+        .perform(
+            post("/api/v1/organizations/departments")
+                .with(csrf())
+                .with(user("u").authorities(new SimpleGrantedAuthority("USER_MANAGE")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"companyId\":\"" + UUID.randomUUID() + "\",\"name\":\"IT\"}"))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void aDuplicateCompanyReturns409() throws Exception {
+    when(organizationService.createCompany(any(), any()))
+        .thenThrow(
+            new AwapException(
+                ErrorCode.ORG_CONFLICT,
+                HttpStatus.CONFLICT,
+                "A company with this name already exists."));
+
+    mockMvc
+        .perform(
+            post("/api/v1/organizations/companies")
+                .with(csrf())
+                .with(user("u").authorities(new SimpleGrantedAuthority("USER_MANAGE")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"Acme\"}"))
+        .andExpect(status().isConflict());
+  }
+
+  @Test
+  void aMissingTenantContextReturns401() throws Exception {
+    TenantContext.clear();
+
+    mockMvc
+        .perform(
+            post("/api/v1/organizations/companies")
+                .with(csrf())
+                .with(user("u").authorities(new SimpleGrantedAuthority("USER_MANAGE")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"Acme\"}"))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void aMissingRoleContextReturns401() throws Exception {
+    TenantContext.set(TenantContext.requireTenantId(), UUID.randomUUID(), null);
+
+    mockMvc
+        .perform(
+            post("/api/v1/organizations/positions")
+                .with(csrf())
+                .with(user("u").authorities(new SimpleGrantedAuthority("USER_MANAGE")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"name\":\"Finance\",\"role\":\"MANAGER\"}"))
+        .andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void aMissingUserContextReturns401() throws Exception {
+    TenantContext.set(TenantContext.requireTenantId(), null, "MANAGER");
+
+    mockMvc
+        .perform(
+            put("/api/v1/organizations/positions/{id}/role", UUID.randomUUID())
+                .with(csrf())
+                .with(user("u").authorities(new SimpleGrantedAuthority("USER_MANAGE")))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"role\":\"MANAGER\"}"))
+        .andExpect(status().isUnauthorized());
   }
 
   @Test

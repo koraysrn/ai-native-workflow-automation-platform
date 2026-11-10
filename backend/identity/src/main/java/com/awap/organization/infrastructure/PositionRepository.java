@@ -12,4 +12,6 @@ public interface PositionRepository extends JpaRepository<Position, UUID> {
   List<Position> findByTenantIdAndDeletedFalse(UUID tenantId);
 
   Optional<Position> findByIdAndTenantIdAndDeletedFalse(UUID id, UUID tenantId);
+
+  boolean existsByTenantIdAndNameAndDeletedFalse(UUID tenantId, String name);
 }

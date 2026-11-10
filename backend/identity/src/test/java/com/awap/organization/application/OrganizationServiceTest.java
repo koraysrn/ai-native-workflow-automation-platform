@@ -8,6 +8,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.awap.common.api.AwapException;
+import com.awap.common.api.ErrorCode;
 import com.awap.engine.application.OutboxEventPublisher;
 import com.awap.identity.application.QuotaService;
 import com.awap.identity.domain.Role;
@@ -43,6 +44,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
 
 @ExtendWith(MockitoExtension.class)
 class OrganizationServiceTest {
@@ -247,6 +249,95 @@ class OrganizationServiceTest {
             UUID.randomUUID(), new PositionRequest("Root", Role.SYSTEM_ADMIN), null);
 
     assertThat(response.role()).isEqualTo(Role.SYSTEM_ADMIN);
+  }
+
+  @Test
+  void creatingADuplicateCompanyReturns409() {
+    UUID tenantId = UUID.randomUUID();
+    when(companyRepository.existsByTenantIdAndNameAndDeletedFalse(tenantId, "Acme"))
+        .thenReturn(true);
+
+    assertThatThrownBy(() -> service.createCompany(tenantId, new CompanyRequest("Acme")))
+        .isInstanceOf(AwapException.class)
+        .satisfies(
+            ex -> assertThat(((AwapException) ex).errorCode()).isEqualTo(ErrorCode.ORG_CONFLICT));
+  }
+
+  @Test
+  void creatingADuplicateDepartmentReturns409() {
+    UUID tenantId = UUID.randomUUID();
+    UUID companyId = UUID.randomUUID();
+    when(companyRepository.findByIdAndTenantIdAndDeletedFalse(companyId, tenantId))
+        .thenReturn(Optional.of(new Company(tenantId, "Acme")));
+    when(departmentRepository.existsByTenantIdAndCompanyIdAndNameAndDeletedFalse(
+            tenantId, companyId, "IT"))
+        .thenReturn(true);
+
+    assertThatThrownBy(
+            () -> service.createDepartment(tenantId, new DepartmentRequest(companyId, null, "IT")))
+        .isInstanceOf(AwapException.class)
+        .satisfies(
+            ex -> assertThat(((AwapException) ex).errorCode()).isEqualTo(ErrorCode.ORG_CONFLICT));
+  }
+
+  @Test
+  void creatingADuplicateTeamReturns409() {
+    UUID tenantId = UUID.randomUUID();
+    UUID departmentId = UUID.randomUUID();
+    when(departmentRepository.findByIdAndTenantIdAndDeletedFalse(departmentId, tenantId))
+        .thenReturn(Optional.of(new Department(tenantId, UUID.randomUUID(), null, "IT")));
+    when(teamRepository.existsByTenantIdAndDepartmentIdAndNameAndDeletedFalse(
+            tenantId, departmentId, "Core"))
+        .thenReturn(true);
+
+    assertThatThrownBy(() -> service.createTeam(tenantId, new TeamRequest(departmentId, "Core")))
+        .isInstanceOf(AwapException.class)
+        .satisfies(
+            ex -> assertThat(((AwapException) ex).errorCode()).isEqualTo(ErrorCode.ORG_CONFLICT));
+  }
+
+  @Test
+  void creatingADuplicatePositionReturns409() {
+    UUID tenantId = UUID.randomUUID();
+    when(positionRepository.existsByTenantIdAndNameAndDeletedFalse(tenantId, "Finance"))
+        .thenReturn(true);
+
+    assertThatThrownBy(
+            () ->
+                service.createPosition(
+                    tenantId, new PositionRequest("Finance", Role.EMPLOYEE), "TENANT_ADMIN"))
+        .isInstanceOf(AwapException.class)
+        .satisfies(
+            ex -> assertThat(((AwapException) ex).errorCode()).isEqualTo(ErrorCode.ORG_CONFLICT));
+  }
+
+  @Test
+  void creatingADuplicateOrganizationUserReturns409() {
+    UUID tenantId = UUID.randomUUID();
+    when(organizationUserRepository.existsByTenantIdAndEmailAndDeletedFalse(tenantId, "a@acme.com"))
+        .thenReturn(true);
+
+    assertThatThrownBy(
+            () -> service.createUser(tenantId, new OrgUserRequest("a@acme.com", "A", null, null)))
+        .isInstanceOf(AwapException.class)
+        .satisfies(
+            ex -> assertThat(((AwapException) ex).errorCode()).isEqualTo(ErrorCode.ORG_CONFLICT));
+  }
+
+  @Test
+  void quotaExceededRejectsTheOrganizationUser() {
+    UUID tenantId = UUID.randomUUID();
+    org.mockito.Mockito.doThrow(
+            new AwapException(ErrorCode.QUOTA_EXCEEDED, HttpStatus.TOO_MANY_REQUESTS, "quota"))
+        .when(quotaService)
+        .assertCanCreateUser(tenantId);
+
+    assertThatThrownBy(
+            () -> service.createUser(tenantId, new OrgUserRequest("a@acme.com", "A", null, null)))
+        .isInstanceOf(AwapException.class)
+        .satisfies(
+            ex ->
+                assertThat(((AwapException) ex).status()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
   }
 
   @Test

@@ -359,6 +359,29 @@
                                         </limit>
                                     </limits>
                                 </rule>
+                                <!-- Issue #195: the organization module is a critical module and
+                                     must stay above 95% line / 90% branch at package level. DTOs
+                                     are excluded because they are generated mapping records. -->
+                                <rule>
+                                    <element>PACKAGE</element>
+                                    <includes>
+                                        <include>com.awap.organization.application</include>
+                                        <include>com.awap.organization.domain</include>
+                                        <include>com.awap.organization.interfaces.api</include>
+                                    </includes>
+                                    <limits>
+                                        <limit>
+                                            <counter>LINE</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.95</minimum>
+                                        </limit>
+                                        <limit>
+                                            <counter>BRANCH</counter>
+                                            <value>COVEREDRATIO</value>
+                                            <minimum>0.90</minimum>
+                                        </limit>
+                                    </limits>
+                                </rule>
                                 <!-- Issue #133: the saga orchestrator and its state machine must
                                      stay above the stated 95% line / 90% branch gate. -->
                                 <rule>
@@ -487,6 +510,46 @@
                                 <outputFormat>HTML</outputFormat>
                                 <outputFormat>XML</outputFormat>
                             </outputFormats>
+                            <failWhenNoMutations>false</failWhenNoMutations>
+                            <mutationThreshold>80</mutationThreshold>
+                            <coverageThreshold>80</coverageThreshold>
+                        </configuration>
+                        <dependencies>
+                            <dependency>
+                                <groupId>org.pitest</groupId>
+                                <artifactId>pitest-junit5-plugin</artifactId>
+                                <version>${pitest-junit5.version}</version>
+                            </dependency>
+                        </dependencies>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>pit-organization</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-maven</artifactId>
+                        <configuration>
+                            <!-- Issue #195: hierarchy entities, soft-delete flags and the
+                                 position-role invariants are the mutation-tested domain paths. -->
+                            <targetClasses>
+                                <param>com.awap.organization.domain.*</param>
+                            </targetClasses>
+                            <targetTests>
+                                <param>com.awap.organization.domain.*</param>
+                                <param>com.awap.organization.application.OrganizationServiceTest</param>
+                            </targetTests>
+                            <mutators>
+                                <mutator>DEFAULTS</mutator>
+                            </mutators>
+                            <outputFormats>
+                                <outputFormat>HTML</outputFormat>
+                                <outputFormat>XML</outputFormat>
+                            </outputFormats>
+                            <outputDirectory>${project.build.directory}/pit-reports-organization</outputDirectory>
                             <failWhenNoMutations>false</failWhenNoMutations>
                             <mutationThreshold>80</mutationThreshold>
                             <coverageThreshold>80</coverageThreshold>

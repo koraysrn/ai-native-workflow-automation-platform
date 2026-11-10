@@ -468,6 +468,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/CompanyResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   /api/v1/organizations/departments:
     get:
@@ -520,6 +526,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/DepartmentResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   /api/v1/organizations/teams:
     get:
@@ -568,6 +582,14 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TeamResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   /api/v1/organizations/positions:
     get:
@@ -612,6 +634,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "403":
           $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
 
   /api/v1/organizations/positions/{id}/role:
     put:
@@ -707,6 +731,16 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/OrgUserResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "429":
+          $ref: "#/components/responses/TooManyRequests"
 
   /api/v1/organizations/users/{id}/assign:
     post:
