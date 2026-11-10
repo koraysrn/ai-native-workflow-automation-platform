@@ -101,6 +101,22 @@ on unverified code and never bypass branch protection.
    green CI run (`gh run rerun <run-id>`); the same event payload and commit SHA are reused. Do
    not create the tag manually, do not force-push `main` and do not move a published tag.
 
+## SBOM recovery for an existing tag
+
+If the release job created the tag but failed before attaching the SBOMs (for example the v1.1.0
+Maven working-directory defect), do **not** delete or move the tag. Regenerate and attach the assets
+from the existing tag with the recovery job:
+
+```sh
+gh workflow run release.yml --ref main -f recover_tag=v1.1.0
+```
+
+The `Release SBOM Recovery` job checks out the tag, builds the backend/frontend/AI-layer SBOMs,
+validates and merges the inventory, signs it with cosign keyless, and uploads
+`*.cdx.json` plus `*.bundle` with `--clobber`. It never runs release-please and never dispatches CD.
+The normal release path now invokes Maven with `-f backend/pom.xml`, and the release-workflow test
+suite rejects a regression to the root-directory invocation.
+
 ## Rollback of a bad tag
 
 Prefer a forward fix. A published tag must never be moved, and `main` must never be force-pushed.
