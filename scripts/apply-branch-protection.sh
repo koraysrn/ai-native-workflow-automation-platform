@@ -59,6 +59,8 @@ PROTECTION_STATUS=""
 # ---------------------------------------------------------------------------
 REQUIRED_CHECKS=(
   "Backend"
+  # Issue #189: the one-command stack contract is a merge gate.
+  "Local Stack"
   "Frontend"
   "AI Layer"
   "Verify Versions"

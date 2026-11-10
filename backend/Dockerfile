@@ -13,6 +13,10 @@ RUN mvn -B -q -DskipTests package
 # Runtime stage
 FROM eclipse-temurin:25-jre
 WORKDIR /app
+# curl is required by the Compose healthcheck (issue #189) and by container-level readiness probes.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
 COPY --from=build /app/identity/target/awap-identity-0.0.1-SNAPSHOT.jar app.jar
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "app.jar"]

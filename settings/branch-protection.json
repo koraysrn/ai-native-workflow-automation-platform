@@ -3,6 +3,7 @@
     "strict": true,
     "contexts": [
       "Backend",
+      "Local Stack",
       "Frontend",
       "AI Layer",
       "Verify Versions",

@@ -1,23 +1,82 @@
-# Lokal altyapı araçları ve küme kurulumu.
-# Varsayılan olarak Windows (cmd.exe + PowerShell) için yapılandırılmıştır.
-# Unix/macOS kullanıcıları KIND ve KIND_URL değişkenlerini kendileri için geçersiz kılabilir.
+# AWAP local tooling and one-command stack (issue #189).
+#
+# The stack targets are POSIX-sh only; they run the same on Linux, macOS and Windows (Git Bash).
+# The kind targets are opt-in and download the binary into .bin/ so no global install is needed.
 
+SHELL := /bin/sh
+
+COMPOSE_FILE ?= infra/docker-compose.yml
+PROFILE ?= full
+NODE ?= node
 KIND_VERSION ?= v0.20.0
-KIND := .bin/kind.exe
-KIND_URL := https://kind.sigs.k8s.io/dl/$(KIND_VERSION)/kind-windows-amd64
+KIND ?= .bin/kind
 
-.PHONY: install-deps setup-local-infra
+.PHONY: help install-deps setup-local-infra up up-minimal down reset seed provision wait logs ps config test-infra
 
-## Eksik kind aracını projeye özel .bin/ klasörüne indirir (global kurulum gerektirmez).
+help:
+	@echo "AWAP local targets:"
+	@echo "  make up           Start the full stack (MinIO, ClamAV, AI layer, observability), wait, provision and seed."
+	@echo "  make up-minimal   Start only PostgreSQL, Redis, Kafka, Schema Registry, backend and frontend."
+	@echo "  make down         Stop the full stack; volumes are kept."
+	@echo "  make reset        Remove volumes and start a clean seeded stack."
+	@echo "  make seed         Idempotently create the local tenant and verify login."
+	@echo "  make provision    Idempotently create buckets, Kafka topics and the Debezium connector."
+	@echo "  make test-infra   Run the provisioning/compose node:test suite and shell checks."
+
+# Full profile: every runtime dependency and application, including MinIO, ClamAV and the AI layer.
+up:
+	$(NODE) infra/scripts/stack.mjs up --profile $(PROFILE) --compose-file $(COMPOSE_FILE)
+
+# Minimal footprint for laptops: only the documented core services, with optional integrations off.
+up-minimal:
+	KAFKA_ENABLED=false CLAMAV_ENABLED=false AI_NODE_ENABLED=false OPENSEARCH_ENABLED=false \
+	FILE_MANAGE_BUCKETS=false \
+	docker compose -f $(COMPOSE_FILE) up -d --build postgres redis kafka schema-registry backend frontend
+
+down:
+	$(NODE) infra/scripts/stack.mjs down --profile $(PROFILE) --compose-file $(COMPOSE_FILE)
+
+reset:
+	$(NODE) infra/scripts/stack.mjs reset --profile $(PROFILE) --compose-file $(COMPOSE_FILE)
+
+seed:
+	$(NODE) infra/scripts/stack.mjs seed
+
+provision:
+	$(NODE) infra/scripts/stack.mjs provision --profile $(PROFILE) --compose-file $(COMPOSE_FILE)
+
+wait:
+	$(NODE) infra/scripts/stack.mjs wait --profile $(PROFILE)
+
+logs:
+	docker compose -f $(COMPOSE_FILE) --profile $(PROFILE) logs -f
+
+ps:
+	docker compose -f $(COMPOSE_FILE) --profile $(PROFILE) ps
+
+config:
+	docker compose -f $(COMPOSE_FILE) --profile $(PROFILE) config
+
+test-infra:
+	$(NODE) --test "infra/test/*.test.mjs"
+	bash -n infra/debezium/register-connector.sh
+	@if command -v shellcheck >/dev/null 2>&1; then \
+		shellcheck infra/debezium/register-connector.sh; \
+	else \
+		echo "shellcheck not installed; skipping (CI installs it)"; \
+	fi
+
+## Downloads the missing kind binary into the project-local .bin/ folder.
 install-deps:
-	@echo "kind indiriliyor: $(KIND_URL)"
-	@if not exist .bin mkdir .bin
-	@powershell -NoProfile -Command "Invoke-WebRequest -Uri '$(KIND_URL)' -OutFile '$(KIND)'"
-	@echo "kind hazir: $(KIND) ($(KIND_VERSION))"
+	@echo "Downloading kind: https://kind.sigs.k8s.io/dl/$(KIND_VERSION)/kind-linux-amd64"
+	@mkdir -p .bin
+	@curl -fsSL "https://kind.sigs.k8s.io/dl/$(KIND_VERSION)/kind-linux-amd64" -o "$(KIND)"
+	@chmod +x "$(KIND)"
+	@echo "kind ready: $(KIND) ($(KIND_VERSION))"
 
-## Lokal kind kümesini oluşturur ve MinIO + ClamAV altyapısını deploy eder.
+## Creates a local kind cluster and deploys the MinIO + ClamAV manifests.
 setup-local-infra: install-deps
-	@echo "Lokal Kubernetes kümesi oluşturuluyor..."
+	@echo "Creating the local Kubernetes cluster..."
 	@$(KIND) create cluster --config infra/kind-config.yaml
-	@echo "MinIO ve ClamAV deploy ediliyor..."
+	@echo "Deploying MinIO and ClamAV..."
 	@kubectl apply -f infra/manifests/minio-clamav.yaml

@@ -1,3 +1,14 @@
+# AWAP local stack (issue #189).
+#
+# Profiles:
+#   (default)       the core stack: PostgreSQL, Redis, Kafka, Schema Registry, OpenSearch,
+#                   Vault, Prometheus, Grafana, OTel collector, backend and frontend.
+#   storage         MinIO only (kept for backwards compatibility with older docs).
+#   full            the one-command stack: everything above plus MinIO, ClamAV, the AI layer,
+#                   Debezium Connect and the idempotent bucket/topic/connector provisioners.
+#
+# `make up` activates the full profile, waits for every healthcheck and runs provisioning.
+# `make up-minimal` starts only the documented core services.
 services:
   postgres:
     image: postgres:16-alpine
@@ -23,10 +34,11 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - wal_archive:/wal-archive
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U awap -d awap"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-awap} -d ${POSTGRES_DB:-awap}"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 20
+      start_period: 10s
 
   redis:
     image: redis:7-alpine
@@ -34,6 +46,11 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   kafka:
     image: confluentinc/cp-kafka:7.9.0
@@ -54,33 +71,203 @@ services:
       - "9092:9092"
     volumes:
       - kafka_data:/var/lib/kafka/data
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "kafka-broker-api-versions --bootstrap-server localhost:9092 >/dev/null 2>&1 || exit 1",
+        ]
+      interval: 10s
+      timeout: 10s
+      retries: 30
+      start_period: 20s
 
   schema-registry:
     image: confluentinc/cp-schema-registry:7.9.0
     depends_on:
-      - kafka
+      kafka:
+        condition: service_healthy
     environment:
       SCHEMA_REGISTRY_HOST_NAME: schema-registry
       SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS: PLAINTEXT://kafka:29092
       SCHEMA_REGISTRY_LISTENERS: http://0.0.0.0:8081
     ports:
       - "8081:8081"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8081/subjects >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
 
-  # MinIO is opt-in (storage profile): the public MinIO Docker image now requires
-  # authentication (or building from source). Start it explicitly with:
-  #   docker compose --profile storage up -d minio
+  # Idempotent topic provisioning for the full profile. Every create uses --if-not-exists, so
+  # restarting the stack never fails or duplicates topics.
+  kafka-init:
+    image: confluentinc/cp-kafka:7.9.0
+    profiles: ["full"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        set -euo pipefail
+        topics="workflow.task.events workflow.instance.events workflow.subprocess.events workflow.saga.events analytics.events document.events notification.send notification.requested.events"
+        for topic in $$topics; do
+          kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists \
+            --topic "$$topic" --partitions 3 --replication-factor 1
+          kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists \
+            --topic "$$topic.dlq" --partitions 3 --replication-factor 1
+        done
+        echo "Kafka topics provisioned."
+
+  # MinIO is opt-in for the core stack (its public image requires authentication) but part of the
+  # full profile, where the backend manages buckets and file uploads are exercised end to end.
   minio:
-    image: quay.io/minio/minio:latest
-    profiles: ["storage"]
-    command: server /data --console-address ":9001"
+    # MinIO's upstream quay.io images now require authentication. The Bitnami legacy image is the
+    # same MinIO server, publicly pullable, and keeps the full profile one-command runnable.
+    image: ${MINIO_IMAGE:-bitnamilegacy/minio:latest}
+    profiles: ["storage", "full"]
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-awapadmin}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-awapadmin123}
+      MINIO_API_PORT_NUMBER: "9000"
+      MINIO_CONSOLE_PORT_NUMBER: "9001"
+      MINIO_BROWSER: "on"
     ports:
       - "9000:9000"
       - "9001:9001"
     volumes:
-      - minio_data:/data
+      # Bitnami runs MinIO as a non-root user; the image-owned data directory is writable by it.
+      - minio_data:/bitnami/minio/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9000/minio/health/live >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  # Idempotent bucket provisioning. `mc mb --ignore-existing` makes repeated runs safe.
+  minio-init:
+    image: ${MINIO_CLIENT_IMAGE:-bitnamilegacy/minio-client:latest}
+    profiles: ["full"]
+    depends_on:
+      minio:
+        condition: service_healthy
+    restart: "no"
+    entrypoint: ["/bin/bash", "-c"]
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-awapadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-awapadmin123}
+      FILE_QUARANTINE_BUCKET: ${FILE_QUARANTINE_BUCKET:-awap-quarantine}
+      FILE_PROMOTED_BUCKET: ${FILE_PROMOTED_BUCKET:-awap-files}
+    command:
+      - |
+        set -eu
+        MC=/opt/bitnami/minio-client/bin/mc
+        "$$MC" alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD"
+        for bucket in "$$FILE_QUARANTINE_BUCKET" "$$FILE_PROMOTED_BUCKET"; do
+          "$$MC" mb --ignore-existing "local/$$bucket"
+          echo "Bucket $$bucket ready."
+        done
+
+  clamav:
+    image: clamav/clamav:1.4
+    profiles: ["full"]
+    ports:
+      - "3310:3310"
+    volumes:
+      - clamav_data:/var/lib/clamav
+    healthcheck:
+      test: ["CMD-SHELL", "clamdcheck.sh || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 30
+      start_period: 60s
+
+  ai-layer:
+    build:
+      context: ..
+      dockerfile: ai-layer/Dockerfile
+    profiles: ["full"]
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8000/api/v1/health', timeout=3)\"",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+  # Debezium Connect is part of the full profile so connector provisioning is one command. The
+  # poller keeps running during the dual-run window; the connector is only registered by
+  # debezium-init (an explicit, idempotent step).
+  connect:
+    image: quay.io/debezium/connect:${DEBEZIUM_VERSION:-3.0}
+    profiles: ["full"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8083:8083"
+    environment:
+      BOOTSTRAP_SERVERS: kafka:29092
+      GROUP_ID: awap-connect
+      CONFIG_STORAGE_TOPIC: awap.connect.configs
+      OFFSET_STORAGE_TOPIC: awap.connect.offsets
+      STATUS_STORAGE_TOPIC: awap.connect.status
+      CONNECT_CONFIG_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_OFFSET_STORAGE_REPLICATION_FACTOR: "1"
+      CONNECT_STATUS_STORAGE_REPLICATION_FACTOR: "1"
+      KEY_CONVERTER: org.apache.kafka.connect.storage.StringConverter
+      VALUE_CONVERTER: org.apache.kafka.connect.json.JsonConverter
+      CONNECT_VALUE_CONVERTER_SCHEMAS_ENABLE: "false"
+      CONNECT_PLUGIN_PATH: /kafka/connect
+      CONNECT_PRODUCER_OVERRIDE_ENABLE_IDEMPOTENCE: "true"
+      CONNECT_PRODUCER_OVERRIDE_ACKS: all
+      REST_HOST_NAME: 0.0.0.0
+      ADVERTISED_HOST_NAME: connect
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${POSTGRES_USER:-awap}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-awap}
+      DB_NAME: ${POSTGRES_DB:-awap}
+    volumes:
+      - ./debezium/outbox-connector.json:/kafka/connectors/outbox-connector.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8083/connectors >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  # Idempotent connector provisioning: create-or-update, then poll the status endpoint.
+  debezium-init:
+    image: node:24-alpine
+    profiles: ["full"]
+    depends_on:
+      connect:
+        condition: service_healthy
+    restart: "no"
+    working_dir: /workspace
+    volumes:
+      - ../:/workspace:ro
+    environment:
+      CONNECT_URL: http://connect:8083
+      CONNECTOR_FILE: /workspace/infra/debezium/outbox-connector.json
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_USER: ${POSTGRES_USER:-awap}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-awap}
+      DB_NAME: ${POSTGRES_DB:-awap}
+    command: ["node", "/workspace/infra/scripts/provision-connector.mjs"]
 
   opensearch:
     image: opensearchproject/opensearch:2.19.0
@@ -94,6 +281,12 @@ services:
       - "9600:9600"
     volumes:
       - opensearch_data:/usr/share/opensearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:9200/_cluster/health >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
 
   # Exposes the replication-slot series consumed by infra/prometheus/cdc-alert-rules.yml.
   # The pg_replication_slot_* series only exist once the Debezium connector created the slot.
@@ -108,6 +301,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9187/metrics >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
 
   prometheus:
     image: prom/prometheus:latest
@@ -117,6 +316,12 @@ services:
       - ./prometheus/cdc-alert-rules.yml:/etc/prometheus/cdc-alert-rules.yml:ro
     ports:
       - "9090:9090"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:9090/-/ready || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
 
   grafana:
     image: grafana/grafana:latest
@@ -129,6 +334,12 @@ services:
       - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
       # Provider + awap.json; without this mount the dashboard was never provisioned.
       - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3000/api/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
@@ -139,6 +350,18 @@ services:
       - "4317:4317" # OTLP gRPC
       - "4318:4318" # OTLP HTTP
       - "8889:8889" # Prometheus exporter
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "/otelcol-contrib",
+          "validate",
+          "--config=/etc/otel-collector-config.yaml",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 10s
 
   vault:
     image: hashicorp/vault:latest
@@ -149,6 +372,12 @@ services:
       - IPC_LOCK
     ports:
       - "8200:8200"
+    healthcheck:
+      test: ["CMD-SHELL", "vault status >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
 
   backend:
     build:
@@ -157,9 +386,29 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      redis:
+        condition: service_healthy
+      # Optional dependencies are not started by the core stack. They are waited for only after
+      # they have started (not until healthy) so a slow ClamAV signature download cannot hold the
+      # backend down; `make up` still waits for their healthchecks explicitly.
+      kafka:
+        condition: service_healthy
+        required: false
+      minio:
+        condition: service_started
+        required: false
+      clamav:
+        condition: service_started
+        required: false
+      ai-layer:
+        condition: service_started
+        required: false
+      otel-collector:
+        condition: service_started
+        required: false
     environment:
       SPRING_PROFILES_ACTIVE: dev
-      DB_URL: jdbc:postgresql://postgres:5432/awap
+      DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-awap}
       DB_USER: ${POSTGRES_USER:-awap}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-awap}
       CORS_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000
@@ -167,24 +416,50 @@ services:
       # Containers must use the INTERNAL listener; the PLAINTEXT listener advertises
       # localhost:9092, which is unreachable from inside the backend container.
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      # E2E switches: the Playwright job enables Kafka so analytics aggregates are actually
-      # produced, and disables bucket provisioning because MinIO is an opt-in profile.
-      KAFKA_ENABLED: ${KAFKA_ENABLED:-false}
+      # The full profile enables every runtime integration. `make up-minimal` (and the CI jobs
+      # that intentionally omit a dependency) override these to false.
+      KAFKA_ENABLED: ${KAFKA_ENABLED:-true}
+      CLAMAV_ENABLED: ${CLAMAV_ENABLED:-true}
+      CLAMAV_HOST: clamav
+      CLAMAV_PORT: "3310"
+      AI_NODE_ENABLED: ${AI_NODE_ENABLED:-true}
+      AI_LAYER_URL: ${AI_LAYER_URL:-http://ai-layer:8000}
+      OPENSEARCH_ENABLED: ${OPENSEARCH_ENABLED:-true}
+      OPENSEARCH_ENDPOINT: ${OPENSEARCH_ENDPOINT:-http://opensearch:9200}
+      MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-awapadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-awapadmin123}
+      OTLP_ENDPOINT: ${OTLP_ENDPOINT:-http://otel-collector:4318/v1/traces}
       FILE_MANAGE_BUCKETS: ${FILE_MANAGE_BUCKETS:-true}
+      FILE_QUARANTINE_BUCKET: ${FILE_QUARANTINE_BUCKET:-awap-quarantine}
+      FILE_PROMOTED_BUCKET: ${FILE_PROMOTED_BUCKET:-awap-files}
       FILE_SCAN_INTERVAL_MS: ${FILE_SCAN_INTERVAL_MS:-60000}
       OUTBOX_RELAY_INTERVAL_MS: ${OUTBOX_RELAY_INTERVAL_MS:-5000}
       OUTBOX_RELAY_INITIAL_DELAY_MS: ${OUTBOX_RELAY_INITIAL_DELAY_MS:-5000}
     ports:
       - "8080:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health/readiness >/dev/null || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 30s
 
   frontend:
     build:
       context: ..
       dockerfile: frontend/Dockerfile
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     ports:
       - "3000:3000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget --spider -q http://localhost:3000 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
 
 volumes:
   postgres_data:
@@ -194,3 +469,4 @@ volumes:
   minio_data:
   opensearch_data:
   grafana_data:
+  clamav_data:

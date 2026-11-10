@@ -252,6 +252,7 @@ test("the committed policy snapshot matches --expected", async () => {
   assert.deepEqual(committed, JSON.parse(result.stdout));
   assert.deepEqual(REQUIRED_CHECKS, [
     "Backend",
+    "Local Stack",
     "Frontend",
     "AI Layer",
     "Verify Versions",

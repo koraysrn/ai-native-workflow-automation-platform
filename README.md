@@ -81,34 +81,67 @@ The authoritative compatibility matrix is maintained in
 - Docker + Docker Compose (recommended; no local JDK/Node/Python needed)
 - For local development only: JDK 25 (Temurin), Node.js 24 LTS + pnpm, Python 3.15.0 (uv)
 
-### Quick start (single command)
+### Quick start (one command)
 
 ```bash
-cd infra
-docker compose up -d --build
+cp infra/.env.example infra/.env   # optional; local defaults are safe
+make up
 ```
 
-This builds and starts the entire stack — PostgreSQL, Redis, Kafka (+ Schema
-Registry), OpenSearch, Vault, Prometheus, Grafana, the OpenTelemetry collector,
-the backend and the frontend. Flyway applies the database migrations
-automatically inside the backend container on startup.
+`make up` runs the `full` Compose profile, which starts **every** runtime
+dependency and application: PostgreSQL, Redis, Kafka + Schema Registry, MinIO,
+ClamAV, OpenSearch, Vault, Prometheus, Grafana, the OpenTelemetry collector, the
+backend, the frontend and the AI layer. MinIO, ClamAV and the AI layer are
+enabled by this profile, and the backend enables Kafka, MinIO, ClamAV,
+OpenSearch and AI integrations. The command then:
+
+1. fails early on a host-port conflict;
+2. waits for every healthcheck with bounded retries and a named error;
+3. runs idempotent provisioning for buckets (`minio-init`), Kafka topics
+   (`kafka-init`) and the Debezium outbox connector (`debezium-init`);
+4. seeds the local tenant and verifies login.
+
+| Target | What it does |
+|---|---|
+| `make up` | Start the full stack, wait, provision and seed. |
+| `make up-minimal` | Start only PostgreSQL, Redis, Kafka, Schema Registry, backend and frontend. |
+| `make down` | Stop the full stack; volumes are kept. |
+| `make reset` | Remove volumes (stale-state recovery) and start a clean seeded stack. |
+| `make seed` | Idempotently create the local tenant and verify login. |
+| `make provision` | Idempotently create buckets, Kafka topics and the Debezium connector. |
+| `make logs` / `make ps` / `make config` | Inspect the running stack. |
 
 | Service | URL |
 |---|---|
 | Frontend | http://localhost:3000 |
 | Backend (REST + actuator) | http://localhost:8080 |
+| AI layer | http://localhost:8000/api/v1/health |
+| MinIO (API / console) | http://localhost:9000 / http://localhost:9001 |
 | Grafana | http://localhost:3001 |
 | Prometheus | http://localhost:9090 |
 | Schema Registry | http://localhost:8081 |
+| Debezium Connect | http://localhost:8083 |
 
-MinIO is opt-in (its public Docker image now requires authentication); start it with:
+Limitations and resource requirements:
+
+- The full profile needs roughly **8 GB of free RAM** and 10 GB of disk. Use
+  `make up-minimal` on smaller laptops.
+- The first run downloads ClamAV signatures and builds three images, so it takes
+  several minutes. Later starts reuse the cached layers and volumes.
+- All credentials in `infra/.env.example` are local-only placeholders. Never
+  commit a real secret; production uses Vault/External Secrets.
+- The full profile pulls the Bitnami legacy MinIO image
+  (`bitnamilegacy/minio`), because MinIO's upstream `quay.io` images now require
+  authentication. Override `MINIO_IMAGE`/`MINIO_CLIENT_IMAGE` if you mirror a
+  different MinIO build.
+- Flyway applies database migrations automatically inside the backend container.
+
+Direct Compose use is still supported:
 
 ```bash
-docker compose --profile storage up -d minio
+docker compose -f infra/docker-compose.yml --profile full up -d --build
+docker compose -f infra/docker-compose.yml --profile full down -v
 ```
-
-Secrets and connection settings are configurable via environment variables; see
-[`infra/.env.example`](infra/.env.example).
 
 ### Local development (manual)
 
