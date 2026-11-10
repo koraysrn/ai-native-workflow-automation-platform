@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0](https://github.com/koraysrn/ai-native-workflow-automation-platform/compare/v1.0.4...v1.1.0) (2026-11-10)
+
+
+### Features
+
+* **ci:** coverage ratchet, changed-line gate and trend ([#196](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/196)) ([#250](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/250)) ([06fce80](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/06fce80a3c3f0b3f8248e7f2e11e3fce2cd3cb71))
+* **identity:** propagate correlation IDs end to end ([#245](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/245)) ([9032343](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/90323439a7befe62185dae6dec2845c06b380668))
+* **infra:** add a complete one-command local stack ([#241](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/241)) ([74a74df](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/74a74df82da0a5f101c4aaa5363ba74070ad6527))
+* **observability:** prove metrics, traces and logs in CI ([#242](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/242)) ([344cc72](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/344cc72870fa79985c8c99c5b7abd22b745038ee))
+* **openapi:** enforce controller and breaking-change contracts ([#246](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/246)) ([3c67c63](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/3c67c63e709bbf1e607ed839a1b3b8eecc131bc7))
+* **organization:** assign roles through positions ([#194](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/194)) ([#248](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/248)) ([ada3d8f](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/ada3d8f765d4c6461001b54c1549e069f3f9de5a))
+* **organization:** gate coverage and reject duplicates ([#195](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/195)) ([#249](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/249)) ([cd46992](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/cd4699294a62fb2b4d50efe4dbaca419b6f5cc8c))
+* **sbom:** generate, merge, sign and gate SBOMs for every layer ([#247](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/247)) ([bc135de](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/bc135de7d1298b8f10b1f445a3df821be9920546))
+
 ## [1.0.4](https://github.com/koraysrn/ai-native-workflow-automation-platform/compare/v1.0.3...v1.0.4) (2026-11-09)
 
 
