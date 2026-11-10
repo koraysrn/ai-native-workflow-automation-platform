@@ -4,6 +4,7 @@ import com.awap.ai.application.AiBackendClient;
 import com.awap.ai.application.LocalHeuristicAiBackend;
 import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
+import com.awap.common.correlation.CorrelationId;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.micrometer.core.instrument.MeterRegistry;
 import java.io.IOException;
@@ -101,13 +102,14 @@ public class OpenAiCompatibleAiBackend implements AiBackendClient {
                   maxTokens,
                   "messages",
                   List.of(Map.of("role", "user", "content", prompt))));
-      HttpRequest request =
+      HttpRequest.Builder builder =
           HttpRequest.newBuilder(endpoint())
               .timeout(timeout)
               .header("Content-Type", "application/json")
-              .header("Authorization", "Bearer " + apiKey)
-              .POST(HttpRequest.BodyPublishers.ofString(payload))
-              .build();
+              .header("Authorization", "Bearer " + apiKey);
+      CorrelationId.current()
+          .ifPresent(correlationId -> builder.header(CorrelationId.HEADER, correlationId));
+      HttpRequest request = builder.POST(HttpRequest.BodyPublishers.ofString(payload)).build();
       HttpResponse<String> response =
           httpClient.send(request, HttpResponse.BodyHandlers.ofString());
 

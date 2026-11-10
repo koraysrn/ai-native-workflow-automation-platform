@@ -1,8 +1,6 @@
 package com.awap.engine.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -17,7 +15,9 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.kafka.core.KafkaTemplate;
@@ -47,7 +47,7 @@ class OutboxRelayIntegrationTest {
 
   @Test
   void relayPublishesEventToCorrectTopicAndMarksItPublished() {
-    when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+    when(kafkaTemplate.send(org.mockito.ArgumentMatchers.<ProducerRecord<String, String>>any()))
         .thenReturn(CompletableFuture.completedFuture(null));
 
     OutboxEvent event =
@@ -64,8 +64,12 @@ class OutboxRelayIntegrationTest {
     assertThat(persisted.getClaimedAt()).isEmpty();
     assertThat(persisted.getPublishAttempts()).isZero();
 
-    verify(kafkaTemplate)
-        .send("workflow.task.events", event.getAggregateId().toString(), "{\"x\":1}");
+    ArgumentCaptor<ProducerRecord<String, String>> captor =
+        ArgumentCaptor.forClass(ProducerRecord.class);
+    verify(kafkaTemplate).send(captor.capture());
+    assertThat(captor.getValue().topic()).isEqualTo("workflow.task.events");
+    assertThat(captor.getValue().key()).isEqualTo(event.getAggregateId().toString());
+    assertThat(captor.getValue().value()).isEqualTo("{\"x\":1}");
   }
 
   @Test
@@ -75,7 +79,7 @@ class OutboxRelayIntegrationTest {
 
   @Test
   void crashBetweenClaimAndPublishIsReconciledAndRepublishedExactlyOnce() {
-    when(kafkaTemplate.send(anyString(), anyString(), anyString()))
+    when(kafkaTemplate.send(org.mockito.ArgumentMatchers.<ProducerRecord<String, String>>any()))
         .thenReturn(CompletableFuture.completedFuture(null));
     SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
     OutboxMetrics metrics = new OutboxMetrics(meterRegistry);
@@ -121,8 +125,11 @@ class OutboxRelayIntegrationTest {
     assertThat(republished.getPublishedAt()).isPresent();
     assertThat(republished.getClaimToken()).isEmpty();
     // Exactly one Kafka record for this aggregate: no duplicate publication after the crash.
-    verify(kafkaTemplate, times(1))
-        .send(
-            eq("workflow.task.events"), eq(event.getAggregateId().toString()), eq("{\"crash\":1}"));
+    ArgumentCaptor<ProducerRecord<String, String>> crashCaptor =
+        ArgumentCaptor.forClass(ProducerRecord.class);
+    verify(kafkaTemplate, times(1)).send(crashCaptor.capture());
+    assertThat(crashCaptor.getValue().topic()).isEqualTo("workflow.task.events");
+    assertThat(crashCaptor.getValue().key()).isEqualTo(event.getAggregateId().toString());
+    assertThat(crashCaptor.getValue().value()).isEqualTo("{\"crash\":1}");
   }
 }

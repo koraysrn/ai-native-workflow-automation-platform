@@ -83,5 +83,7 @@ class KafkaConsumerConfigTest {
 
     assertThat(factory.getContainerProperties().getAckMode())
         .isEqualTo(ContainerProperties.AckMode.RECORD);
+    // Issue #191: every listener restores/clears the correlation ID from the record header.
+    assertThat(factory.getRecordInterceptor()).isInstanceOf(CorrelationIdRecordInterceptor.class);
   }
 }

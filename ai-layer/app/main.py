@@ -4,6 +4,9 @@ from fastapi import FastAPI
 
 from app.api.health import router as health_router
 from app.config import SERVICE_VERSION
+from app.observability import CorrelationIdMiddleware, configure_logging
+
+configure_logging()
 
 app = FastAPI(
     title="AWAP AI Layer",
@@ -16,4 +19,5 @@ app = FastAPI(
     openapi_url="/api/v1/openapi.json",
 )
 
+app.add_middleware(CorrelationIdMiddleware)
 app.include_router(health_router, prefix="/api/v1")

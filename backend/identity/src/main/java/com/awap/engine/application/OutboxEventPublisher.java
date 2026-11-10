@@ -1,5 +1,6 @@
 package com.awap.engine.application;
 
+import com.awap.common.correlation.CorrelationId;
 import com.awap.engine.domain.OutboxEvent;
 import com.awap.engine.infrastructure.OutboxEventRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -29,10 +30,24 @@ public class OutboxEventPublisher {
   @Transactional
   public void publish(
       UUID tenantId, String aggregateType, UUID aggregateId, String eventType, Object payload) {
+    String correlationId = CorrelationId.currentOrDefault();
     OutboxEvent event =
-        new OutboxEvent(tenantId, aggregateType, aggregateId, eventType, toJson(payload));
+        new OutboxEvent(
+            tenantId, aggregateType, aggregateId, eventType, toJson(payload), correlationId);
     repository.save(event);
-    applicationEventPublisher.publishEvent(payload);
+    // In-process listeners run on this thread; make sure a scheduler-originated event still carries
+    // a correlation ID without leaking it into the next pooled task.
+    boolean scoped = CorrelationId.current().isEmpty();
+    if (scoped) {
+      CorrelationId.set(correlationId);
+    }
+    try {
+      applicationEventPublisher.publishEvent(payload);
+    } finally {
+      if (scoped) {
+        CorrelationId.clear();
+      }
+    }
   }
 
   /**
@@ -43,7 +58,13 @@ public class OutboxEventPublisher {
   public void publishDurably(
       UUID tenantId, String aggregateType, UUID aggregateId, String eventType, Object payload) {
     repository.save(
-        new OutboxEvent(tenantId, aggregateType, aggregateId, eventType, toJson(payload)));
+        new OutboxEvent(
+            tenantId,
+            aggregateType,
+            aggregateId,
+            eventType,
+            toJson(payload),
+            CorrelationId.currentOrDefault()));
   }
 
   private String toJson(Object payload) {

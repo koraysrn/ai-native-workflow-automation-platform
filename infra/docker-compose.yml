@@ -423,6 +423,7 @@ services:
       CLAMAV_HOST: clamav
       CLAMAV_PORT: "3310"
       AI_NODE_ENABLED: ${AI_NODE_ENABLED:-true}
+      AI_LAYER_ENABLED: ${AI_LAYER_ENABLED:-false}
       AI_LAYER_URL: ${AI_LAYER_URL:-http://ai-layer:8000}
       OPENSEARCH_ENABLED: ${OPENSEARCH_ENABLED:-true}
       OPENSEARCH_ENDPOINT: ${OPENSEARCH_ENDPOINT:-http://opensearch:9200}

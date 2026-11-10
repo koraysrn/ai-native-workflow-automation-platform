@@ -58,7 +58,8 @@ public class JpaOutboxClaimStore implements OutboxClaimStore {
                 candidate.getEventType(),
                 candidate.getAggregateId(),
                 candidate.getPayloadJson(),
-                token));
+                token,
+                candidate.getCorrelationId()));
       }
     }
     return claimed;

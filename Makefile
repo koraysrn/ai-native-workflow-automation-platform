@@ -25,12 +25,12 @@ help:
 
 # Full profile: every runtime dependency and application, including MinIO, ClamAV and the AI layer.
 up:
-	$(NODE) infra/scripts/stack.mjs up --profile $(PROFILE) --compose-file $(COMPOSE_FILE)
+	AI_LAYER_ENABLED=true $(NODE) infra/scripts/stack.mjs up --profile $(PROFILE) --compose-file $(COMPOSE_FILE)
 
 # Minimal footprint for laptops: only the documented core services, with optional integrations off.
 up-minimal:
-	KAFKA_ENABLED=false CLAMAV_ENABLED=false AI_NODE_ENABLED=false OPENSEARCH_ENABLED=false \
-	FILE_MANAGE_BUCKETS=false \
+	KAFKA_ENABLED=false CLAMAV_ENABLED=false AI_NODE_ENABLED=false AI_LAYER_ENABLED=false \
+	OPENSEARCH_ENABLED=false FILE_MANAGE_BUCKETS=false \
 	docker compose -f $(COMPOSE_FILE) up -d --build postgres redis kafka schema-registry backend frontend
 
 down:

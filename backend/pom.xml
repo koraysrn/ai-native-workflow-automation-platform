@@ -47,6 +47,9 @@
         <jacoco.version>0.8.15</jacoco.version>
         <jjwt.version>0.12.6</jjwt.version>
         <jacoco.skip>false</jacoco.skip>
+        <!-- The shared kernel still produces a coverage report for Sonar new-code coverage, but
+             its bundle gate is evaluated by the modules that own the business behaviour. -->
+        <jacoco.skip.check>false</jacoco.skip.check>
 
         <!-- Security floors for transitive dependencies. CI scans the aggregate
              CycloneDX SBOM, so these versions are exactly what ships:
@@ -256,7 +259,7 @@
                             <goal>check</goal>
                         </goals>
                         <configuration>
-                            <skip>${jacoco.skip}</skip>
+                            <skip>${jacoco.skip.check}</skip>
                             <rules>
                                 <rule>
                                     <element>BUNDLE</element>
