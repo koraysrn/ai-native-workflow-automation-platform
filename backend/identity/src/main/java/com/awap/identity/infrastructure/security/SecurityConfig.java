@@ -83,7 +83,7 @@ public class SecurityConfig {
             eh -> eh.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
         .authorizeHttpRequests(
             auth ->
-                auth.requestMatchers("/actuator/health", "/actuator/info")
+                auth.requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info")
                     .permitAll()
                     .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/refresh")
                     .permitAll()

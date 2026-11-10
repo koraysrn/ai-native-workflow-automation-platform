@@ -78,6 +78,12 @@ jobs:
           node-version: 24
 
       - name: Start PostgreSQL, Kafka, the backend and Prometheus
+        # The optional full-stack integrations are not part of this job; keep their flags off.
+        env:
+          CLAMAV_ENABLED: "false"
+          AI_NODE_ENABLED: "false"
+          OPENSEARCH_ENABLED: "false"
+          FILE_MANAGE_BUCKETS: "false"
         run: >-
           docker compose -f infra/docker-compose.yml up -d --build
           postgres redis kafka schema-registry backend postgres-exporter prometheus

@@ -22,6 +22,8 @@ done
 
 # Substitute only the DB_* placeholders. Debezium's own `${routedByValue}` placeholder must survive;
 # a bare `envsubst` would replace it with an empty string and route every event to `outbox.event.`.
+# The single-quoted list is intentional: envsubst receives the literal placeholders to substitute.
+# shellcheck disable=SC2016
 payload="$(envsubst '${DB_HOST} ${DB_PORT} ${DB_USER} ${DB_PASSWORD} ${DB_NAME}' < "${CONNECTOR_FILE}")"
 
 if curl -fsS "${CONNECT_URL}/connectors/${CONNECTOR_NAME}" >/dev/null 2>&1; then
@@ -42,7 +44,7 @@ fi
 echo
 echo "Connector status:"
 # The worker returns 404 for a short window after the create call; poll instead of failing the job.
-for attempt in $(seq 1 30); do
+for _ in $(seq 1 30); do
   if status="$(curl -fsS "${CONNECT_URL}/connectors/${CONNECTOR_NAME}/status")"; then
     printf '%s\n' "${status}"
     exit 0

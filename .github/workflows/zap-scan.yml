@@ -20,6 +20,11 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Start the Docker Compose stack
+        env:
+          CLAMAV_ENABLED: "false"
+          AI_NODE_ENABLED: "false"
+          OPENSEARCH_ENABLED: "false"
+          FILE_MANAGE_BUCKETS: "false"
         run: docker compose up -d --build
         working-directory: infra
 

@@ -186,15 +186,17 @@ jobs:
         working-directory: frontend
       - name: Start Compose stack
         env:
-          # The live journey asserts real analytics aggregates and a real document scan
-          # projection. Kafka must be enabled for the outbox relay to reach the analytics
-          # listener, and MinIO stays opt-in (the API records QUARANTINED without buckets).
+          # Issue #189: run the suite against the one-command full stack, but keep the optional
+          # integrations that this suite does not assert disabled so the run stays deterministic.
           KAFKA_ENABLED: "true"
+          CLAMAV_ENABLED: "false"
+          AI_NODE_ENABLED: "false"
+          OPENSEARCH_ENABLED: "false"
           FILE_MANAGE_BUCKETS: "false"
           FILE_SCAN_INTERVAL_MS: "3600000"
           OUTBOX_RELAY_INTERVAL_MS: "1000"
           OUTBOX_RELAY_INITIAL_DELAY_MS: "1000"
-        run: docker compose -f infra/docker-compose.yml up -d --build
+        run: docker compose -f infra/docker-compose.yml --profile full up -d --build
       - name: Wait for backend health
         run: |
           for attempt in $(seq 1 60); do
@@ -485,6 +487,44 @@ jobs:
     permissions:
       contents: read
       packages: write
+
+  local-stack:
+    name: Local Stack
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install root tooling (yaml)
+        run: pnpm install --frozen-lockfile
+      - name: Compose profile, healthcheck and provisioning tests
+        run: node --test "infra/test/*.test.mjs"
+      - name: Shell syntax check
+        run: bash -n infra/debezium/register-connector.sh
+      - name: ShellCheck
+        run: |
+          if ! command -v shellcheck >/dev/null 2>&1; then
+            sudo apt-get update -qq
+            sudo apt-get install -y shellcheck
+          fi
+          shellcheck infra/debezium/register-connector.sh
+      - name: Compose model resolves for both profiles
+        run: |
+          docker compose -f infra/docker-compose.yml --profile full config --quiet
+          docker compose -f infra/docker-compose.yml config --quiet
+      # Issue #189: every provisioning branch must be executed in dry-run mode, and a renamed or
+      # skipped branch must fail the job instead of passing silently.
+      - name: Provisioning dry run (records every branch)
+        env:
+          AWAP_PROVISION_TRACE_FILE: ${{ runner.temp }}/provision-trace.txt
+        run: |
+          node infra/scripts/stack.mjs up --dry-run --profile full
+          node infra/scripts/stack.mjs provision --dry-run
+          node infra/scripts/provision-connector.mjs --dry-run
+          node infra/scripts/check-provision-trace.mjs "$AWAP_PROVISION_TRACE_FILE"
 
   openapi:
     name: API Lint
