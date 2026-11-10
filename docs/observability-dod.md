@@ -21,8 +21,21 @@ with its trace ID visible in structured JSON logs.
 
 ## Verification checklist
 
-- [ ] A task approve/reject increases `awap_task_decisions_total` in `/actuator/prometheus`.
-- [ ] Prometheus targets report the backend as UP.
-- [ ] Grafana renders the dashboard and the query returns data.
-- [ ] A request produces a span in the OTel collector (span count increases).
-- [ ] The JSON log line for that request carries the same trace ID as the span.
+The live proof is automated in
+[`infra/observability/prove-observability.mjs`](../infra/observability/prove-observability.mjs)
+and runs in the `Observability Proof` CI job on every pull request. Evidence is uploaded as the
+`observability-evidence` artifact.
+
+- [x] A task approve/reject increases `awap_task_decisions_total` in `/actuator/prometheus`.
+- [x] Prometheus targets report the backend as UP.
+- [x] Grafana renders the dashboard and the query returns data.
+- [x] A request produces a span in the OTel collector (span count increases).
+- [x] The JSON log line for that request carries the same trace ID as the span.
+
+Each check fails with the missing metric, target, dashboard or trace ID; a collector outage fails
+the job instead of being skipped. Local run:
+
+```bash
+make up
+node infra/observability/prove-observability.mjs
+```

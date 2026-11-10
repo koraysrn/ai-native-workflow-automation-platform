@@ -50,6 +50,10 @@ spring:
       ack-mode: record
 
 awap:
+  metrics:
+    # The Compose full stack sets this to true so Prometheus can scrape /actuator/prometheus
+    # without a user token. Production keeps it false and scrapes over an authenticated path.
+    public: ${AWAP_METRICS_PUBLIC:false}
   kafka:
     enabled: ${KAFKA_ENABLED:false}
     # Default consumer group for listeners on distinct topics. The analytics and usage listeners
@@ -265,10 +269,13 @@ management:
         enabled: true
   tracing:
     sampling:
-      probability: 1.0
-  otlp:
+      probability: ${OTLP_SAMPLING_PROBABILITY:1.0}
+  # Spring Boot 4 moved the OTLP trace endpoint under management.opentelemetry.*.
+  opentelemetry:
     tracing:
-      endpoint: ${OTLP_ENDPOINT:http://localhost:4318/v1/traces}
+      export:
+        otlp:
+          endpoint: ${OTLP_ENDPOINT:http://localhost:4318/v1/traces}
 
 logging:
   level:

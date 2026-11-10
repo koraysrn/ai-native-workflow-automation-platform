@@ -38,16 +38,19 @@ public class SecurityConfig {
   private final AuthRateLimitFilter authRateLimitFilter;
   private final IdempotencyFilter idempotencyFilter;
   private final ObjectProvider<GeneralRateLimitFilter> generalRateLimitFilterProvider;
+  private final boolean publicMetrics;
 
   public SecurityConfig(
       JwtAuthenticationFilter jwtAuthenticationFilter,
       AuthRateLimitFilter authRateLimitFilter,
       IdempotencyFilter idempotencyFilter,
-      ObjectProvider<GeneralRateLimitFilter> generalRateLimitFilterProvider) {
+      ObjectProvider<GeneralRateLimitFilter> generalRateLimitFilterProvider,
+      @Value("${awap.metrics.public:false}") boolean publicMetrics) {
     this.jwtAuthenticationFilter = jwtAuthenticationFilter;
     this.authRateLimitFilter = authRateLimitFilter;
     this.idempotencyFilter = idempotencyFilter;
     this.generalRateLimitFilterProvider = generalRateLimitFilterProvider;
+    this.publicMetrics = publicMetrics;
   }
 
   @Bean
@@ -82,17 +85,22 @@ public class SecurityConfig {
         .exceptionHandling(
             eh -> eh.authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED)))
         .authorizeHttpRequests(
-            auth ->
-                auth.requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info")
-                    .permitAll()
-                    .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/refresh")
-                    .permitAll()
-                    .requestMatchers(HttpMethod.POST, "/api/v1/tenants")
-                    .permitAll()
-                    .requestMatchers(HttpMethod.POST, "/api/v1/tenant-invitations/*/accept")
-                    .permitAll()
-                    .anyRequest()
-                    .authenticated())
+            auth -> {
+              auth.requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info")
+                  .permitAll()
+                  .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/refresh")
+                  .permitAll()
+                  .requestMatchers(HttpMethod.POST, "/api/v1/tenants")
+                  .permitAll()
+                  .requestMatchers(HttpMethod.POST, "/api/v1/tenant-invitations/*/accept")
+                  .permitAll();
+              // Prometheus cannot present a user token. The endpoint is public only when the
+              // operator enables awap.metrics.public (local full stack / in-cluster scrape).
+              if (publicMetrics) {
+                auth.requestMatchers("/actuator/prometheus").permitAll();
+              }
+              auth.anyRequest().authenticated();
+            })
         .addFilterBefore(authRateLimitFilter, UsernamePasswordAuthenticationFilter.class)
         .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
         .addFilterAfter(idempotencyFilter, UsernamePasswordAuthenticationFilter.class);

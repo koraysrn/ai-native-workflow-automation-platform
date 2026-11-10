@@ -554,6 +554,13 @@ jobs:
           "scripts/test/apply-branch-protection.test.mjs"
       - name: Dashboard and alert rule tests
         run: node --test "infra/grafana/test/*.test.mjs" "infra/prometheus/test/*.test.mjs"
+      - name: Observability proof branch tests
+        # Issue #190: every assertion and error path is executed with fakes.
+        run: node --test "infra/observability/test/*.test.mjs"
+      - name: Observability proof dry run
+        env:
+          AWAP_OBSERVABILITY_TRACE_FILE: ${{ runner.temp }}/observability-trace.txt
+        run: node infra/observability/prove-observability.mjs --dry-run
       - name: Documentation link tests
         # Issue #185: every relative Markdown link and anchor must resolve.
         run: node --test "scripts/test/check-doc-links.test.mjs"
@@ -576,6 +583,57 @@ jobs:
       - name: Validate dashboard queries against a live Prometheus
         timeout-minutes: 10
         run: node infra/prometheus/validate-live-queries.mjs
+
+  observability-live:
+    name: Observability Proof
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - name: Start the full stack
+        env:
+          # The proof asserts the real counter, target, dashboard and trace/log correlation.
+          KAFKA_ENABLED: "true"
+          CLAMAV_ENABLED: "false"
+          AI_NODE_ENABLED: "false"
+          OPENSEARCH_ENABLED: "false"
+          FILE_MANAGE_BUCKETS: "false"
+        run: docker compose -f infra/docker-compose.yml --profile full up -d --build
+      - name: Wait for backend and observability endpoints
+        run: |
+          for attempt in $(seq 1 90); do
+            if curl -fsS http://localhost:8080/actuator/health/readiness >/dev/null \
+              && curl -fsS http://localhost:9090/-/ready >/dev/null \
+              && curl -fsS http://localhost:3001/api/health >/dev/null; then
+              echo "Observability stack ready after $attempt attempt(s)."
+              exit 0
+            fi
+            sleep 5
+          done
+          docker compose -f infra/docker-compose.yml logs --tail=300 backend prometheus grafana otel-collector
+          exit 1
+      - name: Prove metric, target, dashboard, span and log correlation
+        env:
+          GF_ADMIN_PASSWORD: admin
+          AWAP_OBSERVABILITY_TRACE_FILE: ${{ runner.temp }}/observability-trace.txt
+        run: node infra/observability/prove-observability.mjs
+      - name: Upload the observability evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: observability-evidence
+          path: observability-evidence
+          retention-days: 30
+          if-no-files-found: warn
+      - name: Dump observability logs on failure
+        if: failure()
+        run: docker compose -f infra/docker-compose.yml logs --tail=1000 backend prometheus grafana otel-collector
+      - name: Stop the stack
+        if: always()
+        run: docker compose -f infra/docker-compose.yml --profile full down -v
 
   k8s-overlays:
     name: Kubernetes Overlays

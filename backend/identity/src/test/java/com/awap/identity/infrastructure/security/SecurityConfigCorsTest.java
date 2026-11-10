@@ -25,7 +25,8 @@ class SecurityConfigCorsTest {
             mock(JwtAuthenticationFilter.class),
             mock(AuthRateLimitFilter.class),
             mock(IdempotencyFilter.class),
-            rateLimitFilters);
+            rateLimitFilters,
+            false);
 
     CorsConfigurationSource source = config.corsConfigurationSource("http://localhost:3000");
     MockHttpServletRequest request = new MockHttpServletRequest("OPTIONS", "/api/v1/tasks");
