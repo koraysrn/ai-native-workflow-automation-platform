@@ -37,6 +37,7 @@ public enum ErrorCode {
   TASK_STATE_CONFLICT("AWAP-TASK-0003", "The task state transition is not allowed."),
   FORM_INVALID_SCHEMA("AWAP-FORM-0001", "The form schema is invalid."),
   ORG_NOT_FOUND("AWAP-ORG-0001", "The organization resource was not found."),
+  ORG_CONFLICT("AWAP-ORG-0002", "The organization resource already exists."),
   FILE_NOT_FOUND("AWAP-FILE-0001", "The file was not found."),
   FILE_SCAN_REJECTED("AWAP-FILE-0002", "The file was rejected by antivirus scanning."),
   FILE_TOO_LARGE("AWAP-FILE-0003", "The file exceeds the maximum allowed size."),

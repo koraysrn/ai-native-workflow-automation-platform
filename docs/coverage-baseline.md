@@ -67,3 +67,41 @@ listing/count adapter, retention policy and purge scheduler. It runs in CI as th
 PIT reports. The `NotificationDelivery` delivery/retry state machine is excluded
 from this profile because it has its own focused coverage; only read-state members
 are in scope.
+
+## Organization module gate (issue #195)
+
+The organization module is a critical module, protected by a package-level JaCoCo
+rule and a dedicated mutation profile.
+
+### Class inventory
+
+| Layer | Classes | Covered branches |
+|-------|---------|------------------|
+| Domain | `Company`, `Department`, `Team`, `Position`, `OrganizationUser`, `OrganizationAuditEvent` | Entity factories, getters, soft-delete flag, `Position.changeRole` (null/valid), role default, `OrganizationUser.assignToTeam` |
+| Application | `OrganizationService` | Null/blank caller role, escalation 403, unknown caller role 403, null role 400, same-role no-op, role propagation with/without an identity account, foreign tenant 404, duplicate 409 for company/department/team/position/user, quota 429, every tree/list/create path |
+| Web | `OrganizationController` | 200/201/400/401/403/404/409/429, `USER_MANAGE` enforcement, missing tenant/role/user context |
+| DTOs | `*Request`, `*Response`, `OrganizationMapperImpl` | Excluded from the gate (generated mapping records) |
+
+### Measured result
+
+| Metric | Covered / Total | Percentage |
+|--------|-----------------|------------|
+| Package line | 350 / 350 | 100% |
+| Package branch | 34 / 34 | 100% |
+| PIT mutation score (`pit-organization`) | 47 killed / 51 generated | 92% |
+| PIT threshold (mutation / coverage) | 80% / 80% | passed |
+
+The rule lives in [`backend/pom.xml`](../backend/pom.xml) as a `PACKAGE` rule with
+`LINE` ≥ 0.95 and `BRANCH` ≥ 0.90. The `pit-organization` profile mutates
+`com.awap.organization.domain.*` and runs in CI as
+`Organization mutation testing (PIT >= 80%)`.
+
+### Integration and artifacts
+
+- [`OrganizationHierarchyIntegrationITest`](../backend/identity/src/test/java/com/awap/organization/application/OrganizationHierarchyIntegrationITest.java)
+  exercises PostgreSQL RLS, tenant-scoped reads, foreign-parent 404, duplicate 409,
+  soft-delete filtering and audit retention with Testcontainers.
+- [`OrganizationControllerWebMvcTest`](../backend/identity/src/test/java/com/awap/organization/interfaces/api/OrganizationControllerWebMvcTest.java)
+  covers the 200/201/400/401/403/404/409 paths.
+- CI uploads the JaCoCo report as the `jacoco-report` artifact and the PIT reports
+  (including `pit-reports-organization`) as the `pit-report` artifact.

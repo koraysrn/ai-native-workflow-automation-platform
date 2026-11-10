@@ -14,4 +14,7 @@ public interface TeamRepository extends JpaRepository<Team, UUID> {
   List<Team> findByTenantIdAndDeletedFalse(UUID tenantId);
 
   Optional<Team> findByIdAndTenantIdAndDeletedFalse(UUID id, UUID tenantId);
+
+  boolean existsByTenantIdAndDepartmentIdAndNameAndDeletedFalse(
+      UUID tenantId, UUID departmentId, String name);
 }

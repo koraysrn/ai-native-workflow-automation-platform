@@ -83,6 +83,9 @@ public class OrganizationService {
 
   @Transactional
   public CompanyResponse createCompany(UUID tenantId, CompanyRequest request) {
+    if (companyRepository.existsByTenantIdAndNameAndDeletedFalse(tenantId, request.name())) {
+      throw conflict("A company with this name already exists.");
+    }
     Company company = new Company(tenantId, request.name());
     companyRepository.save(company);
     publish(
@@ -104,6 +107,10 @@ public class OrganizationService {
     companyRepository
         .findByIdAndTenantIdAndDeletedFalse(request.companyId(), tenantId)
         .orElseThrow(() -> notFound("Company not found."));
+    if (departmentRepository.existsByTenantIdAndCompanyIdAndNameAndDeletedFalse(
+        tenantId, request.companyId(), request.name())) {
+      throw conflict("A department with this name already exists in the company.");
+    }
     Department department =
         new Department(tenantId, request.companyId(), request.parentId(), request.name());
     departmentRepository.save(department);
@@ -128,6 +135,10 @@ public class OrganizationService {
     departmentRepository
         .findByIdAndTenantIdAndDeletedFalse(request.departmentId(), tenantId)
         .orElseThrow(() -> notFound("Department not found."));
+    if (teamRepository.existsByTenantIdAndDepartmentIdAndNameAndDeletedFalse(
+        tenantId, request.departmentId(), request.name())) {
+      throw conflict("A team with this name already exists in the department.");
+    }
     Team team = new Team(tenantId, request.departmentId(), request.name());
     teamRepository.save(team);
     publish(
@@ -151,6 +162,9 @@ public class OrganizationService {
       UUID tenantId, PositionRequest request, String callerRole) {
     Role role = request.role() == null ? Role.EMPLOYEE : request.role();
     assertCanAssign(callerRole, role);
+    if (positionRepository.existsByTenantIdAndNameAndDeletedFalse(tenantId, request.name())) {
+      throw conflict("A position with this name already exists.");
+    }
     Position position = new Position(tenantId, request.name(), role);
     positionRepository.save(position);
     publish(
@@ -256,6 +270,10 @@ public class OrganizationService {
   @Transactional
   public OrgUserResponse createUser(UUID tenantId, OrgUserRequest request) {
     quotaService.assertCanCreateUser(tenantId);
+    if (organizationUserRepository.existsByTenantIdAndEmailAndDeletedFalse(
+        tenantId, request.email())) {
+      throw conflict("An organization user with this email already exists.");
+    }
     Position position = null;
     if (request.positionId() != null) {
       position =
@@ -363,5 +381,9 @@ public class OrganizationService {
 
   private AwapException notFound(String detail) {
     return new AwapException(ErrorCode.RESOURCE_NOT_FOUND, HttpStatus.NOT_FOUND, detail);
+  }
+
+  private AwapException conflict(String detail) {
+    return new AwapException(ErrorCode.ORG_CONFLICT, HttpStatus.CONFLICT, detail);
   }
 }

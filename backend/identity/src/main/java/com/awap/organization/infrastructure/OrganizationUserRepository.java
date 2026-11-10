@@ -18,4 +18,6 @@ public interface OrganizationUserRepository extends JpaRepository<OrganizationUs
   Optional<OrganizationUser> findByIdAndTenantIdAndDeletedFalse(UUID id, UUID tenantId);
 
   long countByTenantIdAndDeletedFalse(UUID tenantId);
+
+  boolean existsByTenantIdAndEmailAndDeletedFalse(UUID tenantId, String email);
 }

@@ -40,6 +40,14 @@ jobs:
       - name: Build and test (includes Pact provider verification)
         run: mvn -B verify
         working-directory: backend
+      - name: Upload JaCoCo reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: jacoco-report
+          path: |
+            backend/common/target/site/jacoco
+            backend/identity/target/site/jacoco
       - name: Module dependency graph check
         # Issue #181: fail on a new backend module cycle and on stale baseline entries.
         run: |
@@ -75,6 +83,9 @@ jobs:
       - name: Saga mutation testing (PIT >= 85%)
         run: mvn -B -Ppit-saga test-compile org.pitest:pitest-maven:mutationCoverage
         working-directory: backend
+      - name: Organization mutation testing (PIT >= 80%)
+        run: mvn -B -Ppit-organization test-compile org.pitest:pitest-maven:mutationCoverage
+        working-directory: backend
       - name: Upload PIT reports
         if: always()
         uses: actions/upload-artifact@v6
@@ -83,6 +94,7 @@ jobs:
           path: |
             backend/identity/target/pit-reports
             backend/identity/target/pit-reports-notification-read
+            backend/identity/target/pit-reports-organization
 
   owasp:
     name: Dependency Scan

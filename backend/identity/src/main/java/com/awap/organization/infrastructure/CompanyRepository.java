@@ -12,4 +12,6 @@ public interface CompanyRepository extends JpaRepository<Company, UUID> {
   List<Company> findByTenantIdAndDeletedFalse(UUID tenantId);
 
   Optional<Company> findByIdAndTenantIdAndDeletedFalse(UUID id, UUID tenantId);
+
+  boolean existsByTenantIdAndNameAndDeletedFalse(UUID tenantId, String name);
 }
