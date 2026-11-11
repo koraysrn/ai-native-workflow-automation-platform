@@ -67,6 +67,27 @@ class TaskLifecycleEventPublishingTest {
   }
 
   @Test
+  void reassignmentEmitsTaskAssigned() {
+    Task reassigned = storedTask();
+    service.reassign(tenantId, reassigned.getId(), new TaskAssignRequest(UUID.randomUUID()));
+    assertThat(captured("TASK_ASSIGNED").taskId()).isEqualTo(reassigned.getId());
+  }
+
+  @Test
+  void claimEmitsTaskAssignedWithTheClaimantAsActor() {
+    // Only an open task can be claimed.
+    Task open = new Task(tenantId, null, null, "Claim me", null, null);
+    when(taskRepository.findByIdAndTenantIdAndDeletedFalse(eq(open.getId()), eq(tenantId)))
+        .thenReturn(Optional.of(open));
+    UUID claimant = UUID.randomUUID();
+    service.claim(tenantId, open.getId(), claimant);
+
+    TaskLifecycleEvent event = captured("TASK_ASSIGNED");
+    assertThat(event.taskId()).isEqualTo(open.getId());
+    assertThat(event.actorId()).isEqualTo(claimant);
+  }
+
+  @Test
   void decisionsAndCompletionEmitTheirOwnEvents() {
     Task approved = storedTask();
     service.approve(tenantId, approved.getId(), UUID.randomUUID(), "TENANT_ADMIN", "ok");
