@@ -4,6 +4,8 @@ import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
 import com.awap.engine.application.NodeCompletedEvent;
 import com.awap.engine.application.OutboxEventPublisher;
+import com.awap.file.application.FileService;
+import com.awap.file.application.FileService.SubmissionFile;
 import com.awap.form.domain.FormDefinition;
 import com.awap.form.domain.FormFieldType;
 import com.awap.form.domain.FormSubmission;
@@ -12,6 +14,7 @@ import com.awap.form.infrastructure.FormSubmissionRepository;
 import com.awap.form.interfaces.dto.FormDefinitionRequest;
 import com.awap.form.interfaces.dto.FormDefinitionResponse;
 import com.awap.form.interfaces.dto.FormMapper;
+import com.awap.form.interfaces.dto.FormSubmissionFileResponse;
 import com.awap.form.interfaces.dto.FormSubmissionRequest;
 import com.awap.form.interfaces.dto.FormSubmissionResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -20,7 +23,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -38,18 +43,21 @@ public class FormService {
   private final ObjectMapper objectMapper;
   private final OutboxEventPublisher outboxEventPublisher;
   private final FormMapper formMapper;
+  private final FileService fileService;
 
   public FormService(
       FormDefinitionRepository definitionRepository,
       FormSubmissionRepository submissionRepository,
       ObjectMapper objectMapper,
       OutboxEventPublisher outboxEventPublisher,
-      FormMapper formMapper) {
+      FormMapper formMapper,
+      FileService fileService) {
     this.definitionRepository = definitionRepository;
     this.submissionRepository = submissionRepository;
     this.objectMapper = objectMapper;
     this.outboxEventPublisher = outboxEventPublisher;
     this.formMapper = formMapper;
+    this.fileService = fileService;
   }
 
   @Transactional
@@ -83,6 +91,8 @@ public class FormService {
       UUID tenantId, UUID id, FormSubmissionRequest request, UUID submittedBy) {
     FormDefinition definition = find(tenantId, id);
     validateData(definition.getSchemaJson(), request.dataJson());
+    List<SubmissionFile> acceptedFiles =
+        acceptedFiles(tenantId, definition.getSchemaJson(), request.dataJson());
     FormSubmission submission =
         new FormSubmission(
             tenantId, id, request.workflowInstanceId(), request.dataJson(), submittedBy);
@@ -100,7 +110,27 @@ public class FormService {
               request.nodeExecutionId(),
               request.dataJson()));
     }
-    return formMapper.toResponse(submission);
+    if (!acceptedFiles.isEmpty()) {
+      outboxEventPublisher.publish(
+          tenantId,
+          "FORM",
+          submission.getId(),
+          "FORM_FILES_SUBMITTED",
+          new FormFilesSubmittedEvent(
+              submission.getId(),
+              id,
+              acceptedFiles.stream()
+                  .map(
+                      file ->
+                          new FormFilesSubmittedEvent.FileReference(
+                              file.fileId(),
+                              file.name(),
+                              file.size(),
+                              file.contentType(),
+                              file.status().name()))
+                  .toList()));
+    }
+    return formMapper.toResponse(submission).withFiles(toFileResponses(acceptedFiles));
   }
 
   public List<FormSubmissionResponse> submissions(UUID tenantId, UUID id) {
@@ -262,14 +292,98 @@ public class FormService {
         }
       }
       case "FILE" -> {
-        if (!value.isTextual() || value.asText().isBlank()) {
-          throw invalidField(fieldId, "must reference an uploaded file id.");
+        if (fileIdsOf(value).isEmpty()) {
+          throw invalidField(
+              fieldId, "must reference an uploaded file id (fileId) or a non-empty fileIds array.");
         }
       }
       default -> {
         // TEXT, TEXTAREA and NUMBER are validated inline; no extra type rules apply.
       }
     }
+  }
+
+  /**
+   * Resolves and validates every FILE field of a submission against the file module. Missing,
+   * foreign, pending, infected, oversized or unsupported files fail the whole submission before the
+   * row is written, so a broken reference can never be persisted.
+   */
+  private List<SubmissionFile> acceptedFiles(UUID tenantId, String schemaJson, String dataJson) {
+    try {
+      JsonNode schema = objectMapper.readTree(schemaJson);
+      JsonNode data = objectMapper.readTree(dataJson);
+      return collectFileIds(schema, data).stream()
+          .map(fileId -> fileService.submissionFile(tenantId, fileId))
+          .toList();
+    } catch (JsonProcessingException ex) {
+      throw new AwapException(
+          ErrorCode.VALIDATION_FAILED,
+          HttpStatus.BAD_REQUEST,
+          "Submission data is not valid JSON.");
+    }
+  }
+
+  private Set<UUID> collectFileIds(JsonNode schema, JsonNode data) {
+    Set<UUID> fileIds = new LinkedHashSet<>();
+    if (schema == null || data == null || !data.isObject()) {
+      return fileIds;
+    }
+    JsonNode fields = schema.path("fields");
+    if (!fields.isArray()) {
+      return fileIds;
+    }
+    for (JsonNode field : fields) {
+      if (!FormFieldType.FILE.name().equals(field.path("type").asText(null))) {
+        continue;
+      }
+      String fieldId = field.path("id").asText("");
+      JsonNode value = data.get(fieldId);
+      if (value == null) {
+        continue;
+      }
+      for (String rawId : fileIdsOf(value)) {
+        try {
+          fileIds.add(UUID.fromString(rawId));
+        } catch (IllegalArgumentException ex) {
+          throw invalidField(fieldId, "must reference a valid file id (UUID).");
+        }
+      }
+    }
+    return fileIds;
+  }
+
+  /** Accepts the single {@code fileId} string or the {@code fileIds} array form of a FILE field. */
+  private List<String> fileIdsOf(JsonNode value) {
+    if (value == null || value.isNull()) {
+      return List.of();
+    }
+    if (value.isTextual()) {
+      return value.asText().isBlank() ? List.of() : List.of(value.asText().trim());
+    }
+    if (!value.isArray()) {
+      return List.of();
+    }
+    List<String> ids = new java.util.ArrayList<>();
+    for (JsonNode item : value) {
+      if (!item.isTextual() || item.asText().isBlank()) {
+        return List.of();
+      }
+      ids.add(item.asText().trim());
+    }
+    return ids;
+  }
+
+  private List<FormSubmissionFileResponse> toFileResponses(List<SubmissionFile> files) {
+    return files.stream()
+        .map(
+            file ->
+                new FormSubmissionFileResponse(
+                    file.fileId(),
+                    file.name(),
+                    file.size(),
+                    file.contentType(),
+                    file.status().name()))
+        .toList();
   }
 
   private boolean isIsoDate(String text) {

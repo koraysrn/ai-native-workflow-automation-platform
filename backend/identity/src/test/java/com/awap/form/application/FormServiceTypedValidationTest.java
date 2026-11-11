@@ -30,6 +30,7 @@ class FormServiceTypedValidationTest {
   @Mock private FormDefinitionRepository definitionRepository;
   @Mock private FormSubmissionRepository submissionRepository;
   @Mock private OutboxEventPublisher outboxEventPublisher;
+  @Mock private com.awap.file.application.FileService fileService;
 
   private FormService service;
   private final UUID tenantId = UUID.randomUUID();
@@ -43,7 +44,8 @@ class FormServiceTypedValidationTest {
             submissionRepository,
             new ObjectMapper(),
             outboxEventPublisher,
-            new FormMapperImpl());
+            new FormMapperImpl(),
+            fileService);
   }
 
   private void givenSchema(String schemaJson) {
@@ -159,7 +161,15 @@ class FormServiceTypedValidationTest {
   @Test
   void nonBlankFileReferenceIsAccepted() {
     givenSchema("{\"fields\":[{\"id\":\"file\",\"type\":\"FILE\",\"required\":true}]}");
-    assertThatNoException()
-        .isThrownBy(() -> submit("{\"file\":\"550e8400-e29b-41d4-a716-446655440000\"}"));
+    java.util.UUID fileId = java.util.UUID.fromString("550e8400-e29b-41d4-a716-446655440000");
+    when(fileService.submissionFile(tenantId, fileId))
+        .thenReturn(
+            new com.awap.file.application.FileService.SubmissionFile(
+                fileId,
+                "doc.pdf",
+                120,
+                "application/pdf",
+                com.awap.file.domain.FileScanStatus.PROMOTED));
+    assertThatNoException().isThrownBy(() -> submit("{\"file\":\"" + fileId + "\"}"));
   }
 }

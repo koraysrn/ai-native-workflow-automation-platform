@@ -102,6 +102,37 @@ public class FileService {
     return toScanInfo(findRecord(tenantId, fileId));
   }
 
+  /**
+   * Validates a file referenced by a form submission (issue #200) and returns the metadata the
+   * submission response exposes. Foreign or missing files are a 404, an infected file is a 403, a
+   * file that is not promoted yet is a 409, and the stored format/size limits are enforced again at
+   * read time so a deleted or tampered upload cannot bypass the upload checks.
+   */
+  @Transactional(readOnly = true)
+  public SubmissionFile submissionFile(UUID tenantId, UUID fileId) {
+    FileRecord record = findRecord(tenantId, fileId);
+    if (record.getStatus() == FileScanStatus.INFECTED) {
+      throw new AwapException(
+          ErrorCode.FILE_SCAN_REJECTED,
+          HttpStatus.FORBIDDEN,
+          "File was rejected by antivirus scanning.");
+    }
+    if (record.getStatus() != FileScanStatus.PROMOTED) {
+      throw new AwapException(
+          ErrorCode.FILE_SCAN_PENDING,
+          HttpStatus.CONFLICT,
+          "File must be scanned and promoted before it can be submitted.");
+    }
+    validateSize(record.getSize());
+    validateFormat(record.getName());
+    return new SubmissionFile(
+        record.getId(),
+        record.getName(),
+        record.getSize(),
+        record.getContentType(),
+        record.getStatus());
+  }
+
   /** Returns scan projections for the requested files, silently skipping foreign/missing ids. */
   @Transactional(readOnly = true)
   public List<FileScanInfo> scanInfo(UUID tenantId, Collection<UUID> fileIds) {
@@ -207,6 +238,10 @@ public class FileService {
 
   /** Presigned upload slot returned to the client. */
   public record UploadSlot(UUID fileId, String uploadUrl) {}
+
+  /** Metadata of a file accepted in a form submission (issue #200). */
+  public record SubmissionFile(
+      UUID fileId, String name, long size, String contentType, FileScanStatus status) {}
 
   /** Public scan projection for one file; {@code downloadable} is only true after promotion. */
   public record FileScanInfo(
