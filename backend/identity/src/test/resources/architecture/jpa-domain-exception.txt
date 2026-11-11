@@ -1,0 +1,46 @@
+# Issue #199 / ADR-0007: the named JPA-entity exception for the domain layer.
+#
+# One fully qualified class name per line. Blank lines and lines starting with
+# '#' are ignored. Adding a class requires:
+#   1. an inventory update in docs/backend-module-boundaries.md,
+#   2. a reviewed reason in the migration plan, and
+#   3. a new line here.
+# Removing a class requires the JPA annotations to be gone from the domain class.
+# The ArchUnit test fails when this list and the annotated domain classes differ.
+com.awap.ai.domain.AutomationAudit
+com.awap.analytics.domain.AnalyticsAggregate
+com.awap.document.domain.DocumentVersion
+com.awap.engine.domain.ExecutionContext
+com.awap.engine.domain.ExecutionLog
+com.awap.engine.domain.NodeExecution
+com.awap.engine.domain.OutboxEvent
+com.awap.engine.domain.ReplayRun
+com.awap.engine.domain.SagaInstance
+com.awap.engine.domain.SagaStep
+com.awap.engine.domain.WorkflowInstance
+com.awap.file.domain.FileRecord
+com.awap.file.domain.FileScanAudit
+com.awap.form.domain.FormDefinition
+com.awap.form.domain.FormSubmission
+com.awap.identity.domain.IdempotencyRecord
+com.awap.identity.domain.Invitation
+com.awap.identity.domain.RefreshToken
+com.awap.identity.domain.Tenant
+com.awap.identity.domain.User
+com.awap.notification.domain.NotificationDelivery
+com.awap.notification.domain.NotificationTemplate
+com.awap.notification.domain.NotificationTemplateVersion
+com.awap.organization.domain.Company
+com.awap.organization.domain.Department
+com.awap.organization.domain.OrganizationAuditEvent
+com.awap.organization.domain.OrganizationUser
+com.awap.organization.domain.Position
+com.awap.organization.domain.Team
+com.awap.task.domain.Task
+com.awap.usage.domain.TenantUsageLimit
+com.awap.usage.domain.UsageCounter
+com.awap.workflow.domain.NodeDefinition
+com.awap.workflow.domain.TransitionDefinition
+com.awap.workflow.domain.WorkflowDefinition
+com.awap.workflow.domain.WorkflowVariable
+com.awap.workflow.domain.WorkflowVersion
