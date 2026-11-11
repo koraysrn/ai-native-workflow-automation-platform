@@ -442,7 +442,15 @@ services:
     ports:
       - "8080:8080"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://localhost:8080/actuator/health/readiness >/dev/null || exit 1"]
+      # No curl in the JRE image (see backend/Dockerfile): bash is guaranteed by the base image and
+      # /dev/tcp performs the readiness request without any extra package.
+      test:
+        [
+          "CMD",
+          "bash",
+          "-c",
+          "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /actuator/health/readiness HTTP/1.0\\r\\n\\r\\n' >&3 && grep -q '\"status\":\"UP\"' <&3",
+        ]
       interval: 10s
       timeout: 5s
       retries: 30
