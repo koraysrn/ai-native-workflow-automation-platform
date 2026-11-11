@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -59,7 +60,8 @@ class FormServiceFileSubmissionTest {
             outboxEventPublisher,
             new FormMapperImpl(),
             fileService);
-    when(definitionRepository.findByIdAndTenantIdAndDeletedFalse(formId, tenantId))
+    lenient()
+        .when(definitionRepository.findByIdAndTenantIdAndDeletedFalse(formId, tenantId))
         .thenReturn(Optional.of(new FormDefinition(tenantId, "Form", FILE_SCHEMA)));
   }
 
@@ -162,15 +164,82 @@ class FormServiceFileSubmissionTest {
 
   @Test
   void aSubmissionWithoutFilesDoesNotPublishTheFileEvent() {
-    when(definitionRepository.findByIdAndTenantIdAndDeletedFalse(formId, tenantId))
-        .thenReturn(
-            Optional.of(
-                new FormDefinition(
-                    tenantId, "Form", "{\"fields\":[{\"id\":\"note\",\"type\":\"TEXT\"}]}")));
+    givenSchema("{\"fields\":[{\"id\":\"note\",\"type\":\"TEXT\"}]}");
 
     submit("{\"note\":\"hello\"}");
 
     verify(outboxEventPublisher, never())
         .publish(any(), anyString(), any(), eq("FORM_FILES_SUBMITTED"), any());
+  }
+
+  @Test
+  void anOptionalFileFieldMayBeOmitted() {
+    givenSchema(
+        "{\"fields\":[{\"id\":\"contract\",\"type\":\"FILE\"},"
+            + "{\"id\":\"note\",\"type\":\"TEXT\"}]}");
+
+    FormSubmissionResponse response = submit("{\"note\":\"hello\"}");
+
+    assertThat(response.files()).isEmpty();
+    verify(fileService, never()).submissionFile(any(), any());
+  }
+
+  @Test
+  void anExplicitNullFileValueIsNotLookedUp() {
+    givenSchema("{\"fields\":[{\"id\":\"contract\",\"type\":\"FILE\"}]}");
+
+    FormSubmissionResponse response = submit("{\"contract\":null}");
+
+    assertThat(response.files()).isEmpty();
+    verify(fileService, never()).submissionFile(any(), any());
+  }
+
+  @Test
+  void aSchemaWithoutFieldsProducesNoFiles() {
+    givenSchema("{}");
+
+    FormSubmissionResponse response = submit("{}");
+
+    assertThat(response.files()).isEmpty();
+  }
+
+  @Test
+  void aNonObjectSubmissionIsRejected() {
+    assertThatThrownBy(() -> submit("[]"))
+        .isInstanceOfSatisfying(
+            AwapException.class,
+            error -> {
+              assertThat(error.status()).isEqualTo(HttpStatus.BAD_REQUEST);
+              assertThat(error.getMessage()).contains("JSON object");
+            });
+  }
+
+  @Test
+  void aMalformedSubmissionIsRejected() {
+    assertThatThrownBy(() -> submit("{oops"))
+        .isInstanceOfSatisfying(
+            AwapException.class,
+            error -> assertThat(error.status()).isEqualTo(HttpStatus.BAD_REQUEST));
+  }
+
+  @Test
+  void aNonTextFileValueIsRejected() {
+    assertThatThrownBy(() -> submit("{\"contract\":5}"))
+        .isInstanceOfSatisfying(
+            AwapException.class,
+            error -> assertThat(error.status()).isEqualTo(HttpStatus.BAD_REQUEST));
+  }
+
+  @Test
+  void anArrayWithABlankEntryIsRejected() {
+    assertThatThrownBy(() -> submit("{\"contract\":[\"\"]}"))
+        .isInstanceOfSatisfying(
+            AwapException.class,
+            error -> assertThat(error.status()).isEqualTo(HttpStatus.BAD_REQUEST));
+  }
+
+  private void givenSchema(String schemaJson) {
+    when(definitionRepository.findByIdAndTenantIdAndDeletedFalse(formId, tenantId))
+        .thenReturn(Optional.of(new FormDefinition(tenantId, "Form", schemaJson)));
   }
 }

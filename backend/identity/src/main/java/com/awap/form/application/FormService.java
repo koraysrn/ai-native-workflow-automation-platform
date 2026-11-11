@@ -90,9 +90,10 @@ public class FormService {
   public FormSubmissionResponse submit(
       UUID tenantId, UUID id, FormSubmissionRequest request, UUID submittedBy) {
     FormDefinition definition = find(tenantId, id);
-    validateData(definition.getSchemaJson(), request.dataJson());
-    List<SubmissionFile> acceptedFiles =
-        acceptedFiles(tenantId, definition.getSchemaJson(), request.dataJson());
+    JsonNode schema = readJson(definition.getSchemaJson(), "Form schema is not valid JSON.");
+    JsonNode data = readJson(request.dataJson(), "Submission data is not valid JSON.");
+    validateData(schema, data);
+    List<SubmissionFile> acceptedFiles = acceptedFiles(tenantId, schema, data);
     FormSubmission submission =
         new FormSubmission(
             tenantId, id, request.workflowInstanceId(), request.dataJson(), submittedBy);
@@ -176,78 +177,75 @@ public class FormService {
     return false;
   }
 
-  private void validateData(String schemaJson, String dataJson) {
-    try {
-      JsonNode schema = objectMapper.readTree(schemaJson);
-      JsonNode data = objectMapper.readTree(dataJson);
-      JsonNode fields = schema.get("fields");
-      if (fields != null && fields.isArray()) {
-        for (JsonNode field : fields) {
-          String fieldId = field.path("id").asText(null);
-          boolean required = field.path("required").asBoolean(false);
-          boolean present = fieldId != null && data.has(fieldId);
-          if (required && !present) {
-            throw new AwapException(
-                ErrorCode.VALIDATION_FAILED,
-                HttpStatus.BAD_REQUEST,
-                "Required field '" + fieldId + "' is missing.");
-          }
-          if (!present || data.get(fieldId).isNull()) {
-            continue;
-          }
-
-          JsonNode value = data.get(fieldId);
-          String type = field.path("type").asText(null);
-
-          if ("TEXT".equals(type) || "TEXTAREA".equals(type) || value.isTextual()) {
-            String text = value.asText();
-            int minLength = field.path("minLength").asInt(-1);
-            int maxLength = field.path("maxLength").asInt(-1);
-            if (minLength >= 0 && text.length() < minLength) {
-              throw new AwapException(
-                  ErrorCode.VALIDATION_FAILED,
-                  HttpStatus.BAD_REQUEST,
-                  "Field '" + fieldId + "' is shorter than " + minLength + " characters.");
-            }
-            if (maxLength >= 0 && text.length() > maxLength) {
-              throw new AwapException(
-                  ErrorCode.VALIDATION_FAILED,
-                  HttpStatus.BAD_REQUEST,
-                  "Field '" + fieldId + "' is longer than " + maxLength + " characters.");
-            }
-            String pattern = field.path("pattern").asText(null);
-            if (pattern != null && !text.matches(pattern)) {
-              throw new AwapException(
-                  ErrorCode.VALIDATION_FAILED,
-                  HttpStatus.BAD_REQUEST,
-                  "Field '" + fieldId + "' does not match the required pattern.");
-            }
-          }
-
-          if ("NUMBER".equals(type) && value.isNumber()) {
-            double number = value.asDouble();
-            if (field.has("min") && number < field.get("min").asDouble()) {
-              throw new AwapException(
-                  ErrorCode.VALIDATION_FAILED,
-                  HttpStatus.BAD_REQUEST,
-                  "Field '" + fieldId + "' is below the minimum.");
-            }
-            if (field.has("max") && number > field.get("max").asDouble()) {
-              throw new AwapException(
-                  ErrorCode.VALIDATION_FAILED,
-                  HttpStatus.BAD_REQUEST,
-                  "Field '" + fieldId + "' is above the maximum.");
-            }
-          }
-
-          validateByType(field, value);
-        }
-      }
-    } catch (JsonProcessingException ex) {
+  private void validateData(JsonNode schema, JsonNode data) {
+    if (data == null || !data.isObject()) {
       throw new AwapException(
           ErrorCode.VALIDATION_FAILED,
           HttpStatus.BAD_REQUEST,
-          "Submission data is not valid JSON.");
+          "Submission data must be a JSON object.");
+    }
+    JsonNode fields = schema == null ? null : schema.get("fields");
+    if (fields != null && fields.isArray()) {
+      for (JsonNode field : fields) {
+        String fieldId = field.path("id").asText(null);
+        boolean required = field.path("required").asBoolean(false);
+        boolean present = fieldId != null && data.has(fieldId);
+        if (required && !present) {
+          throw new AwapException(
+              ErrorCode.VALIDATION_FAILED,
+              HttpStatus.BAD_REQUEST,
+              "Required field '" + fieldId + "' is missing.");
+        }
+        if (!present || data.get(fieldId).isNull()) {
+          continue;
+        }
+
+        JsonNode value = data.get(fieldId);
+        String type = field.path("type").asText(null);
+
+        if ("TEXT".equals(type) || "TEXTAREA".equals(type) || value.isTextual()) {
+          String text = value.asText();
+          int minLength = field.path("minLength").asInt(-1);
+          int maxLength = field.path("maxLength").asInt(-1);
+          if (minLength >= 0 && text.length() < minLength) {
+            throw new AwapException(
+                ErrorCode.VALIDATION_FAILED,
+                HttpStatus.BAD_REQUEST,
+                "Field '" + fieldId + "' is shorter than " + minLength + " characters.");
+          }
+          if (maxLength >= 0 && text.length() > maxLength) {
+            throw new AwapException(
+                ErrorCode.VALIDATION_FAILED,
+                HttpStatus.BAD_REQUEST,
+                "Field '" + fieldId + "' is longer than " + maxLength + " characters.");
+          }
+          String pattern = field.path("pattern").asText(null);
+          if (pattern != null && !text.matches(pattern)) {
+            throw new AwapException(
+                ErrorCode.VALIDATION_FAILED,
+                HttpStatus.BAD_REQUEST,
+                "Field '" + fieldId + "' does not match the required pattern.");
+          }
+        }
+
+        if ("NUMBER".equals(type) && value.isNumber()) {
+          double number = value.asDouble();
+          if (field.has("min") && number < field.get("min").asDouble()) {
+            throw new AwapException(
+                ErrorCode.VALIDATION_FAILED,
+                HttpStatus.BAD_REQUEST,
+                "Field '" + fieldId + "' is below the minimum.");
+          }
+          if (field.has("max") && number > field.get("max").asDouble()) {
+            throw new AwapException(
+                ErrorCode.VALIDATION_FAILED,
+                HttpStatus.BAD_REQUEST,
+                "Field '" + fieldId + "' is above the maximum.");
+          }
+        }
+
+        validateByType(field, value);
+      }
     }
   }
 
@@ -303,32 +301,28 @@ public class FormService {
     }
   }
 
+  private JsonNode readJson(String json, String errorMessage) {
+    try {
+      return objectMapper.readTree(json);
+    } catch (JsonProcessingException ex) {
+      throw new AwapException(ErrorCode.VALIDATION_FAILED, HttpStatus.BAD_REQUEST, errorMessage);
+    }
+  }
+
   /**
    * Resolves and validates every FILE field of a submission against the file module. Missing,
    * foreign, pending, infected, oversized or unsupported files fail the whole submission before the
    * row is written, so a broken reference can never be persisted.
    */
-  private List<SubmissionFile> acceptedFiles(UUID tenantId, String schemaJson, String dataJson) {
-    try {
-      JsonNode schema = objectMapper.readTree(schemaJson);
-      JsonNode data = objectMapper.readTree(dataJson);
-      return collectFileIds(schema, data).stream()
-          .map(fileId -> fileService.submissionFile(tenantId, fileId))
-          .toList();
-    } catch (JsonProcessingException ex) {
-      throw new AwapException(
-          ErrorCode.VALIDATION_FAILED,
-          HttpStatus.BAD_REQUEST,
-          "Submission data is not valid JSON.");
-    }
+  private List<SubmissionFile> acceptedFiles(UUID tenantId, JsonNode schema, JsonNode data) {
+    return collectFileIds(schema, data).stream()
+        .map(fileId -> fileService.submissionFile(tenantId, fileId))
+        .toList();
   }
 
   private Set<UUID> collectFileIds(JsonNode schema, JsonNode data) {
     Set<UUID> fileIds = new LinkedHashSet<>();
-    if (schema == null || data == null || !data.isObject()) {
-      return fileIds;
-    }
-    JsonNode fields = schema.path("fields");
+    JsonNode fields = schema == null ? null : schema.path("fields");
     if (!fields.isArray()) {
       return fileIds;
     }
