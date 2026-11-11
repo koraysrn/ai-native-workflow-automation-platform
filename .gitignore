@@ -46,6 +46,8 @@ infra/k8s/secrets.plain.yaml
 
 # Load-test artifacts
 load-test/seed.json
+load-test/tenants.json
+load-test/tenants-*.json
 load-test/results/
 load-test/fake-webhook.log
 load-test/k6/dist/

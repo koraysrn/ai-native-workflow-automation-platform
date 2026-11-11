@@ -209,6 +209,13 @@ awap:
         delete-days: ${OPENSEARCH_ANALYTICS_ILM_DELETE_DAYS:180}
   rate-limit:
     enabled: ${RATE_LIMIT_ENABLED:false}
+  # Brute-force protection for /auth/login|register|refresh, keyed by client IP. Deployed
+  # environments keep enabled=true and the 10/60s default; only the synthetic multi-tenant
+  # load-test stack disables it (1000 logins from one host would otherwise be throttled).
+  auth-rate-limit:
+    enabled: ${AUTH_RATE_LIMIT_ENABLED:true}
+    limit: ${AUTH_RATE_LIMIT_LIMIT:10}
+    redis: ${AUTH_RATE_LIMIT_REDIS:false}
   security:
     jwt:
       secret: ${JWT_SECRET}

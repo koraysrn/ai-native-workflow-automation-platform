@@ -31,7 +31,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Component
 public class AuthRateLimitFilter extends OncePerRequestFilter {
 
-  static final int LIMIT = 10;
+  static final int DEFAULT_LIMIT = 10;
   static final long WINDOW_SECONDS = 60;
   static final String KEY_PREFIX = "rl:auth:";
 
@@ -40,6 +40,8 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
           + "if current == 1 then redis.call('EXPIRE', KEYS[1], ARGV[2]) end "
           + "return current";
 
+  private final boolean enabled;
+  private final int limit;
   private final boolean redisEnabled;
   private final StringRedisTemplate redisTemplate;
   private final DefaultRedisScript<Long> script = new DefaultRedisScript<>(SCRIPT, Long.class);
@@ -49,15 +51,29 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
           .maximumSize(10_000)
           .build();
 
+  /**
+   * The limit and the on/off switch are configurable because a synthetic multi-tenant load test
+   * logs 1000 tenants in from one host, which the per-IP brute-force budget would otherwise
+   * throttle to ~10 logins per minute (about 100 minutes for the seed alone). Deployed environments
+   * keep the defaults; only the CI load-test Compose invocation sets {@code
+   * AUTH_RATE_LIMIT_ENABLED=false}.
+   */
   public AuthRateLimitFilter(
+      @Value("${awap.auth-rate-limit.enabled:true}") boolean enabled,
+      @Value("${awap.auth-rate-limit.limit:10}") int limit,
       @Value("${awap.auth-rate-limit.redis:false}") boolean redisEnabled,
       ObjectProvider<StringRedisTemplate> redisTemplateProvider) {
+    this.enabled = enabled;
+    this.limit = limit;
     this.redisEnabled = redisEnabled;
     this.redisTemplate = redisTemplateProvider.getIfAvailable();
   }
 
   @Override
   protected boolean shouldNotFilter(HttpServletRequest request) {
+    if (!enabled) {
+      return true;
+    }
     String path = request.getRequestURI();
     return !(HttpMethod.POST.matches(request.getMethod())
         && (path.endsWith("/auth/login")
@@ -81,9 +97,9 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
             redisTemplate.execute(
                 script,
                 List.of(KEY_PREFIX + ip),
-                String.valueOf(LIMIT),
+                String.valueOf(limit),
                 String.valueOf(WINDOW_SECONDS));
-        if (count != null && count > LIMIT) {
+        if (count != null && count > limit) {
           reject(response);
           return;
         }
@@ -93,7 +109,7 @@ public class AuthRateLimitFilter extends OncePerRequestFilter {
       }
     } else {
       AtomicInteger counter = local.get(ip, key -> new AtomicInteger());
-      if (counter.incrementAndGet() > LIMIT) {
+      if (counter.incrementAndGet() > limit) {
         reject(response);
         return;
       }

@@ -1,0 +1,281 @@
+{
+  "schemaVersion": 1,
+  "issue": 201,
+  "generatedAt": "2026-11-11T21:55:57.835Z",
+  "mode": "smoke",
+  "target": {
+    "tenants": 1000,
+    "profile": "tenancy-load"
+  },
+  "environment": {
+    "apiBase": "http://localhost:8080",
+    "runner": "local"
+  },
+  "source": "load-test/results/tenancy-summary.json",
+  "thresholds": {
+    "tenant_isolation_p95": {
+      "metric": "http_req_duration{scenario:tenant_isolation}",
+      "stat": "p(95)",
+      "target": 2000,
+      "compare": "max",
+      "unit": "ms"
+    },
+    "tenant_isolation_p99": {
+      "metric": "http_req_duration{scenario:tenant_isolation}",
+      "stat": "p(99)",
+      "target": 4000,
+      "compare": "max",
+      "unit": "ms"
+    },
+    "tenant_isolation_error_rate": {
+      "metric": "http_req_failed{scenario:tenant_isolation}",
+      "stat": "rate",
+      "target": 0.01,
+      "compare": "max",
+      "unit": "ratio"
+    },
+    "approval_race_p95": {
+      "metric": "http_req_duration{scenario:approval_race}",
+      "stat": "p(95)",
+      "target": 1500,
+      "compare": "max",
+      "unit": "ms"
+    },
+    "approval_race_p99": {
+      "metric": "http_req_duration{scenario:approval_race}",
+      "stat": "p(99)",
+      "target": 3000,
+      "compare": "max",
+      "unit": "ms"
+    },
+    "approval_race_error_rate": {
+      "metric": "http_req_failed{scenario:approval_race}",
+      "stat": "rate",
+      "target": 0.01,
+      "compare": "max",
+      "unit": "ratio"
+    },
+    "idempotent_start_p95": {
+      "metric": "http_req_duration{scenario:idempotent_start}",
+      "stat": "p(95)",
+      "target": 2000,
+      "compare": "max",
+      "unit": "ms"
+    },
+    "idempotent_start_p99": {
+      "metric": "http_req_duration{scenario:idempotent_start}",
+      "stat": "p(99)",
+      "target": 4000,
+      "compare": "max",
+      "unit": "ms"
+    },
+    "idempotent_start_error_rate": {
+      "metric": "http_req_failed{scenario:idempotent_start}",
+      "stat": "rate",
+      "target": 0.01,
+      "compare": "max",
+      "unit": "ratio"
+    },
+    "isolation_violations": {
+      "metric": "isolation_violations",
+      "stat": "count",
+      "target": 0,
+      "compare": "max",
+      "unit": "count"
+    },
+    "cross_tenant_leaks": {
+      "metric": "cross_tenant_leaks",
+      "stat": "count",
+      "target": 0,
+      "compare": "max",
+      "unit": "count"
+    },
+    "approval_race_violations": {
+      "metric": "approval_race_violations",
+      "stat": "count",
+      "target": 0,
+      "compare": "max",
+      "unit": "count"
+    },
+    "idempotency_violations": {
+      "metric": "idempotency_violations",
+      "stat": "count",
+      "target": 0,
+      "compare": "max",
+      "unit": "count"
+    }
+  },
+  "checks": [
+    {
+      "id": "tenant_isolation_p95",
+      "label": "Tenant isolation read p95",
+      "metric": "http_req_duration{scenario:tenant_isolation}",
+      "stat": "p(95)",
+      "target": 2000,
+      "unit": "ms",
+      "actual": 4.65376455,
+      "observed": true,
+      "pass": true,
+      "reason": "within-budget",
+      "compare": "max"
+    },
+    {
+      "id": "tenant_isolation_p99",
+      "label": "Tenant isolation read p99",
+      "metric": "http_req_duration{scenario:tenant_isolation}",
+      "stat": "p(99)",
+      "target": 4000,
+      "unit": "ms",
+      "actual": 6.443471399999992,
+      "observed": true,
+      "pass": true,
+      "reason": "within-budget",
+      "compare": "max"
+    },
+    {
+      "id": "tenant_isolation_error_rate",
+      "label": "Tenant isolation error rate",
+      "metric": "http_req_failed{scenario:tenant_isolation}",
+      "stat": "rate",
+      "target": 0.01,
+      "unit": "ratio",
+      "actual": 0,
+      "observed": false,
+      "pass": true,
+      "reason": "within-budget",
+      "compare": "max"
+    },
+    {
+      "id": "approval_race_p95",
+      "label": "Approval race p95",
+      "metric": "http_req_duration{scenario:approval_race}",
+      "stat": "p(95)",
+      "target": 1500,
+      "unit": "ms",
+      "actual": 25.27967075,
+      "observed": true,
+      "pass": true,
+      "reason": "within-budget",
+      "compare": "max"
+    },
+    {
+      "id": "approval_race_p99",
+      "label": "Approval race p99",
+      "metric": "http_req_duration{scenario:approval_race}",
+      "stat": "p(99)",
+      "target": 3000,
+      "unit": "ms",
+      "actual": 28.738534749999992,
+      "observed": true,
+      "pass": true,
+      "reason": "within-budget",
+      "compare": "max"
+    },
+    {
+      "id": "approval_race_error_rate",
+      "label": "Approval race error rate",
+      "metric": "http_req_failed{scenario:approval_race}",
+      "stat": "rate",
+      "target": 0.01,
+      "unit": "ratio",
+      "actual": 0,
+      "observed": false,
+      "pass": true,
+      "reason": "within-budget",
+      "compare": "max"
+    },
+    {
+      "id": "idempotent_start_p95",
+      "label": "Idempotent start p95",
+      "metric": "http_req_duration{scenario:idempotent_start}",
+      "stat": "p(95)",
+      "target": 2000,
+      "unit": "ms",
+      "actual": 49.438850499999994,
+      "observed": true,
+      "pass": true,
+      "reason": "within-budget",
+      "compare": "max"
+    },
+    {
+      "id": "idempotent_start_p99",
+      "label": "Idempotent start p99",
+      "metric": "http_req_duration{scenario:idempotent_start}",
+      "stat": "p(99)",
+      "target": 4000,
+      "unit": "ms",
+      "actual": 54.25802530000001,
+      "observed": true,
+      "pass": true,
+      "reason": "within-budget",
+      "compare": "max"
+    },
+    {
+      "id": "idempotent_start_error_rate",
+      "label": "Idempotent start error rate",
+      "metric": "http_req_failed{scenario:idempotent_start}",
+      "stat": "rate",
+      "target": 0.01,
+      "unit": "ratio",
+      "actual": 0,
+      "observed": false,
+      "pass": true,
+      "reason": "within-budget",
+      "compare": "max"
+    },
+    {
+      "id": "isolation_violations",
+      "label": "Rows from another tenant in an own-tenant list",
+      "metric": "isolation_violations",
+      "stat": "count",
+      "target": 0,
+      "unit": "count",
+      "actual": 0,
+      "observed": true,
+      "pass": true,
+      "reason": "within-budget",
+      "compare": "max"
+    },
+    {
+      "id": "cross_tenant_leaks",
+      "label": "Cross-tenant read answered 2xx",
+      "metric": "cross_tenant_leaks",
+      "stat": "count",
+      "target": 0,
+      "unit": "count",
+      "actual": 0,
+      "observed": true,
+      "pass": true,
+      "reason": "within-budget",
+      "compare": "max"
+    },
+    {
+      "id": "approval_race_violations",
+      "label": "Approval races without exactly one winner",
+      "metric": "approval_race_violations",
+      "stat": "count",
+      "target": 0,
+      "unit": "count",
+      "actual": 0,
+      "observed": true,
+      "pass": true,
+      "reason": "within-budget",
+      "compare": "max"
+    },
+    {
+      "id": "idempotency_violations",
+      "label": "Duplicate Idempotency-Key created a second instance",
+      "metric": "idempotency_violations",
+      "stat": "count",
+      "target": 0,
+      "unit": "count",
+      "actual": 0,
+      "observed": true,
+      "pass": true,
+      "reason": "within-budget",
+      "compare": "max"
+    }
+  ],
+  "regressions": [],
+  "result": "pass"
+}

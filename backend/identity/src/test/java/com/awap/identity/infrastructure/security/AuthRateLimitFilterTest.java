@@ -50,7 +50,7 @@ class AuthRateLimitFilterTest {
     StringRedisTemplate redis = mock(StringRedisTemplate.class);
     when(redis.execute(any(), anyList(), any(Object[].class))).thenReturn(11L);
 
-    AuthRateLimitFilter filter = new AuthRateLimitFilter(true, providerWith(redis));
+    AuthRateLimitFilter filter = new AuthRateLimitFilter(true, 10, true, providerWith(redis));
     MockHttpServletResponse response = new MockHttpServletResponse();
 
     filter.doFilter(authRequest(), response, mock(FilterChain.class));
@@ -65,7 +65,7 @@ class AuthRateLimitFilterTest {
     StringRedisTemplate redis = mock(StringRedisTemplate.class);
     when(redis.execute(any(), anyList(), any(Object[].class))).thenReturn(10L);
 
-    AuthRateLimitFilter filter = new AuthRateLimitFilter(true, providerWith(redis));
+    AuthRateLimitFilter filter = new AuthRateLimitFilter(true, 10, true, providerWith(redis));
     MockHttpServletResponse response = new MockHttpServletResponse();
     FilterChain chain = mock(FilterChain.class);
 
@@ -80,7 +80,7 @@ class AuthRateLimitFilterTest {
     when(redis.execute(any(), anyList(), any(Object[].class)))
         .thenThrow(new RuntimeException("redis down"));
 
-    AuthRateLimitFilter filter = new AuthRateLimitFilter(true, providerWith(redis));
+    AuthRateLimitFilter filter = new AuthRateLimitFilter(true, 10, true, providerWith(redis));
     MockHttpServletResponse response = new MockHttpServletResponse();
 
     filter.doFilter(authRequest(), response, mock(FilterChain.class));
@@ -90,7 +90,7 @@ class AuthRateLimitFilterTest {
 
   @Test
   void localFallbackRejectsEleventhRequest() throws Exception {
-    AuthRateLimitFilter filter = new AuthRateLimitFilter(false, providerWith(null));
+    AuthRateLimitFilter filter = new AuthRateLimitFilter(true, 10, false, providerWith(null));
 
     MockHttpServletResponse rejected = null;
     for (int i = 0; i < 11; i++) {
@@ -104,7 +104,7 @@ class AuthRateLimitFilterTest {
 
   @Test
   void independentBucketsPerIpInLocalFallback() throws Exception {
-    AuthRateLimitFilter filter = new AuthRateLimitFilter(false, providerWith(null));
+    AuthRateLimitFilter filter = new AuthRateLimitFilter(true, 10, false, providerWith(null));
 
     for (int i = 0; i < 10; i++) {
       MockHttpServletResponse response = new MockHttpServletResponse();
@@ -121,7 +121,7 @@ class AuthRateLimitFilterTest {
 
   @Test
   void blankForwardedForFallsBackToRemoteAddress() throws Exception {
-    AuthRateLimitFilter filter = new AuthRateLimitFilter(false, providerWith(null));
+    AuthRateLimitFilter filter = new AuthRateLimitFilter(true, 10, false, providerWith(null));
     MockHttpServletRequest request = authRequest();
     request.addHeader("X-Forwarded-For", "   ");
 
@@ -129,5 +129,37 @@ class AuthRateLimitFilterTest {
     filter.doFilter(request, response, mock(FilterChain.class));
 
     assertThat(response.getStatus()).isEqualTo(200);
+  }
+
+  @Test
+  void disabledFilterSkipsEveryAuthEndpoint() throws Exception {
+    AuthRateLimitFilter filter = new AuthRateLimitFilter(false, 1, false, providerWith(null));
+    FilterChain chain = mock(FilterChain.class);
+
+    for (int i = 0; i < 25; i++) {
+      MockHttpServletResponse response = new MockHttpServletResponse();
+      filter.doFilter(authRequest(), response, chain);
+      assertThat(response.getStatus()).isEqualTo(200);
+    }
+    // A non-auth path is unaffected either way.
+    assertThat(filter.shouldNotFilter(new MockHttpServletRequest("GET", "/api/v1/tasks"))).isTrue();
+  }
+
+  @Test
+  void configuredLimitAppliesToBothBackends() throws Exception {
+    AuthRateLimitFilter local = new AuthRateLimitFilter(true, 2, false, providerWith(null));
+    MockHttpServletResponse limited = null;
+    for (int i = 0; i < 3; i++) {
+      limited = new MockHttpServletResponse();
+      local.doFilter(authRequest(), limited, mock(FilterChain.class));
+    }
+    assertThat(limited.getStatus()).isEqualTo(429);
+
+    StringRedisTemplate redis = mock(StringRedisTemplate.class);
+    when(redis.execute(any(), anyList(), any(Object[].class))).thenReturn(3L);
+    AuthRateLimitFilter filter = new AuthRateLimitFilter(true, 2, true, providerWith(redis));
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    filter.doFilter(authRequest(), response, mock(FilterChain.class));
+    assertThat(response.getStatus()).isEqualTo(429);
   }
 }
