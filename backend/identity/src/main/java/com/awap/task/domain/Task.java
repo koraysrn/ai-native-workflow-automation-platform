@@ -220,6 +220,11 @@ public class Task {
     return description;
   }
 
+  /** Creator from JPA auditing, used as the notification recipient fallback. */
+  public UUID getCreatedBy() {
+    return createdBy;
+  }
+
   public UUID getAssigneeId() {
     return assigneeId;
   }

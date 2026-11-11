@@ -230,6 +230,33 @@ class WorkflowEngineServiceTest {
   }
 
   @Test
+  void transitionPublishesCompletedAndFailedLifecycleEvents() {
+    WorkflowInstance completed = instance(WorkflowState.RUNNING);
+    service.transition(completed, WorkflowState.COMPLETED, "WORKFLOW_COMPLETED");
+    ArgumentCaptor<Object> completedPayload = ArgumentCaptor.forClass(Object.class);
+    verify(outboxEventPublisher)
+        .publish(
+            eq(tenantId),
+            eq("WORKFLOW"),
+            eq(completed.getId()),
+            eq("WORKFLOW_COMPLETED"),
+            completedPayload.capture());
+    assertThat(completedPayload.getValue()).isInstanceOf(WorkflowLifecycleEvent.class);
+
+    WorkflowInstance failed = instance(WorkflowState.RUNNING);
+    service.transition(failed, WorkflowState.FAILED, "WORKFLOW_FAILED");
+    ArgumentCaptor<Object> failedPayload = ArgumentCaptor.forClass(Object.class);
+    verify(outboxEventPublisher)
+        .publish(
+            eq(tenantId),
+            eq("WORKFLOW"),
+            eq(failed.getId()),
+            eq("WORKFLOW_FAILED"),
+            failedPayload.capture());
+    assertThat(((WorkflowLifecycleEvent) failedPayload.getValue()).state()).isEqualTo("FAILED");
+  }
+
+  @Test
   void retryTransitionsFailedInstanceToRunning() {
     WorkflowInstance instance = instance(WorkflowState.FAILED);
     stubFoundInstance(instance);
