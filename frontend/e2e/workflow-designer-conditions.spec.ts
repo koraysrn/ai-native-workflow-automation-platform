@@ -12,6 +12,8 @@ async function openDesigner(page: Page): Promise<void> {
   await page.context().addCookies([
     { name: "awap_session", value: "1", url: "http://localhost:3000" },
     { name: "awap_tenant", value: "tenant-a", url: "http://localhost:3000" },
+    // A readable CSRF cookie keeps the mocked POST paths from bootstrapping against the API.
+    { name: "XSRF-TOKEN", value: "e2e-csrf", url: "http://localhost:8080" },
   ]);
   await page.goto("/workflows/designer");
   await expect(page.getByRole("heading", { name: "Workflow Designer" })).toBeVisible();
@@ -126,6 +128,13 @@ test("creates a DECISION branch with two conditions and saves them", async ({ pa
   await expect(page.getByTestId("condition-badge").nth(1)).toHaveText(
     "IF: #fn.hasRole(#role, 'MANAGER')",
   );
+
+  // The designer now rejects nodes that are unreachable from START (issue #198), so the
+  // saved graph closes the branch at END. The editor handles Escape on its textarea only.
+  await page.getByLabel("Condition expression").focus();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("heading", { name: "Edge condition" })).toHaveCount(0);
+  await connectNodes(page, "TASK", "END");
 
   await expect(page.getByRole("heading", { name: "Legend" })).toBeVisible();
   await expect(page.getByText(/Conditional transition evaluated as a SpEL expression/)).toBeVisible();
