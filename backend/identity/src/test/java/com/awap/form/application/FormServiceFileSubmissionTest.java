@@ -215,6 +215,14 @@ class FormServiceFileSubmissionTest {
   }
 
   @Test
+  void aBlankSubmissionIsRejected() {
+    assertThatThrownBy(() -> submit(""))
+        .isInstanceOfSatisfying(
+            AwapException.class,
+            error -> assertThat(error.status()).isEqualTo(HttpStatus.BAD_REQUEST));
+  }
+
+  @Test
   void aMalformedSubmissionIsRejected() {
     assertThatThrownBy(() -> submit("{oops"))
         .isInstanceOfSatisfying(

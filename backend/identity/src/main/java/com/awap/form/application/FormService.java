@@ -20,6 +20,7 @@ import com.awap.form.interfaces.dto.FormSubmissionResponse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.MissingNode;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeParseException;
@@ -184,7 +185,7 @@ public class FormService {
           HttpStatus.BAD_REQUEST,
           "Submission data must be a JSON object.");
     }
-    JsonNode fields = schema == null ? null : schema.get("fields");
+    JsonNode fields = schema.get("fields");
     if (fields != null && fields.isArray()) {
       for (JsonNode field : fields) {
         String fieldId = field.path("id").asText(null);
@@ -303,7 +304,10 @@ public class FormService {
 
   private JsonNode readJson(String json, String errorMessage) {
     try {
-      return objectMapper.readTree(json);
+      JsonNode node = objectMapper.readTree(json);
+      // Jackson returns null for empty content; a missing node keeps the downstream `path` calls
+      // null-safe and makes an empty payload fail the JSON-object check.
+      return node == null ? MissingNode.getInstance() : node;
     } catch (JsonProcessingException ex) {
       throw new AwapException(ErrorCode.VALIDATION_FAILED, HttpStatus.BAD_REQUEST, errorMessage);
     }
@@ -322,7 +326,7 @@ public class FormService {
 
   private Set<UUID> collectFileIds(JsonNode schema, JsonNode data) {
     Set<UUID> fileIds = new LinkedHashSet<>();
-    JsonNode fields = schema == null ? null : schema.path("fields");
+    JsonNode fields = schema.path("fields");
     if (!fields.isArray()) {
       return fileIds;
     }
