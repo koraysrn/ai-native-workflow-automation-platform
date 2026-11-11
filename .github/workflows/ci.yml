@@ -246,7 +246,9 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
       - name: Install Chromium
-        run: pnpm exec playwright install --with-deps chromium
+        # A runner-side Ubuntu archive outage must not block the suite: try the distro
+        # dependencies first and fall back to the browser alone, which the GitHub image supports.
+        run: pnpm exec playwright install --with-deps chromium || pnpm exec playwright install chromium
         working-directory: frontend
       - name: Start Compose stack
         env:
