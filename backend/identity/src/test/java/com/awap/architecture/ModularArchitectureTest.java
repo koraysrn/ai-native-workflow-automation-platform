@@ -7,11 +7,25 @@ import com.tngtech.archunit.core.domain.JavaClass;
 import com.tngtech.archunit.junit.AnalyzeClasses;
 import com.tngtech.archunit.junit.ArchTest;
 import com.tngtech.archunit.lang.ArchRule;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /** Enforces modular-monolith boundaries that keep services independently deployable. */
 @AnalyzeClasses(packages = "com.awap")
 class ModularArchitectureTest {
+
+  /**
+   * The named classes allowed to keep JPA mapping annotations in the domain layer (issue #199,
+   * ADR-0007). The list is the single source of truth for the exception and is validated against
+   * the real domain classes by {@link JpaDomainExceptionTest}.
+   */
+  private static final Set<String> JPA_DOMAIN_EXCEPTION = loadJpaDomainException();
 
   private static final Set<String> JPA_MACHINERY =
       Set.of(
@@ -26,6 +40,63 @@ class ModularArchitectureTest {
           "jakarta.persistence.LockModeType",
           "jakarta.persistence.FlushModeType",
           "jakarta.persistence.metamodel.Metamodel");
+
+  private static Set<String> loadJpaDomainException() {
+    try (InputStream input =
+        ModularArchitectureTest.class
+            .getClassLoader()
+            .getResourceAsStream("architecture/jpa-domain-exception.txt")) {
+      if (input == null) {
+        throw new IllegalStateException(
+            "architecture/jpa-domain-exception.txt is missing; issue #199 requires an explicit"
+                + " exception inventory");
+      }
+      try (BufferedReader reader =
+          new BufferedReader(new InputStreamReader(input, StandardCharsets.UTF_8))) {
+        Set<String> names =
+            reader
+                .lines()
+                .map(String::trim)
+                .filter(line -> !line.isEmpty() && !line.startsWith("#"))
+                .collect(Collectors.toUnmodifiableSet());
+        if (names.isEmpty()) {
+          throw new IllegalStateException(
+              "architecture/jpa-domain-exception.txt must name every allowed JPA domain entity");
+        }
+        return names;
+      }
+    } catch (IOException error) {
+      throw new UncheckedIOException(error);
+    }
+  }
+
+  static Set<String> jpaDomainException() {
+    return JPA_DOMAIN_EXCEPTION;
+  }
+
+  /**
+   * Issue #199: the JPA mapping annotation exception is narrow. A domain class that is not named in
+   * the exception inventory may not import persistence mapping annotations at all.
+   */
+  @ArchTest
+  static final ArchRule jpa_annotations_are_limited_to_the_exception =
+      noClasses()
+          .that()
+          .resideInAPackage("..domain..")
+          .and(
+              DescribedPredicate.not(
+                  DescribedPredicate.describe(
+                      "named in architecture/jpa-domain-exception.txt",
+                      javaClass -> JPA_DOMAIN_EXCEPTION.contains(javaClass.getName()))))
+          .should()
+          .dependOnClassesThat()
+          .resideInAnyPackage(
+              "jakarta.persistence..",
+              "org.hibernate.annotations..",
+              "org.springframework.data.annotation..")
+          .because(
+              "ADR-0007 limits the JPA-entity exception to the named classes, and a new entity"
+                  + " needs an explicit architecture review");
 
   @ArchTest
   static final ArchRule domain_does_not_depend_on_spring =
