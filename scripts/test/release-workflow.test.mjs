@@ -85,7 +85,7 @@ test("the release workflow verifies the bot token and offers a dry run", async (
   const workflow = await readFile(RELEASE_WORKFLOW, "utf8");
   assert.match(workflow, /node scripts\/release\/token-preflight\.mjs/);
   assert.match(workflow, /secrets\.RELEASE_PLEASE_TOKEN/);
-  assert.match(workflow, /actions\/create-github-app-token@v2/);
+  assert.match(workflow, /actions\/create-github-app-token@v3/);
   assert.match(workflow, /secrets\.RELEASE_PLEASE_APP_ID/);
   assert.match(workflow, /secrets\.RELEASE_PLEASE_PRIVATE_KEY/);
   assert.match(workflow, /steps\.app-credentials\.outputs\.configured == 'true'/);

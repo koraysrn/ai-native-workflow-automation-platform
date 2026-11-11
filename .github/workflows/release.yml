@@ -117,7 +117,7 @@ jobs:
       - name: Mint a release token from the GitHub App
         id: app-token
         if: steps.gate.outputs.skip != 'true' && steps.app-credentials.outputs.configured == 'true'
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ secrets.RELEASE_PLEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_PLEASE_PRIVATE_KEY }}
