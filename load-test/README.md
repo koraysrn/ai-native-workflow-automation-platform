@@ -43,8 +43,45 @@ K6_SMOKE=1 k6 run load-test/k6/awap-load-test.js -e API_BASE=http://localhost:80
 `GOFLAGS`/`k6` are not required for the static checks:
 
 ```bash
-node --test "load-test/test/*.test.mjs"   # scenario, retry-model and CDC-benchmark unit tests
+node --test "load-test/test/*.test.mjs"   # scenario, tenancy, SLO, retry-model and CDC unit tests
 ```
+
+## 1000+ tenant suite (issue #201)
+
+A second k6 script proves tenant isolation, serialized approvals and idempotent starts under
+1000+ concurrent tenants. The methodology, SLO table and nightly publication are documented in
+[`docs/benchmarks/tenant-load-methodology.md`](../docs/benchmarks/tenant-load-methodology.md).
+
+| Scenario | Flow | SLO |
+|---|---|---|
+| `tenant_isolation` | own instance list + a neighbour's instance probe | p95 < 2s, p99 < 4s, error rate < 1%, zero leaked rows |
+| `approval_race` | task create + five parallel approvals | p95 < 1.5s, p99 < 3s, exactly one winner |
+| `idempotent_start` | the same `Idempotency-Key` twice | p95 < 2s, p99 < 4s, never a second instance |
+
+```bash
+# Plan validation only (what CI's static job runs)
+node load-test/seed-tenants.mjs --tenants 1000 --dry-run
+
+# Seed 1000 tenants (concurrent, retried, resumable with --start-index)
+API_BASE=http://localhost:8080 node load-test/seed-tenants.mjs --tenants 1000 --concurrency 16
+
+# Run and evaluate (k6 exits 99 on a threshold breach; report-slo.mjs exits 1 on a regression)
+k6 run load-test/k6/awap-tenancy-load-test.js \
+  --summary-export=load-test/results/tenancy-summary.json \
+  -e API_BASE=http://localhost:8080 -e TENANTS_FILE="$PWD/load-test/tenants.json"
+node load-test/report-slo.mjs --summary load-test/results/tenancy-summary.json --tenants 1000 \
+  --output load-test/results/tenancy-slo-report.json
+
+# Database-level RLS assertion as the non-superuser runtime role
+docker compose -f infra/docker-compose.yml exec -T postgres \
+  psql -v ON_ERROR_STOP=1 -U awap_app -d awap \
+    -v tenant_id=<tenant-a> -v foreign_id=<tenant-b> -f /dev/stdin \
+  < load-test/verify-isolation.sql
+```
+
+`load-test/tenants.json` holds 1000 bearer/CSRF credentials and is gitignored. The nightly workflow
+never uploads it. A double approval answers one 200 and four 409s: the backend maps a lost
+optimistic-lock race to `409 RESOURCE_CONFLICT` (see `GlobalExceptionHandler`) instead of a 500.
 
 ## Polling vs CDC benchmark (issue #159)
 
@@ -119,6 +156,10 @@ when the `CDC_E2E_ENABLED` repository variable is `true`.
 
 ## Seeding and cleanup
 
+Both seeders use unique slugs per run (`load-<suffix>-<index>`), so repeated runs never collide and
+the smoke/full profiles are idempotent. `node load-test/seed-tenants.mjs --tenants 1000 --dry-run`
+prints the plan without calling the API.
+
 - Slugs are `load-<suffix>-<index>` where the suffix is `LOAD_TEST_SUFFIX` or a timestamp+pid, so
   repeated runs never collide and the smoke/full profiles are idempotent.
 - `load-test/seed.json` holds the seeded ids/token and is ignored by git.
@@ -133,7 +174,10 @@ DELETE FROM tenants WHERE slug LIKE 'load-%';
 
 ## Scheduling
 
-- `.github/workflows/load-test-nightly.yml` runs the full profile nightly and on demand.
+- `.github/workflows/load-test-nightly.yml` runs the full profile nightly and on demand. The static
+  job also executes both harness dry runs; the load job seeds `LOAD_TEST_TENANT_COUNT` (default
+  1000) tenants, runs the tenancy suite, evaluates the SLOs into the job summary and asserts RLS in
+  Postgres.
 - PRs that touch `load-test/**` always run the static checks; the low-VU smoke profile (which boots
   the full Compose stack) runs on PRs only when the `LOAD_TEST_SMOKE_ENABLED` repository variable is
   `true`, and nightly/manual runs always execute the full profile.

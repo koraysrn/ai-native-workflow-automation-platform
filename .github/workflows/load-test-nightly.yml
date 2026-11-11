@@ -26,13 +26,22 @@ jobs:
           cache: pnpm
       - name: Install root tooling (yaml)
         run: pnpm install --frozen-lockfile
-      - name: Scenario and retry-model unit tests
+      - name: Scenario, tenancy, SLO and retry-model unit tests
         run: node --test "load-test/test/*.test.mjs"
+      # The issue requires CI to run the harness in dry-run mode and fail on a broken branch, so the
+      # 1000-tenant plan and the SLO report are validated before any stack is booted.
+      - name: Tenancy harness dry run
+        run: |
+          node load-test/seed-tenants.mjs --tenants 1000 --concurrency 16 --dry-run
+          node load-test/report-slo.mjs --dry-run
       - name: Validate the k6 script bundles
-        run: >-
-          npx --yes esbuild@0.25.0 load-test/k6/awap-load-test.js
-          --bundle --external:k6 --external:k6/*
-          --outfile=load-test/k6/dist/awap-load-test.bundle.js
+        run: |
+          npx --yes esbuild@0.25.0 load-test/k6/awap-load-test.js \
+            --bundle --external:k6 --external:k6/* \
+            --outfile=load-test/k6/dist/awap-load-test.bundle.js
+          npx --yes esbuild@0.25.0 load-test/k6/awap-tenancy-load-test.js \
+            --bundle --external:k6 --external:k6/* \
+            --outfile=load-test/k6/dist/awap-tenancy-load-test.bundle.js
       - name: Remove the bundle
         if: always()
         run: rm -rf load-test/k6/dist
@@ -44,7 +53,11 @@ jobs:
     # in CI (set the LOAD_TEST_SMOKE_ENABLED repository variable). Static checks always run.
     if: github.event_name != 'pull_request' || vars.LOAD_TEST_SMOKE_ENABLED == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 90
+    env:
+      # 1000 tenants is the issue's floor; LOAD_TEST_TENANT_COUNT scales the grid up on bigger
+      # runners without editing the workflow.
+      TENANT_COUNT: ${{ vars.LOAD_TEST_TENANT_COUNT || '1000' }}
     steps:
       - uses: actions/checkout@v7
 
@@ -55,6 +68,9 @@ jobs:
           AI_NODE_ENABLED: "false"
           OPENSEARCH_ENABLED: "false"
           FILE_MANAGE_BUCKETS: "false"
+          # Seeding 1000 tenants logs in from one host; the per-IP brute-force budget (10/min)
+          # would stretch the seed to ~100 minutes. Deployed stacks keep the defaults.
+          AUTH_RATE_LIMIT_ENABLED: "false"
         run: docker compose up -d --build
         working-directory: infra
 
@@ -135,6 +151,51 @@ jobs:
         env:
           API_BASE: http://localhost:8080
           WEBHOOK_TARGET: http://localhost:9099/webhook
+
+      # The 1000+ tenant grid is seeded after the single-tenant smoke fixtures so the existing
+      # scenarios keep their credentials even when the tenancy seed is partially red.
+      - name: Seed 1000+ tenants for the tenancy suite
+        if: github.event_name != 'pull_request'
+        run: >-
+          node load-test/seed-tenants.mjs
+          --tenants "$TENANT_COUNT" --concurrency 16
+          --output load-test/tenants.json
+          --suffix "${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-tenancy"
+        env:
+          API_BASE: http://localhost:8080
+
+      - name: Tenancy run (isolation, approval race, idempotency)
+        if: github.event_name != 'pull_request'
+        run: >-
+          k6 run load-test/k6/awap-tenancy-load-test.js
+          --summary-export=load-test/results/tenancy-summary.json
+        env:
+          API_BASE: http://localhost:8080
+          # k6 resolves open() relative to the script; pass an absolute path.
+          TENANTS_FILE: ${{ github.workspace }}/load-test/tenants.json
+
+      # always() so a threshold breach (k6 exit 99) still publishes the regression table; the report
+      # exits 1, which keeps the job red.
+      - name: Evaluate the tenancy SLOs
+        if: always() && github.event_name != 'pull_request'
+        run: >-
+          node load-test/report-slo.mjs
+          --summary load-test/results/tenancy-summary.json
+          --tenants "$TENANT_COUNT" --mode full
+          --output load-test/results/tenancy-slo-report.json
+          --step-summary "$GITHUB_STEP_SUMMARY"
+
+      # Runs as the non-superuser awap_app role: a superuser bypasses RLS and would turn the
+      # assertion into a false negative.
+      - name: Assert Postgres RLS hides other tenants
+        if: github.event_name != 'pull_request'
+        run: |
+          TENANT_A=$(node -e 'const t=require("./load-test/tenants.json").tenants; if(t.length<2){process.exit(1);} console.log(t[0].tenantId);')
+          TENANT_B=$(node -e 'console.log(require("./load-test/tenants.json").tenants[1].tenantId);')
+          docker compose -f infra/docker-compose.yml exec -T postgres \
+            psql -v ON_ERROR_STOP=1 -U awap_app -d awap \
+            -v tenant_id="$TENANT_A" -v foreign_id="$TENANT_B" -f /dev/stdin \
+            < load-test/verify-isolation.sql
 
       # The SQL file asserts the plan and raises on a regression, so ON_ERROR_STOP makes psql fail
       # the step instead of printing a scan plan that any "Scan" grep would accept.

@@ -437,6 +437,10 @@ services:
       FILE_SCAN_INTERVAL_MS: ${FILE_SCAN_INTERVAL_MS:-60000}
       OUTBOX_RELAY_INTERVAL_MS: ${OUTBOX_RELAY_INTERVAL_MS:-5000}
       OUTBOX_RELAY_INITIAL_DELAY_MS: ${OUTBOX_RELAY_INITIAL_DELAY_MS:-5000}
+      # Issue #201: the 1000-tenant seed logs in from one host, so the per-IP auth budget must be
+      # lifted for the load-test stack only. Deployed environments keep the defaults.
+      AUTH_RATE_LIMIT_ENABLED: ${AUTH_RATE_LIMIT_ENABLED:-true}
+      AUTH_RATE_LIMIT_LIMIT: ${AUTH_RATE_LIMIT_LIMIT:-10}
       # Issue #190: the local Prometheus scrapes /actuator/prometheus without a user token.
       AWAP_METRICS_PUBLIC: ${AWAP_METRICS_PUBLIC:-true}
     ports:
