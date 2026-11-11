@@ -1,15 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { listWorkflowDefinitions, type WorkflowDefinitionDto } from "../../../lib/api";
+import type { WorkflowDefinitionDto } from "../../../lib/api";
+import { useWorkflowDefinitions } from "../../../lib/hooks/resources";
 import StartWorkflowDialog from "../../../components/workflows/StartWorkflowDialog";
+import { EmptyState, ErrorState, LoadingState } from "../../../components/ui/QueryState";
 
 export default function WorkflowsPage() {
-  const { data: workflows = [] } = useQuery({
-    queryKey: ["workflow-definitions"],
-    queryFn: listWorkflowDefinitions,
-  });
+  const workflows = useWorkflowDefinitions();
   const [starting, setStarting] = useState<WorkflowDefinitionDto | null>(null);
 
   return (
@@ -18,8 +16,15 @@ export default function WorkflowsPage() {
       {starting && (
         <StartWorkflowDialog workflowId={starting.id} onClose={() => setStarting(null)} />
       )}
+      {workflows.isLoading && <LoadingState label="Loading workflows…" />}
+      {workflows.isError && (
+        <ErrorState error={workflows.error} message="Failed to load workflows." />
+      )}
+      {workflows.isSuccess && workflows.data.length === 0 && (
+        <EmptyState message="No workflows yet." />
+      )}
       <ul>
-        {workflows.map((workflow) => (
+        {(workflows.data ?? []).map((workflow) => (
           <li key={workflow.id} style={{ marginBottom: 8 }}>
             {workflow.name} — {workflow.status} (v{workflow.currentVersion}){" "}
             {workflow.status === "PUBLISHED" && (

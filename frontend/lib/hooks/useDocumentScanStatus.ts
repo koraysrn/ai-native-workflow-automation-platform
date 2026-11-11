@@ -9,8 +9,10 @@ import {
   type DocumentScanStatusEventDto,
 } from "../documentScanStatus";
 
-/** Shared React Query cache key for the document list. */
-export const DOCUMENTS_QUERY_KEY = ["documents"] as const;
+import { queryKeys } from "../queryKeys";
+
+/** Shared React Query cache key for the document list (same key as the list query). */
+export const DOCUMENTS_QUERY_KEY = queryKeys.documents.all;
 
 export interface UseDocumentScanStatusOptions {
   enabled?: boolean;
@@ -140,9 +142,8 @@ export function useDocumentScanStatus(
             fileId?: string;
           };
           if (deleted?.fileId) {
-            queryClient.setQueryData<DocumentVersionDto[]>(
-              DOCUMENTS_QUERY_KEY,
-              (documents) => removeDocumentByFileId(documents, deleted.fileId!),
+            queryClient.setQueryData<DocumentVersionDto[]>(DOCUMENTS_QUERY_KEY, (documents) =>
+              removeDocumentByFileId(documents, deleted.fileId!),
             );
           }
         } catch {

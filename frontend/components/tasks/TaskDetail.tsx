@@ -1,34 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { approveTask, rejectTask, type TaskDto } from "../../lib/api";
+import type { TaskDto } from "../../lib/api";
+import { useDecideTask } from "../../lib/hooks/resources";
 
-export default function TaskDetail({
-  task,
-  onClose,
-}: {
-  task: TaskDto;
-  onClose: () => void;
-}) {
-  const queryClient = useQueryClient();
+export default function TaskDetail({ task, onClose }: { task: TaskDto; onClose: () => void }) {
   const [comment, setComment] = useState("");
-
-  const decide = useMutation({
-    mutationFn: ({
-      id,
-      approve,
-      comment,
-    }: {
-      id: string;
-      approve: boolean;
-      comment: string;
-    }) => (approve ? approveTask(id, comment) : rejectTask(id, comment)),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["tasks"] });
-      onClose();
-    },
-  });
+  const decide = useDecideTask();
 
   return (
     <div style={{ border: "1px solid #cbd5e1", padding: 16, marginBottom: 12, borderRadius: 8 }}>
@@ -47,13 +25,17 @@ export default function TaskDetail({
       />
       <div style={{ display: "flex", gap: 8 }}>
         <button
-          onClick={() => decide.mutate({ id: task.id, approve: true, comment })}
+          onClick={() =>
+            decide.mutate({ id: task.id, approve: true, comment }, { onSuccess: onClose })
+          }
           disabled={decide.isPending}
         >
           Approve
         </button>
         <button
-          onClick={() => decide.mutate({ id: task.id, approve: false, comment })}
+          onClick={() =>
+            decide.mutate({ id: task.id, approve: false, comment }, { onSuccess: onClose })
+          }
           disabled={decide.isPending}
         >
           Reject

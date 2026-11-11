@@ -1,7 +1,7 @@
 "use client";
 
-import { useQuery } from "@tanstack/react-query";
-import { fetchAnalyticsSummary } from "../../../lib/api";
+import { ErrorState, LoadingState } from "../../../components/ui/QueryState";
+import { useAnalyticsSummary } from "../../../lib/hooks/resources";
 
 function formatDuration(ms: number): string {
   if (ms < 1000) {
@@ -11,20 +11,14 @@ function formatDuration(ms: number): string {
 }
 
 export default function AnalyticsPage() {
-  const {
-    data: aggregates = [],
-    isLoading,
-    isError,
-  } = useQuery({
-    queryKey: ["analytics-summary"],
-    queryFn: () => fetchAnalyticsSummary(),
-  });
+  const analytics = useAnalyticsSummary();
+  const aggregates = analytics.data ?? [];
 
-  if (isLoading) {
-    return <p>Loading analytics…</p>;
+  if (analytics.isLoading) {
+    return <LoadingState label="Loading analytics…" />;
   }
-  if (isError) {
-    return <p>Failed to load analytics.</p>;
+  if (analytics.isError) {
+    return <ErrorState error={analytics.error} message="Failed to load analytics." />;
   }
 
   const workflowCompleted = aggregates.find((item) => item.eventType === "WORKFLOW_COMPLETED");
