@@ -26,6 +26,7 @@ class FormServiceTest {
   @Mock private FormDefinitionRepository definitionRepository;
   @Mock private FormSubmissionRepository submissionRepository;
   @Mock private OutboxEventPublisher outboxEventPublisher;
+  @Mock private com.awap.file.application.FileService fileService;
 
   private FormService service;
 
@@ -37,7 +38,8 @@ class FormServiceTest {
             submissionRepository,
             new ObjectMapper().findAndRegisterModules(),
             outboxEventPublisher,
-            new FormMapperImpl());
+            new FormMapperImpl(),
+            fileService);
   }
 
   @Test

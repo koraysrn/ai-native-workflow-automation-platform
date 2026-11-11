@@ -1580,7 +1580,11 @@ paths:
     post:
       operationId: submitForm
       summary: Submit a form
-      description: Validates and stores a submission against a form definition.
+      description: >-
+        Validates and stores a submission against a form definition. A FILE field value is either
+        a single `fileId` string or a `fileIds` array; every id must reference a tenant-owned file
+        in `PROMOTED` state (404 for foreign/missing, 403 for infected, 409 for not promoted, 415
+        for an unsupported format and 413 above 500 MB).
       tags: [Forms]
       parameters:
         - $ref: "#/components/parameters/FormId"
@@ -3083,6 +3087,29 @@ components:
         createdAt:
           type: string
           format: date-time
+        files:
+          type: array
+          description: Metadata for the scanned files accepted with this submission.
+          items:
+            $ref: "#/components/schemas/FormSubmissionFileResponse"
+
+    FormSubmissionFileResponse:
+      type: object
+      properties:
+        fileId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        size:
+          type: integer
+          format: int64
+        contentType:
+          type: string
+          nullable: true
+        scanStatus:
+          type: string
+          enum: [QUARANTINED, SCANNING, CLEAN, PROMOTED, INFECTED, SCAN_FAILED]
 
     DocumentVersionResponse:
       type: object

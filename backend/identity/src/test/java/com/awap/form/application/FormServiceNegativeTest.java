@@ -34,7 +34,8 @@ class FormServiceNegativeTest {
             mock(FormSubmissionRepository.class),
             new ObjectMapper(),
             mock(OutboxEventPublisher.class),
-            mock(FormMapper.class));
+            mock(FormMapper.class),
+            mock(com.awap.file.application.FileService.class));
   }
 
   @Test

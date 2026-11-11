@@ -9,6 +9,7 @@ import {
   submitForm,
   type FormDefinitionDetailDto,
 } from "../../../../lib/api";
+import FormFileField from "../../../../components/forms/FormFileField";
 
 interface SchemaField {
   id: string;
@@ -52,8 +53,13 @@ export default function FillFormPage() {
         dataJson: JSON.stringify(values),
         workflowInstanceId: instanceId || null,
       }),
-    onSuccess: () => {
-      setMessage("Submitted");
+    onSuccess: (response) => {
+      const files = response.files ?? [];
+      setMessage(
+        files.length === 0
+          ? "Submitted"
+          : `Submitted with ${files.length} file(s): ${files.map((file) => `${file.name} (${file.scanStatus})`).join(", ")}`,
+      );
       setValues({});
     },
     onError: () => setMessage("Submit failed"),
@@ -102,7 +108,13 @@ export default function FillFormPage() {
             <label key={field.id} style={{ display: "block", marginBottom: 12 }}>
               {field.id}
               {field.required ? " *" : ""}
-              {field.type === "SELECT" ? (
+              {field.type === "FILE" ? (
+                <FormFileField
+                  fieldId={field.id}
+                  onUploaded={(fileId) => setValue(field.id, fileId)}
+                  onCleared={() => setValue(field.id, "")}
+                />
+              ) : field.type === "SELECT" ? (
                 <select
                   value={values[field.id] ?? ""}
                   onChange={(event) => setValue(field.id, event.target.value)}
@@ -156,9 +168,7 @@ export default function FillFormPage() {
         </div>
       )}
 
-      {!isLoading && formId !== "" && fields.length === 0 && (
-        <p>This form has no fields yet.</p>
-      )}
+      {!isLoading && formId !== "" && fields.length === 0 && <p>This form has no fields yet.</p>}
 
       {message && <p aria-live="polite">{message}</p>}
     </div>

@@ -26,6 +26,7 @@ class FormServiceValidationTest {
   @Mock private FormDefinitionRepository definitionRepository;
   @Mock private FormSubmissionRepository submissionRepository;
   @Mock private OutboxEventPublisher outboxEventPublisher;
+  @Mock private com.awap.file.application.FileService fileService;
 
   private FormService service;
   private final UUID tenantId = UUID.randomUUID();
@@ -39,7 +40,8 @@ class FormServiceValidationTest {
             submissionRepository,
             new ObjectMapper(),
             outboxEventPublisher,
-            new FormMapperImpl());
+            new FormMapperImpl(),
+            fileService);
   }
 
   private void givenSchema(String schemaJson) {

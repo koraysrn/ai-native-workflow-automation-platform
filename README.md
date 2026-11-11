@@ -210,6 +210,7 @@ tests, coverage gates and SBOM generation.
 - [`docs/openapi/ai-layer-openapi.yaml`](docs/openapi/ai-layer-openapi.yaml) — versioned AI layer contract
 - [`docs/correlation-ids.md`](docs/correlation-ids.md) — correlation-ID contract and PII masking
 - [`docs/role-model.md`](docs/role-model.md) — role hierarchy and position-based assignment
+- [`docs/form-file-submission.md`](docs/form-file-submission.md) — FILE field / scanned document contract
 - [`docs/coverage-ratchet.md`](docs/coverage-ratchet.md) — coverage ratchet, changed-line gate and trend
 - [`docs/break-glass-log.md`](docs/break-glass-log.md) — audited single-maintainer break-glass record
 - [`docs/sbom.md`](docs/sbom.md) — per-layer SBOMs, merge, signing and verification
