@@ -446,8 +446,29 @@ export interface SubmitFormPayload {
   nodeExecutionId?: string | null;
 }
 
-export function submitForm(formId: string, payload: SubmitFormPayload): Promise<unknown> {
-  return authPost<unknown>(`/api/v1/forms/${formId}/submissions`, payload);
+export interface FormSubmissionFileDto {
+  fileId: string;
+  name: string;
+  size: number;
+  contentType: string | null;
+  scanStatus: string;
+}
+
+export interface FormSubmissionDto {
+  id: string;
+  formId: string;
+  workflowInstanceId: string | null;
+  dataJson: string;
+  submittedBy: string | null;
+  createdAt: string;
+  files: FormSubmissionFileDto[];
+}
+
+export function submitForm(
+  formId: string,
+  payload: SubmitFormPayload,
+): Promise<FormSubmissionDto> {
+  return authPost<FormSubmissionDto>(`/api/v1/forms/${formId}/submissions`, payload);
 }
 
 export interface AnalyticsAggregateDto {
