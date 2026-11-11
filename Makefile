@@ -11,7 +11,7 @@ NODE ?= node
 KIND_VERSION ?= v0.20.0
 KIND ?= .bin/kind
 
-.PHONY: help install-deps setup-local-infra up up-minimal down reset seed provision wait logs ps config test-infra
+.PHONY: help install-deps setup-local-infra up up-minimal down reset seed provision wait logs ps config test-infra coverage-baseline coverage-baseline-check
 
 help:
 	@echo "AWAP local targets:"
@@ -22,6 +22,26 @@ help:
 	@echo "  make seed         Idempotently create the local tenant and verify login."
 	@echo "  make provision    Idempotently create buckets, Kafka topics and the Debezium connector."
 	@echo "  make test-infra   Run the provisioning/compose node:test suite and shell checks."
+	@echo "  make coverage-baseline        Regenerate docs/coverage-baseline.md from the JaCoCo reports (issue #197)."
+	@echo "  make coverage-baseline-check  Fail when the committed baseline document is stale."
+
+# Issue #197: the baseline document is generated, never edited by hand. Run
+# `cd backend && ./mvnw -B clean verify` first so both JaCoCo reports exist;
+# JaCoCo appends to jacoco.exec, so an incremental build can over-report.
+BASELINE_REPORTS = \
+	--csv awap-identity=backend/identity/target/site/jacoco/jacoco.csv \
+	--xml awap-identity=backend/identity/target/site/jacoco/jacoco.xml \
+	--csv awap-common=backend/common/target/site/jacoco/jacoco.csv \
+	--xml awap-common=backend/common/target/site/jacoco/jacoco.xml \
+	--document docs/coverage-baseline.md
+
+coverage-baseline:
+	$(NODE) scripts/coverage-baseline.mjs $(BASELINE_REPORTS) \
+		--emit docs/coverage-baseline.md \
+		--delta backend/target/coverage-baseline-delta.md
+
+coverage-baseline-check:
+	$(NODE) scripts/coverage-baseline.mjs $(BASELINE_REPORTS) --check
 
 # Full profile: every runtime dependency and application, including MinIO, ClamAV and the AI layer.
 up:

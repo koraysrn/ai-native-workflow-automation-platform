@@ -83,6 +83,35 @@ threshold. Generated code and DTO/config paths are excluded by explicit patterns
 A changed Java file missing from the JaCoCo report is treated as uncovered, so a
 new production class cannot bypass the check by never being loaded.
 
+## Generated baseline document (issue #197)
+
+[`scripts/coverage-baseline.mjs`](../scripts/coverage-baseline.mjs) renders
+[`docs/coverage-baseline.md`](coverage-baseline.md) from the JaCoCo CSV **and**
+XML reports. It cross-checks both formats, applies the bundle exclusions, lists
+every module aggregate and every class-level gate, and embeds a machine-readable
+copy of the values for the PR delta.
+
+The document is generated; never edit it by hand. Regenerate it after a clean
+build (JaCoCo appends to `target/jacoco.exec`, so an incremental `verify` can
+report lines that the current run did not execute):
+
+```bash
+cd backend && ./mvnw -B clean verify
+cd ..
+make coverage-baseline
+```
+
+CI fails when the committed document drifts:
+
+```bash
+make coverage-baseline-check
+```
+
+The `Coverage baseline drift` CI step runs the same check, uploads the
+`coverage-baseline` artifact and posts the delta as a PR comment. The generator's
+tests (`scripts/test/coverage-baseline.test.mjs`) cover a stale document, a
+missing report, a malformed CSV, a CSV/XML mismatch and a module without classes.
+
 ## Trend report and regression gate
 
 [`scripts/coverage-trend.mjs`](../scripts/coverage-trend.mjs) aggregates the JaCoCo
@@ -108,14 +137,16 @@ node ../scripts/coverage-trend.mjs \
 
 ## Gate self-tests
 
-Both scripts are covered by tests that deliberately feed uncovered and regressed
-input:
+The gate scripts are covered by tests that deliberately feed uncovered and
+regressed input:
 
 - `scripts/test/check-changed-line-coverage.test.mjs` — fully covered lines pass,
   an uncovered changed line fails, a missing JaCoCo entry fails, and generated
   files are excluded.
 - `scripts/test/coverage-trend.test.mjs` — meeting the baseline passes, dropping
   below the minimum fails, and a regression above the minimum still fails.
+- `scripts/test/coverage-baseline.test.mjs` — a matching document passes, a stale
+  or missing document fails, and malformed, missing or mismatched reports fail.
 
 CI runs these tests in the Backend job before the gates, and uploads the
 `jacoco-report`, `coverage-trend` and `pit-report` artifacts.

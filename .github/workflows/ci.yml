@@ -13,6 +13,8 @@ permissions:
   contents: read
   packages: write
   security-events: write
+  # Issue #197: the backend job posts the coverage baseline delta on the PR.
+  pull-requests: write
 
 # One CI run per ref: a new push cancels the superseded run so parallel runs do
 # not compete for the same NVD API key quota during the OWASP cold download.
@@ -109,6 +111,43 @@ jobs:
           path: |
             backend/identity/target/coverage-trend.json
             backend/common/target/coverage-trend.json
+      - name: Coverage baseline tooling tests
+        # Issue #197: missing, malformed, empty and CSV/XML-mismatched reports fail.
+        run: node --test "scripts/test/coverage-baseline.test.mjs"
+      - name: Coverage baseline drift
+        # Issue #197: the committed document must match the measured reports.
+        run: >-
+          node scripts/coverage-baseline.mjs
+          --csv "awap-identity=backend/identity/target/site/jacoco/jacoco.csv"
+          --xml "awap-identity=backend/identity/target/site/jacoco/jacoco.xml"
+          --csv "awap-common=backend/common/target/site/jacoco/jacoco.csv"
+          --xml "awap-common=backend/common/target/site/jacoco/jacoco.xml"
+          --document docs/coverage-baseline.md
+          --check
+          --emit backend/target/coverage-baseline.md
+          --delta backend/target/coverage-baseline-delta.md
+          --summary "$GITHUB_STEP_SUMMARY"
+      - name: Upload coverage baseline
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: coverage-baseline
+          path: |
+            backend/target/coverage-baseline.md
+            backend/target/coverage-baseline-delta.md
+      - name: Comment the coverage baseline delta
+        # Issue #197: publish the delta even when the drift check is red.
+        if: always() && github.event_name == 'pull_request'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          if [ -f backend/target/coverage-baseline-delta.md ]; then
+            gh pr comment "$PR_NUMBER" --body-file backend/target/coverage-baseline-delta.md
+          else
+            echo "No coverage delta was generated; skipping the comment."
+          fi
       - name: Format check (Spotless)
         run: mvn -B spotless:check
         working-directory: backend
