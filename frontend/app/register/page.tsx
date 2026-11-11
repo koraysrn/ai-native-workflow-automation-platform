@@ -2,10 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useState, type FormEvent } from "react";
-import { registerTenant } from "../../lib/api";
+import { useRegisterTenant } from "../../lib/hooks/resources";
 
 export default function RegisterPage() {
   const router = useRouter();
+  const register = useRegisterTenant();
   const [slug, setSlug] = useState("");
   const [name, setName] = useState("");
   const [adminFullName, setAdminFullName] = useState("");
@@ -17,7 +18,7 @@ export default function RegisterPage() {
     event.preventDefault();
     setMessage("");
     try {
-      await registerTenant({ slug, name, adminEmail, adminPassword, adminFullName });
+      await register.mutateAsync({ slug, name, adminEmail, adminPassword, adminFullName });
       router.push("/");
       router.refresh();
     } catch (error) {
@@ -29,12 +30,46 @@ export default function RegisterPage() {
     <main style={{ maxWidth: 420, margin: "48px auto", fontFamily: "sans-serif" }}>
       <h1>Create tenant</h1>
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-        <input placeholder="Tenant slug" aria-label="Tenant slug" value={slug} onChange={(e) => setSlug(e.target.value)} required />
-        <input placeholder="Company name" aria-label="Company name" value={name} onChange={(e) => setName(e.target.value)} required />
-        <input placeholder="Admin full name" aria-label="Admin full name" value={adminFullName} onChange={(e) => setAdminFullName(e.target.value)} required />
-        <input placeholder="Admin email" aria-label="Admin email" type="email" value={adminEmail} onChange={(e) => setAdminEmail(e.target.value)} required />
-        <input placeholder="Admin password" aria-label="Admin password" type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} required />
-        <button type="submit">Create tenant</button>
+        <input
+          placeholder="Tenant slug"
+          aria-label="Tenant slug"
+          value={slug}
+          onChange={(e) => setSlug(e.target.value)}
+          required
+        />
+        <input
+          placeholder="Company name"
+          aria-label="Company name"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
+        <input
+          placeholder="Admin full name"
+          aria-label="Admin full name"
+          value={adminFullName}
+          onChange={(e) => setAdminFullName(e.target.value)}
+          required
+        />
+        <input
+          placeholder="Admin email"
+          aria-label="Admin email"
+          type="email"
+          value={adminEmail}
+          onChange={(e) => setAdminEmail(e.target.value)}
+          required
+        />
+        <input
+          placeholder="Admin password"
+          aria-label="Admin password"
+          type="password"
+          value={adminPassword}
+          onChange={(e) => setAdminPassword(e.target.value)}
+          required
+        />
+        <button type="submit" disabled={register.isPending}>
+          {register.isPending ? "Creating…" : "Create tenant"}
+        </button>
       </form>
       {message && <p aria-live="polite">{message}</p>}
     </main>

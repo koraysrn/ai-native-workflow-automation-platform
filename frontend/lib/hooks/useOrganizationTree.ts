@@ -1,9 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
-import { fetchOrganizationTree } from "../api";
-
-export function useOrganizationTree() {
-  return useQuery({
-    queryKey: ["organization-tree"],
-    queryFn: fetchOrganizationTree,
-  });
-}
+/**
+ * Organization tree query. The hook lives in `resources.ts` with every other server-state hook so
+ * the query-key factory has a single consumer contract; this module keeps the import path stable.
+ */
+export { useOrganizationTree } from "./resources";

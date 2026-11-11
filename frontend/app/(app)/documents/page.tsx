@@ -1,31 +1,28 @@
 "use client";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import DocumentScanTable from "../../../components/documents/DocumentScanTable";
-import {
-  archiveDocumentVersion,
-  createDocumentUpload,
-  getDocumentDownloadUrl,
-  listDocuments,
-  type DocumentVersionDto,
-} from "../../../lib/api";
+import { EmptyState, ErrorState, LoadingState } from "../../../components/ui/QueryState";
+import type { DocumentVersionDto } from "../../../lib/api";
 import {
   infectionMessage,
   isDocumentDownloadable,
   scanStatusAnnouncement,
 } from "../../../lib/documentScanStatus";
 import { useDocumentScanStatus } from "../../../lib/hooks/useDocumentScanStatus";
+import {
+  useArchiveDocument,
+  useDocumentDownloadUrl,
+  useDocuments,
+  useUploadDocument,
+} from "../../../lib/hooks/resources";
 
 export default function DocumentsPage() {
-  const queryClient = useQueryClient();
   const [message, setMessage] = useState("");
   const [dismissedInfection, setDismissedInfection] = useState<string | null>(null);
   const { connected, transport, lastEvent } = useDocumentScanStatus();
-  const { data: documents = [], isLoading } = useQuery({
-    queryKey: ["documents"],
-    queryFn: listDocuments,
-  });
+  const documentsQuery = useDocuments();
+  const documents = documentsQuery.data ?? [];
 
   const announcement = lastEvent ? scanStatusAnnouncement(lastEvent) : "";
   const infectedNotice =
@@ -33,41 +30,16 @@ export default function DocumentsPage() {
       ? infectionMessage(lastEvent)
       : null;
 
-  const upload = useMutation({
-    mutationFn: async (file: File) => {
-      const slot = await createDocumentUpload(file.name, file.type, file.size);
-      const response = await fetch(slot.uploadUrl, {
-        method: "PUT",
-        ...(file.type ? { headers: { "Content-Type": file.type } } : {}),
-        body: file,
-      });
-      if (!response.ok) {
-        throw new Error(`Upload failed with status ${response.status}`);
-      }
-      return slot;
-    },
-    onSuccess: () => {
-      setMessage("Uploaded. Scan status updates live as soon as the antivirus run completes.");
-      queryClient.invalidateQueries({ queryKey: ["documents"] });
-    },
-    onError: (error) => setMessage(error instanceof Error ? error.message : "Upload failed"),
-  });
-
-  const archive = useMutation({
-    mutationFn: (versionId: string) => archiveDocumentVersion(versionId),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["documents"] });
-      setMessage("Version archived.");
-    },
-    onError: () => setMessage("Archive failed"),
-  });
+  const upload = useUploadDocument();
+  const archive = useArchiveDocument();
+  const downloadUrl = useDocumentDownloadUrl();
 
   async function download(document: DocumentVersionDto) {
     if (!isDocumentDownloadable(document)) {
       return;
     }
-    const { downloadUrl } = await getDocumentDownloadUrl(document.fileId);
-    window.location.assign(downloadUrl);
+    const { downloadUrl: url } = await downloadUrl.mutateAsync(document.fileId);
+    window.location.assign(url);
   }
 
   return (
@@ -93,19 +65,22 @@ export default function DocumentsPage() {
         disabled={upload.isPending}
         onChange={(event) => {
           const file = event.target.files?.[0];
-          if (file) {
-            upload.mutate(file);
-            event.target.value = "";
+          if (!file) {
+            return;
           }
+          upload.mutate(file, {
+            onSuccess: () =>
+              setMessage(
+                "Uploaded. Scan status updates live as soon as the antivirus run completes.",
+              ),
+            onError: (error) =>
+              setMessage(error instanceof Error ? error.message : "Upload failed"),
+          });
+          event.target.value = "";
         }}
       />
       {message && <p aria-live="polite">{message}</p>}
-      <p
-        aria-live="polite"
-        aria-atomic="true"
-        role="status"
-        data-testid="document-scan-announcer"
-      >
+      <p aria-live="polite" aria-atomic="true" role="status" data-testid="document-scan-announcer">
         {announcement}
       </p>
       {infectedNotice && (
@@ -123,22 +98,30 @@ export default function DocumentsPage() {
           <strong>Infected file blocked.</strong> {infectedNotice}{" "}
           <button
             type="button"
-            onClick={() =>
-              setDismissedInfection(lastEvent?.occurredAt ?? null)
-            }
+            onClick={() => setDismissedInfection(lastEvent?.occurredAt ?? null)}
           >
             Dismiss
           </button>
         </div>
       )}
-      {isLoading ? (
-        <p>Loading documents…</p>
-      ) : (
+      {documentsQuery.isLoading && <LoadingState label="Loading documents…" />}
+      {documentsQuery.isError && (
+        <ErrorState error={documentsQuery.error} message="Failed to load documents." />
+      )}
+      {documentsQuery.isSuccess && documents.length === 0 && (
+        <EmptyState message="No documents uploaded yet." />
+      )}
+      {documents.length > 0 && (
         <DocumentScanTable
           documents={documents}
           archivePending={archive.isPending}
           onDownload={download}
-          onArchive={(document) => archive.mutate(document.id)}
+          onArchive={(document) =>
+            archive.mutate(document.id, {
+              onSuccess: () => setMessage("Version archived."),
+              onError: () => setMessage("Archive failed"),
+            })
+          }
         />
       )}
     </div>

@@ -14,7 +14,10 @@ import {
   type Connection,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { createWorkflowDefinition, validateWorkflowExpression } from "../../../../lib/api";
+import {
+  useCreateWorkflowDefinition,
+  useValidateWorkflowExpression,
+} from "../../../../lib/hooks/resources";
 import {
   DEFAULT_WORKFLOW_VARIABLES,
   validateExpression,
@@ -88,6 +91,8 @@ export default function DesignerPage() {
 }
 
 function DesignerCanvas() {
+  const createWorkflow = useCreateWorkflowDefinition();
+  const validateExpressionApi = useValidateWorkflowExpression();
   const [name, setName] = useState("");
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<WorkflowEdge>([]);
@@ -322,7 +327,7 @@ function DesignerCanvas() {
       let results;
       try {
         results = await Promise.all(
-          conditions.map((condition) => validateWorkflowExpression(condition)),
+          conditions.map((condition) => validateExpressionApi.mutateAsync(condition)),
         );
       } catch {
         setError("Condition validation failed. Check your connection and retry.");
@@ -334,7 +339,7 @@ function DesignerCanvas() {
         return;
       }
       try {
-        await createWorkflowDefinition({
+        await createWorkflow.mutateAsync({
           name,
           definitionJson: toDefinitionJson(nodes, edges),
         });

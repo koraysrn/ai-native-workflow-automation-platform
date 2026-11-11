@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createFormDefinition } from "../../../../lib/api";
+import { useCreateFormDefinition } from "../../../../lib/hooks/resources";
 
 const fieldTypes = [
   "TEXT",
@@ -34,6 +34,7 @@ export default function FormBuilderPage() {
   const [fields, setFields] = useState<Field[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [message, setMessage] = useState("");
+  const createForm = useCreateFormDefinition();
 
   const selected = fields.find((field) => field.id === selectedId) ?? null;
 
@@ -44,13 +45,15 @@ export default function FormBuilderPage() {
   }
 
   function updateField(patch: Partial<Field>) {
-    setFields((fs) => fs.map((field) => (field.id === selectedId ? { ...field, ...patch } : field)));
+    setFields((fs) =>
+      fs.map((field) => (field.id === selectedId ? { ...field, ...patch } : field)),
+    );
   }
 
   async function save() {
     setMessage("");
     try {
-      await createFormDefinition(name, JSON.stringify({ fields }));
+      await createForm.mutateAsync({ name, schemaJson: JSON.stringify({ fields }) });
       setMessage("Saved");
     } catch {
       setMessage("Save failed");
@@ -118,7 +121,9 @@ export default function FormBuilderPage() {
                     type="number"
                     value={selected.minLength ?? ""}
                     onChange={(event) =>
-                      updateField({ minLength: event.target.value ? Number(event.target.value) : undefined })
+                      updateField({
+                        minLength: event.target.value ? Number(event.target.value) : undefined,
+                      })
                     }
                     style={{ display: "block", width: "100%" }}
                   />
@@ -129,7 +134,9 @@ export default function FormBuilderPage() {
                     type="number"
                     value={selected.maxLength ?? ""}
                     onChange={(event) =>
-                      updateField({ maxLength: event.target.value ? Number(event.target.value) : undefined })
+                      updateField({
+                        maxLength: event.target.value ? Number(event.target.value) : undefined,
+                      })
                     }
                     style={{ display: "block", width: "100%" }}
                   />
@@ -152,7 +159,9 @@ export default function FormBuilderPage() {
                     type="number"
                     value={selected.min ?? ""}
                     onChange={(event) =>
-                      updateField({ min: event.target.value ? Number(event.target.value) : undefined })
+                      updateField({
+                        min: event.target.value ? Number(event.target.value) : undefined,
+                      })
                     }
                     style={{ display: "block", width: "100%" }}
                   />
@@ -163,7 +172,9 @@ export default function FormBuilderPage() {
                     type="number"
                     value={selected.max ?? ""}
                     onChange={(event) =>
-                      updateField({ max: event.target.value ? Number(event.target.value) : undefined })
+                      updateField({
+                        max: event.target.value ? Number(event.target.value) : undefined,
+                      })
                     }
                     style={{ display: "block", width: "100%" }}
                   />

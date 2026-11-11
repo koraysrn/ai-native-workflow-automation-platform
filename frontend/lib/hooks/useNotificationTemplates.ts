@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { queryKeys } from "../queryKeys";
 import {
   activateNotificationTemplate,
   archiveNotificationTemplate,
@@ -11,12 +12,12 @@ import {
   type UpdateNotificationTemplatePayload,
 } from "../api";
 
-export const NOTIFICATION_TEMPLATES_QUERY_KEY = ["notification-templates"] as const;
+export const NOTIFICATION_TEMPLATES_QUERY_KEY = queryKeys.notificationTemplates.all;
 
 /** Loads the tenant templates for the editor. */
 export function useNotificationTemplates(templateKey?: string) {
   return useQuery({
-    queryKey: [...NOTIFICATION_TEMPLATES_QUERY_KEY, templateKey ?? "all"],
+    queryKey: queryKeys.notificationTemplates.list(templateKey),
     queryFn: () => listNotificationTemplates(templateKey),
   });
 }

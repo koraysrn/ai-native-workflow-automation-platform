@@ -201,6 +201,22 @@ export async function login(
   return (await response.json()) as TokenDto;
 }
 
+/** Error thrown by every API call; `status` lets the query layer classify retries. */
+export class ApiError extends Error {
+  readonly status: number;
+
+  constructor(status: number, message: string) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+/** HTTP status of an error when it came from the API layer. */
+export function errorStatus(error: unknown): number | undefined {
+  return error instanceof ApiError ? error.status : undefined;
+}
+
 async function refreshAccessToken(): Promise<boolean> {
   try {
     const response = await fetch(`${apiBase()}/api/v1/auth/refresh`, {
@@ -215,17 +231,58 @@ async function refreshAccessToken(): Promise<boolean> {
   }
 }
 
+let refreshInFlight: Promise<boolean> | null = null;
+
+/**
+ * Refreshes the access token at most once across concurrent 401s. Without single-flight every
+ * parallel query that receives a 401 would call `/auth/refresh`, rotating the refresh cookie
+ * repeatedly and racing itself. The shared promise is cleared once it settles so the next
+ * expiry can refresh again.
+ */
+export function refreshSession(): Promise<boolean> {
+  if (!refreshInFlight) {
+    refreshInFlight = refreshAccessToken().finally(() => {
+      refreshInFlight = null;
+    });
+  }
+  return refreshInFlight;
+}
+
+/** Navigation seam so tests can observe the redirect without navigating jsdom. */
+export const navigation = {
+  redirectToLogin(): void {
+    // A full navigation re-runs the middleware auth check and clears in-memory server state.
+    // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload re-runs the middleware auth check
+    window.location.assign("/");
+  },
+};
+
 function redirectToLogin(): never {
-  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload re-runs the middleware auth check
-  window.location.href = "/";
-  throw new Error("Unauthorized");
+  navigation.redirectToLogin();
+  throw new ApiError(401, "Unauthorized");
 }
 
-async function authFetch<T>(path: string, retried = false): Promise<T> {
+/**
+ * One request path for every verb: cookie credentials, tenant header, CSRF for mutations, a single
+ * retry after a successful refresh, and a typed `ApiError` for the query layer.
+ */
+async function apiRequest<T>(
+  method: "GET" | "POST" | "PUT" | "PATCH",
+  path: string,
+  body?: unknown,
+  retried = false,
+): Promise<T> {
   const headers: Record<string, string> = {};
-  const token = csrfToken();
-  if (token) {
-    headers["X-XSRF-TOKEN"] = token;
+  if (body !== undefined) {
+    headers["Content-Type"] = "application/json";
+  }
+  if (method === "GET") {
+    const token = csrfToken();
+    if (token) {
+      headers["X-XSRF-TOKEN"] = token;
+    }
+  } else {
+    Object.assign(headers, await csrfHeaders());
   }
   const tenant = activeTenantId();
   if (tenant) {
@@ -233,108 +290,35 @@ async function authFetch<T>(path: string, retried = false): Promise<T> {
   }
   const started = performance.now();
   const response = await fetch(`${apiBase()}${path}`, {
+    method,
     headers,
     credentials: "include",
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
-  logApi("GET", path, response.status, started);
+  logApi(method, path, response.status, started);
 
-  if (response.status === 401 && !retried && (await refreshAccessToken())) {
-    return authFetch<T>(path, true);
+  if (response.status === 401 && !retried && (await refreshSession())) {
+    return apiRequest<T>(method, path, body, true);
   }
   if (response.status === 401) {
     redirectToLogin();
   }
   if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
+    throw new ApiError(
+      response.status,
+      await readErrorDetail(response, `${method} ${path.split("?")[0]} failed`),
+    );
+  }
+  if (response.status === 204) {
+    return undefined as T;
   }
   return (await response.json()) as T;
 }
 
-async function authPatch<T>(path: string, retried = false): Promise<T> {
-  const headers: Record<string, string> = { ...(await csrfHeaders()) };
-  const tenant = activeTenantId();
-  if (tenant) {
-    headers["X-Tenant-Id"] = tenant;
-  }
-  const started = performance.now();
-  const response = await fetch(`${apiBase()}${path}`, {
-    method: "PATCH",
-    headers,
-    credentials: "include",
-  });
-  logApi("PATCH", path, response.status, started);
-
-  if (response.status === 401 && !retried && (await refreshAccessToken())) {
-    return authPatch<T>(path, true);
-  }
-  if (response.status === 401) {
-    redirectToLogin();
-  }
-  if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
-  }
-  return (await response.json()) as T;
-}
-
-async function authPut<T>(path: string, body: unknown, retried = false): Promise<T> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(await csrfHeaders()),
-  };
-  const tenant = activeTenantId();
-  if (tenant) {
-    headers["X-Tenant-Id"] = tenant;
-  }
-  const started = performance.now();
-  const response = await fetch(`${apiBase()}${path}`, {
-    method: "PUT",
-    headers,
-    credentials: "include",
-    body: JSON.stringify(body),
-  });
-  logApi("PUT", path, response.status, started);
-
-  if (response.status === 401 && !retried && (await refreshAccessToken())) {
-    return authPut<T>(path, body, true);
-  }
-  if (response.status === 401) {
-    redirectToLogin();
-  }
-  if (!response.ok) {
-    throw new Error(await readErrorDetail(response, "Request failed"));
-  }
-  return (await response.json()) as T;
-}
-
-async function authPost<T>(path: string, body: unknown, retried = false): Promise<T> {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    ...(await csrfHeaders()),
-  };
-  const tenant = activeTenantId();
-  if (tenant) {
-    headers["X-Tenant-Id"] = tenant;
-  }
-  const started = performance.now();
-  const response = await fetch(`${apiBase()}${path}`, {
-    method: "POST",
-    headers,
-    credentials: "include",
-    body: JSON.stringify(body),
-  });
-  logApi("POST", path, response.status, started);
-
-  if (response.status === 401 && !retried && (await refreshAccessToken())) {
-    return authPost<T>(path, body, true);
-  }
-  if (response.status === 401) {
-    redirectToLogin();
-  }
-  if (!response.ok) {
-    throw new Error(`Request failed with status ${response.status}`);
-  }
-  return (await response.json()) as T;
-}
+const authFetch = <T>(path: string): Promise<T> => apiRequest<T>("GET", path);
+const authPatch = <T>(path: string): Promise<T> => apiRequest<T>("PATCH", path);
+const authPut = <T>(path: string, body: unknown): Promise<T> => apiRequest<T>("PUT", path, body);
+const authPost = <T>(path: string, body: unknown): Promise<T> => apiRequest<T>("POST", path, body);
 
 export function listTasks(): Promise<TaskDto[]> {
   return authFetch<TaskDto[]>("/api/v1/tasks");
@@ -464,10 +448,7 @@ export interface FormSubmissionDto {
   files: FormSubmissionFileDto[];
 }
 
-export function submitForm(
-  formId: string,
-  payload: SubmitFormPayload,
-): Promise<FormSubmissionDto> {
+export function submitForm(formId: string, payload: SubmitFormPayload): Promise<FormSubmissionDto> {
   return authPost<FormSubmissionDto>(`/api/v1/forms/${formId}/submissions`, payload);
 }
 

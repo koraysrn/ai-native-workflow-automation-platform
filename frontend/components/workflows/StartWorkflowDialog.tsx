@@ -1,8 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { startWorkflowInstance } from "../../lib/api";
+import { useStartWorkflow } from "../../lib/hooks/resources";
 
 export default function StartWorkflowDialog({
   workflowId,
@@ -11,18 +10,10 @@ export default function StartWorkflowDialog({
   workflowId: string;
   onClose: () => void;
 }) {
-  const queryClient = useQueryClient();
   const [contextJson, setContextJson] = useState("{}");
   const [message, setMessage] = useState("");
 
-  const start = useMutation({
-    mutationFn: () => startWorkflowInstance(workflowId, contextJson),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["instances"] });
-      onClose();
-    },
-    onError: () => setMessage("Start failed"),
-  });
+  const start = useStartWorkflow();
 
   return (
     <div style={{ border: "1px solid #cbd5e1", padding: 16, marginBottom: 12, borderRadius: 8 }}>
@@ -35,7 +26,18 @@ export default function StartWorkflowDialog({
         style={{ display: "block", width: "100%", minHeight: 96, marginBottom: 12 }}
       />
       <div style={{ display: "flex", gap: 8 }}>
-        <button onClick={() => start.mutate()} disabled={start.isPending}>
+        <button
+          onClick={() =>
+            start.mutate(
+              { workflowDefinitionId: workflowId, contextJson },
+              {
+                onSuccess: onClose,
+                onError: () => setMessage("Start failed"),
+              },
+            )
+          }
+          disabled={start.isPending}
+        >
           Start
         </button>
         <button onClick={onClose}>Cancel</button>

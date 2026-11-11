@@ -91,9 +91,10 @@ test.describe("login", () => {
     await page.getByPlaceholder("Password").fill("s3cret");
     await page.getByRole("button", { name: "Sign in" }).click();
 
-    // No active tenant yet: the guard routes to the tenant picker.
+    // No active tenant yet: the guard routes to the tenant picker. Match the heading, not any text:
+    // Next's route announcer also carries the heading text on navigation.
     await expect(page).toHaveURL(/\/select-tenant/);
-    await expect(page.getByText("Select tenant")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Select tenant" })).toBeVisible();
 
     // Choosing a tenant persists the cookie and reloads into the dashboard.
     await page.getByRole("button", { name: /tenant-a/ }).click();

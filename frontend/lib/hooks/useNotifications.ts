@@ -6,15 +6,17 @@ import {
   markNotificationUnread,
   type NotificationDeliveryDto,
 } from "../api";
+import { queryKeys } from "../queryKeys";
 
-export const NOTIFICATIONS_QUERY_KEY = ["notifications"] as const;
-export const UNREAD_COUNT_QUERY_KEY = ["notifications", "unread-count"] as const;
+/** Kept for callers that invalidate the whole inbox. */
+export const NOTIFICATIONS_QUERY_KEY = queryKeys.notifications.all;
+export const UNREAD_COUNT_QUERY_KEY = queryKeys.notifications.unreadCount();
 
 /** Loads the tenant notification inbox. */
-export function useNotifications() {
+export function useNotifications(unreadOnly = false) {
   return useQuery({
-    queryKey: NOTIFICATIONS_QUERY_KEY,
-    queryFn: () => listNotifications(),
+    queryKey: queryKeys.notifications.list(unreadOnly),
+    queryFn: () => listNotifications(unreadOnly),
   });
 }
 
@@ -66,7 +68,11 @@ export function useToggleNotificationRead() {
         markRead.mutate(notification.id);
       }
     },
-    pendingId: markRead.isPending ? markRead.variables : markUnread.isPending ? markUnread.variables : null,
+    pendingId: markRead.isPending
+      ? markRead.variables
+      : markUnread.isPending
+        ? markUnread.variables
+        : null,
     error: markRead.error ?? markUnread.error,
   };
 }

@@ -1,15 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import {
-  fetchFormDefinition,
-  fetchFormDefinitions,
-  listWorkflowInstances,
-  submitForm,
-  type FormDefinitionDetailDto,
-} from "../../../../lib/api";
 import FormFileField from "../../../../components/forms/FormFileField";
+import { ErrorState, LoadingState } from "../../../../components/ui/QueryState";
+import {
+  useFormDefinition,
+  useFormDefinitions,
+  useSubmitForm,
+  useWorkflowInstances,
+} from "../../../../lib/hooks/resources";
 
 interface SchemaField {
   id: string;
@@ -19,21 +18,17 @@ interface SchemaField {
 }
 
 export default function FillFormPage() {
-  const { data: forms = [] } = useQuery({ queryKey: ["forms"], queryFn: fetchFormDefinitions });
-  const { data: instances = [] } = useQuery({
-    queryKey: ["instances"],
-    queryFn: listWorkflowInstances,
-  });
+  const formsQuery = useFormDefinitions();
+  const instancesQuery = useWorkflowInstances();
+  const forms = formsQuery.data ?? [];
+  const instances = instancesQuery.data ?? [];
   const [formId, setFormId] = useState("");
   const [instanceId, setInstanceId] = useState("");
   const [values, setValues] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
 
-  const { data: form, isLoading } = useQuery<FormDefinitionDetailDto>({
-    queryKey: ["form", formId],
-    queryFn: () => fetchFormDefinition(formId),
-    enabled: formId !== "",
-  });
+  const formQuery = useFormDefinition(formId);
+  const form = formQuery.data;
 
   const fields = useMemo<SchemaField[]>(() => {
     if (!form?.schemaJson) {
@@ -47,23 +42,28 @@ export default function FillFormPage() {
     }
   }, [form]);
 
-  const submit = useMutation({
-    mutationFn: () =>
-      submitForm(formId, {
+  const submit = useSubmitForm(formId);
+
+  function submitValues() {
+    submit.mutate(
+      {
         dataJson: JSON.stringify(values),
         workflowInstanceId: instanceId || null,
-      }),
-    onSuccess: (response) => {
-      const files = response.files ?? [];
-      setMessage(
-        files.length === 0
-          ? "Submitted"
-          : `Submitted with ${files.length} file(s): ${files.map((file) => `${file.name} (${file.scanStatus})`).join(", ")}`,
-      );
-      setValues({});
-    },
-    onError: () => setMessage("Submit failed"),
-  });
+      },
+      {
+        onSuccess: (response) => {
+          const files = response.files ?? [];
+          setMessage(
+            files.length === 0
+              ? "Submitted"
+              : `Submitted with ${files.length} file(s): ${files.map((file) => `${file.name} (${file.scanStatus})`).join(", ")}`,
+          );
+          setValues({});
+        },
+        onError: () => setMessage("Submit failed"),
+      },
+    );
+  }
 
   function setValue(fieldId: string, value: string) {
     setValues((vs) => ({ ...vs, [fieldId]: value }));
@@ -80,9 +80,9 @@ export default function FillFormPage() {
           onChange={(event) => setFormId(event.target.value)}
         >
           <option value="">Select a form</option>
-          {forms.map((form) => (
-            <option key={form.id} value={form.id}>
-              {form.name}
+          {forms.map((entry) => (
+            <option key={entry.id} value={entry.id}>
+              {entry.name}
             </option>
           ))}
         </select>
@@ -100,9 +100,15 @@ export default function FillFormPage() {
         </select>
       </div>
 
-      {isLoading && <p>Loading form…</p>}
+      {formsQuery.isError && (
+        <ErrorState error={formsQuery.error} message="Failed to load forms." />
+      )}
+      {formQuery.isError && (
+        <ErrorState error={formQuery.error} message="Failed to load the selected form." />
+      )}
+      {formQuery.isFetching && <LoadingState label="Loading form…" />}
 
-      {!isLoading && fields.length > 0 && (
+      {!formQuery.isFetching && fields.length > 0 && (
         <div style={{ maxWidth: 480 }}>
           {fields.map((field) => (
             <label key={field.id} style={{ display: "block", marginBottom: 12 }}>
@@ -162,13 +168,15 @@ export default function FillFormPage() {
               )}
             </label>
           ))}
-          <button type="button" onClick={() => submit.mutate()} disabled={submit.isPending}>
+          <button type="button" onClick={submitValues} disabled={submit.isPending}>
             {submit.isPending ? "Submitting…" : "Submit"}
           </button>
         </div>
       )}
 
-      {!isLoading && formId !== "" && fields.length === 0 && <p>This form has no fields yet.</p>}
+      {!formQuery.isFetching && formId !== "" && fields.length === 0 && (
+        <p>This form has no fields yet.</p>
+      )}
 
       {message && <p aria-live="polite">{message}</p>}
     </div>
