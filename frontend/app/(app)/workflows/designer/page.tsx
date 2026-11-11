@@ -1,15 +1,16 @@
 "use client";
 
-import { useCallback, useMemo, useState, type KeyboardEvent } from "react";
+import { useMemo, useRef, useState, type DragEvent, type KeyboardEvent } from "react";
 import {
   Background,
   Controls,
   Handle,
   Position,
   ReactFlow,
-  addEdge,
+  ReactFlowProvider,
   useEdgesState,
   useNodesState,
+  useReactFlow,
   type Connection,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
@@ -27,41 +28,32 @@ import {
   type WorkflowNode,
   type WorkflowNodeData,
 } from "../../../../lib/workflowGraph";
+import {
+  NODE_DRAG_MIME,
+  addConnection,
+  canRedo,
+  canUndo,
+  connectionError,
+  createHistory,
+  createNode,
+  dropToFlowPosition,
+  duplicateNode,
+  pushHistory,
+  redo,
+  removeNode,
+  shortcutAction,
+  undo,
+  validateGraph,
+  type GraphHistory,
+  type GraphSnapshot,
+} from "../../../../lib/workflowDesigner";
 import ConditionalEdge from "../../../../components/workflows/ConditionalEdge";
 import DesignerLegend from "../../../../components/workflows/DesignerLegend";
 import EdgeConditionEditor from "../../../../components/workflows/EdgeConditionEditor";
-
-const nodeColors: Record<string, string> = {
-  START: "#16a34a",
-  END: "#e11d48",
-  FORM: "#2563eb",
-  APPROVAL: "#f59e0b",
-  TASK: "#8b5cf6",
-  DECISION: "#0ea5e9",
-  CONDITION: "#06b6d4",
-  PARALLEL_GATEWAY: "#7c3aed",
-  MERGE_GATEWAY: "#a855f7",
-  DELAY: "#f97316",
-  WEBHOOK: "#dc2626",
-  SUB_PROCESS: "#475569",
-  AI: "#10b981",
-};
+import NodePalette from "../../../../components/workflows/NodePalette";
+import TransitionComposer from "../../../../components/workflows/TransitionComposer";
 
 const workflowVariables = [...DEFAULT_WORKFLOW_VARIABLES];
-
-/**
- * Darkens a node-type colour so the white toolbar label keeps at least a 4.5:1 WCAG AA contrast.
- * Axe flags several of the brighter palette entries (for example #10b981 and #f59e0b) otherwise.
- */
-function darkenHex(hex: string, factor = 0.6): string {
-  const value = Number.parseInt(hex.replace("#", ""), 16);
-  const channels = [(value >> 16) & 0xff, (value >> 8) & 0xff, value & 0xff].map((channel) =>
-    Math.round(channel * factor)
-      .toString(16)
-      .padStart(2, "0"),
-  );
-  return `#${channels.join("")}`;
-}
 
 function WorkflowNodeCard({ data }: { data: WorkflowNodeData }) {
   return (
@@ -86,6 +78,16 @@ const nodeTypes = { workflow: WorkflowNodeCard };
 const edgeTypes = { conditional: ConditionalEdge };
 
 export default function DesignerPage() {
+  // React Flow's screen-to-flow conversion needs the provider context, so the
+  // canvas is a child component (issue #198).
+  return (
+    <ReactFlowProvider>
+      <DesignerCanvas />
+    </ReactFlowProvider>
+  );
+}
+
+function DesignerCanvas() {
   const [name, setName] = useState("");
   const [nodes, setNodes, onNodesChange] = useNodesState<WorkflowNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<WorkflowEdge>([]);
@@ -94,6 +96,9 @@ export default function DesignerPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [saving, setSaving] = useState(false);
+  const [historyFlags, setHistoryFlags] = useState({ undo: false, redo: false });
+  const historyRef = useRef<GraphHistory>(createHistory({ nodes: [], edges: [] }));
+  const { screenToFlowPosition } = useReactFlow();
 
   const selectedNode = nodes.find((node) => node.id === selectedNodeId) ?? null;
   const selectedEdge = edges.find((edge) => edge.id === selectedEdgeId) ?? null;
@@ -105,24 +110,81 @@ export default function DesignerPage() {
     return node?.data.name ?? node?.data.type ?? nodeId;
   }
 
-  const onConnect = useCallback(
-    (connection: Connection) =>
-      setEdges((current) => addEdge({ ...connection, data: {} }, current)),
-    [setEdges],
-  );
+  function refreshHistoryFlags() {
+    setHistoryFlags({ undo: canUndo(historyRef.current), redo: canRedo(historyRef.current) });
+  }
+
+  function applySnapshot(snapshot: GraphSnapshot) {
+    setNodes(snapshot.nodes);
+    setEdges(snapshot.edges);
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+  }
+
+  /** Applies a mutation and records an immutable snapshot for undo/redo. */
+  function commit(nextNodes: WorkflowNode[], nextEdges: WorkflowEdge[]) {
+    applySnapshot({ nodes: nextNodes, edges: nextEdges });
+    historyRef.current = pushHistory(historyRef.current, { nodes: nextNodes, edges: nextEdges });
+    refreshHistoryFlags();
+  }
+
+  function rememberCurrentGraph() {
+    historyRef.current = pushHistory(historyRef.current, { nodes, edges });
+    refreshHistoryFlags();
+  }
+
+  function addNodeAt(type: string, position: { x: number; y: number }) {
+    const node = createNode(type, position, {
+      existingIds: nodes.map((candidate) => candidate.id),
+    });
+    commit([...nodes, node], edges);
+    setSelectedNodeId(node.id);
+    setSelectedEdgeId(null);
+    setNotice(`${type} node added.`);
+  }
 
   function addNode(type: string) {
     const index = nodes.length;
-    const node: WorkflowNode = {
-      id: crypto.randomUUID(),
-      type: "workflow",
-      // A grid keeps handles reachable; overlapping nodes make connecting edges unreliable.
-      position: { x: 80 + (index % 3) * 220, y: 80 + Math.floor(index / 3) * 140 },
-      data: { type, name: type },
-    };
-    setNodes((current) => [...current, node]);
-    setSelectedNodeId(node.id);
-    setSelectedEdgeId(null);
+    // A grid keeps handles reachable; overlapping nodes make connecting edges unreliable.
+    addNodeAt(type, { x: 80 + (index % 3) * 220, y: 80 + Math.floor(index / 3) * 140 });
+  }
+
+  function onDrop(event: DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    const type = event.dataTransfer.getData(NODE_DRAG_MIME);
+    if (type === "") {
+      setError("Drop a node type from the palette.");
+      return;
+    }
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const position = dropToFlowPosition({
+      clientX: event.clientX,
+      clientY: event.clientY,
+      bounds,
+      screenToFlowPosition,
+    });
+    if (position === null) {
+      // A drop outside the canvas is ignored instead of creating an off-screen node.
+      setError("Drop the node inside the canvas.");
+      return;
+    }
+    setError("");
+    addNodeAt(type, position);
+  }
+
+  function connect(connection: Connection) {
+    const result = addConnection(nodes, edges, connection);
+    if (result.error !== null) {
+      setError(result.error);
+      return;
+    }
+    setError("");
+    commit(nodes, result.edges);
+    setNotice("Transition added.");
+  }
+
+  function addTransitionFromComposer(source: string, target: string) {
+    connect({ source, target, sourceHandle: null, targetHandle: null });
   }
 
   function closeEdgeInspector() {
@@ -164,15 +226,75 @@ export default function DesignerPage() {
       return;
     }
     const copy = duplicateEdge(selectedEdge);
-    setEdges((current) => [...current, copy]);
+    commit(nodes, [...edges, copy]);
     setSelectedEdgeId(copy.id);
     setNotice("Edge duplicated with its condition.");
   }
 
+  function deleteSelection() {
+    if (selectedNodeId !== null) {
+      const next = removeNode(nodes, edges, selectedNodeId);
+      commit(next.nodes, next.edges);
+      setNotice("Node deleted.");
+      return;
+    }
+    if (selectedEdgeId !== null) {
+      commit(
+        nodes,
+        edges.filter((edge) => edge.id !== selectedEdgeId),
+      );
+      setNotice("Transition deleted.");
+    }
+  }
+
+  function duplicateSelection() {
+    if (selectedNodeId !== null) {
+      const copy = duplicateNode(nodes, selectedNodeId);
+      if (copy === null) {
+        return;
+      }
+      commit([...nodes, copy], edges);
+      setSelectedNodeId(copy.id);
+      setSelectedEdgeId(null);
+      setNotice("Node duplicated.");
+      return;
+    }
+    duplicateSelectedEdge();
+  }
+
+  function applyUndo() {
+    const result = undo(historyRef.current);
+    historyRef.current = result.history;
+    applySnapshot(result.snapshot);
+    refreshHistoryFlags();
+    setNotice("Undo.");
+  }
+
+  function applyRedo() {
+    const result = redo(historyRef.current);
+    historyRef.current = result.history;
+    applySnapshot(result.snapshot);
+    refreshHistoryFlags();
+    setNotice("Redo.");
+  }
+
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "d" && selectedEdge) {
-      event.preventDefault();
-      duplicateSelectedEdge();
+    const action = shortcutAction(event, {
+      node: selectedNode !== null,
+      edge: selectedEdge !== null,
+    });
+    if (action === null) {
+      return;
+    }
+    event.preventDefault();
+    if (action === "undo") {
+      applyUndo();
+    } else if (action === "redo") {
+      applyRedo();
+    } else if (action === "duplicate") {
+      duplicateSelection();
+    } else {
+      deleteSelection();
     }
   }
 
@@ -187,6 +309,11 @@ export default function DesignerPage() {
       setError(
         `Fix ${invalidEdges.length} invalid condition${invalidEdges.length === 1 ? "" : "s"} before saving.`,
       );
+      return;
+    }
+    const validation = validateGraph(nodes, edges);
+    if (!validation.valid) {
+      setError(validation.errors.join(" "));
       return;
     }
     const conditions = [...new Set(edges.map(conditionOf).filter((value) => value.trim() !== ""))];
@@ -223,24 +350,6 @@ export default function DesignerPage() {
   return (
     <div onKeyDown={onKeyDown}>
       <h1 style={{ fontSize: 24, fontWeight: 700 }}>Workflow Designer</h1>
-      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        {Object.keys(nodeColors).map((type) => (
-          <button
-            key={type}
-            type="button"
-            onClick={() => addNode(type)}
-            style={{
-              background: darkenHex(nodeColors[type] ?? "#4f46e5"),
-              color: "#fff",
-              border: "none",
-              padding: "6px 10px",
-              borderRadius: 6,
-            }}
-          >
-            {type}
-          </button>
-        ))}
-      </div>
       <div style={{ display: "flex", gap: 8, marginBottom: 12, alignItems: "center" }}>
         <input
           placeholder="Workflow name"
@@ -250,6 +359,24 @@ export default function DesignerPage() {
         />
         <button type="button" onClick={save} disabled={invalidEdges.length > 0 || saving}>
           Save draft
+        </button>
+        <button
+          type="button"
+          onClick={applyUndo}
+          disabled={!historyFlags.undo}
+          aria-label="Undo"
+          aria-keyshortcuts="Control+Z Meta+Z"
+        >
+          Undo
+        </button>
+        <button
+          type="button"
+          onClick={applyRedo}
+          disabled={!historyFlags.redo}
+          aria-label="Redo"
+          aria-keyshortcuts="Control+Shift+Z Meta+Shift+Z Control+Y"
+        >
+          Redo
         </button>
         {invalidEdges.length > 0 ? (
           <span role="status" style={{ color: "#b91c1c", fontSize: 13 }}>
@@ -266,13 +393,31 @@ export default function DesignerPage() {
       ) : null}
 
       <div style={{ display: "flex", gap: 16 }}>
-        <div style={{ flex: 1, height: 480, border: "1px solid #e2e8f0", borderRadius: 8 }}>
+        <NodePalette onAdd={addNode} />
+        <div
+          data-testid="designer-canvas"
+          onDrop={onDrop}
+          onDragOver={(event) => {
+            event.preventDefault();
+            event.dataTransfer.dropEffect = "copy";
+          }}
+          style={{ flex: 1, height: 480, border: "1px solid #e2e8f0", borderRadius: 8 }}
+        >
           <ReactFlow
             nodes={nodes}
             edges={displayEdges}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
-            onConnect={onConnect}
+            onConnect={connect}
+            isValidConnection={(connection) =>
+              connectionError(nodes, edges, {
+                source: connection.source,
+                target: connection.target,
+                sourceHandle: connection.sourceHandle ?? null,
+                targetHandle: connection.targetHandle ?? null,
+              }) === null
+            }
+            onNodeDragStop={rememberCurrentGraph}
             onNodeClick={(_, node) => {
               setSelectedNodeId(node.id);
               setSelectedEdgeId(null);
@@ -304,6 +449,14 @@ export default function DesignerPage() {
         ) : selectedNode ? (
           <div style={{ width: 260, border: "1px solid #e2e8f0", borderRadius: 8, padding: 12 }}>
             <h2 style={{ fontSize: 16, fontWeight: 700 }}>{selectedNode.data.type} node</h2>
+            <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
+              <button type="button" onClick={duplicateSelection}>
+                Duplicate node
+              </button>
+              <button type="button" onClick={deleteSelection}>
+                Delete node
+              </button>
+            </div>
             {selectedNode.data.type === "APPROVAL" && (
               <label style={{ display: "block", marginBottom: 8 }}>
                 Approvers (one per line, e.g. role:MANAGER)
@@ -347,8 +500,7 @@ export default function DesignerPage() {
                 />
               </label>
             )}
-            {(selectedNode.data.type === "DECISION" ||
-              selectedNode.data.type === "CONDITION") && (
+            {(selectedNode.data.type === "DECISION" || selectedNode.data.type === "CONDITION") && (
               <label style={{ display: "block", marginBottom: 8 }}>
                 Fallback guard expression
                 <textarea
@@ -507,6 +659,7 @@ export default function DesignerPage() {
         <h2 id="designer-transitions-heading" style={{ fontSize: 14, fontWeight: 700 }}>
           Transitions
         </h2>
+        <TransitionComposer nodes={nodes} onAdd={addTransitionFromComposer} />
         {edges.length === 0 ? (
           <p style={{ color: "#6b7280", fontSize: 13 }}>
             No transitions yet. Drag from the source handle of a node to another node.
