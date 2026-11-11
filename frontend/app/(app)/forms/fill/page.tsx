@@ -168,9 +168,7 @@ export default function FillFormPage() {
         </div>
       )}
 
-      {!isLoading && formId !== "" && fields.length === 0 && (
-        <p>This form has no fields yet.</p>
-      )}
+      {!isLoading && formId !== "" && fields.length === 0 && <p>This form has no fields yet.</p>}
 
       {message && <p aria-live="polite">{message}</p>}
     </div>

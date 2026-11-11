@@ -46,9 +46,7 @@ describe("FormFileField", () => {
     await waitFor(() =>
       expect(screen.getByRole("status")).toHaveTextContent("Scan status: Scanning"),
     );
-    await waitFor(() =>
-      expect(screen.getByRole("status")).toHaveTextContent("ready to submit"),
-    );
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("ready to submit"));
     expect(pollStatus).toHaveBeenCalledWith("f1");
   });
 

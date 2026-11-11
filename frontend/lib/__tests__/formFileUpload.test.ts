@@ -85,7 +85,12 @@ describe("putFile", () => {
   it("reports progress and resolves on a 2xx response", async () => {
     const xhr = new FakeXhr();
     const percents: number[] = [];
-    const promise = putFile("https://upload", new Blob(["x"]), (percent) => percents.push(percent), () => xhr as unknown as XMLHttpRequest);
+    const promise = putFile(
+      "https://upload",
+      new Blob(["x"]),
+      (percent) => percents.push(percent),
+      () => xhr as unknown as XMLHttpRequest,
+    );
 
     expect(xhr.opened).toEqual({ method: "PUT", url: "https://upload" });
     xhr.progress(25, 100);
@@ -99,7 +104,12 @@ describe("putFile", () => {
 
   it("rejects a non-2xx response", async () => {
     const xhr = new FakeXhr();
-    const promise = putFile("https://upload", new Blob(["x"]), () => undefined, () => xhr as unknown as XMLHttpRequest);
+    const promise = putFile(
+      "https://upload",
+      new Blob(["x"]),
+      () => undefined,
+      () => xhr as unknown as XMLHttpRequest,
+    );
 
     xhr.status = 500;
     xhr.onload?.();
@@ -108,7 +118,12 @@ describe("putFile", () => {
 
   it("rejects a network error", async () => {
     const xhr = new FakeXhr();
-    const promise = putFile("https://upload", new Blob(["x"]), () => undefined, () => xhr as unknown as XMLHttpRequest);
+    const promise = putFile(
+      "https://upload",
+      new Blob(["x"]),
+      () => undefined,
+      () => xhr as unknown as XMLHttpRequest,
+    );
 
     xhr.onerror?.();
     await expect(promise).rejects.toThrow("Upload failed.");

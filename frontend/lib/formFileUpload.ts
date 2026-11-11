@@ -19,10 +19,7 @@ export function isTerminalScan(status: string | null | undefined): boolean {
 }
 
 /** Finds the live scan status of one file in the tenant document list. */
-export function findScanStatus(
-  documents: DocumentVersionDto[],
-  fileId: string,
-): string | null {
+export function findScanStatus(documents: DocumentVersionDto[], fileId: string): string | null {
   return documents.find((document) => document.fileId === fileId)?.scanStatus ?? null;
 }
 
