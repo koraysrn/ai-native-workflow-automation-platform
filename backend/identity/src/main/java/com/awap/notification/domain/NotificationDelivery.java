@@ -88,6 +88,13 @@ public class NotificationDelivery {
   @Column(name = "last_error", columnDefinition = "TEXT")
   private String lastError;
 
+  /**
+   * Provider-assigned id returned by the transport (issue #204), used to correlate a delivery row
+   * with the provider's bounce/complaint/receipt events. Null for rows without a provider id.
+   */
+  @Column(name = "provider_message_id", length = 255)
+  private String providerMessageId;
+
   @Column(name = "next_attempt_at")
   private Instant nextAttemptAt;
 
@@ -264,11 +271,17 @@ public class NotificationDelivery {
   }
 
   public void markSent(Instant at) {
+    markSent(at, null);
+  }
+
+  /** Marks the row SENT and records the provider message id returned by the transport. */
+  public void markSent(Instant at, String providerMessageId) {
     this.status = SENT;
     this.lastError = null;
     this.nextAttemptAt = null;
     this.leaseUntil = null;
     this.leaseToken = null;
+    this.providerMessageId = providerMessageId;
     this.updatedAt = at;
   }
 
@@ -391,6 +404,10 @@ public class NotificationDelivery {
 
   public String getLastError() {
     return lastError;
+  }
+
+  public String getProviderMessageId() {
+    return providerMessageId;
   }
 
   public Instant getNextAttemptAt() {

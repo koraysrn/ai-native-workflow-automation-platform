@@ -129,8 +129,9 @@ class NotificationProducerPipelineTest {
     }
 
     @Override
-    public void dispatch(NotificationMessage message) {
+    public String dispatch(NotificationMessage message) {
       messages.add(message);
+      return null;
     }
   }
 

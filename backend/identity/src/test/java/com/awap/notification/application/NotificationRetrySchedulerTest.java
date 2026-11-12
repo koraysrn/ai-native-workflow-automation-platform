@@ -291,7 +291,7 @@ class NotificationRetrySchedulerTest {
     }
 
     @Override
-    public void dispatch(NotificationMessage message) {
+    public String dispatch(NotificationMessage message) {
       invocations.incrementAndGet();
       tenantsByRecipient.put(message.recipient(), message.tenantId());
       countsByRecipient
@@ -300,6 +300,7 @@ class NotificationRetrySchedulerTest {
       if (failure != null) {
         throw failure;
       }
+      return null;
     }
 
     private long tenantCount(UUID tenantId) {

@@ -130,8 +130,9 @@ class NotificationRequestedEventListenerTest {
     }
 
     @Override
-    public void dispatch(NotificationMessage message) {
+    public String dispatch(NotificationMessage message) {
       invocations.incrementAndGet();
+      return null;
     }
   }
 }

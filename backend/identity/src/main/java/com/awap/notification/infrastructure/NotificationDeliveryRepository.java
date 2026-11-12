@@ -38,14 +38,16 @@ public interface NotificationDeliveryRepository extends JpaRepository<Notificati
   @Query(
       "update NotificationDelivery d set d.status = 'SENT', d.attempts = :attempts,"
           + " d.lastError = null, d.lastAttemptAt = :now, d.nextAttemptAt = null,"
-          + " d.leaseUntil = null, d.leaseToken = null, d.updatedAt = :now"
+          + " d.leaseUntil = null, d.leaseToken = null,"
+          + " d.providerMessageId = :providerMessageId, d.updatedAt = :now"
           + " where d.id = :id and d.leaseToken = :leaseToken"
           + " and d.status in ('PENDING', 'RETRYING')")
   int applySent(
       @Param("id") UUID id,
       @Param("leaseToken") UUID leaseToken,
       @Param("attempts") int attempts,
-      @Param("now") Instant now);
+      @Param("now") Instant now,
+      @Param("providerMessageId") String providerMessageId);
 
   /** Schedules the next attempt and releases the lease. */
   @Modifying(clearAutomatically = true, flushAutomatically = true)

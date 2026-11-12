@@ -13,7 +13,12 @@ public interface NotificationDeliveryStateStore {
   /** True when {@code leaseToken} still owns a retriable row. */
   boolean isLeaseCurrent(UUID deliveryId, UUID leaseToken);
 
-  boolean markSent(UUID deliveryId, UUID leaseToken, int attempts, Instant now);
+  /**
+   * Marks the row SENT and stores the provider message id returned by the transport (issue #204);
+   * {@code providerMessageId} may be null for channels without a provider id.
+   */
+  boolean markSent(
+      UUID deliveryId, UUID leaseToken, int attempts, Instant now, String providerMessageId);
 
   boolean markRetrying(
       UUID deliveryId,

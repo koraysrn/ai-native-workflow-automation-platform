@@ -42,8 +42,13 @@ exception **narrow and time-boxed**. Only the classes named in
 [`jpa-domain-exception.txt`](../backend/identity/src/test/resources/architecture/jpa-domain-exception.txt)
 may carry JPA mapping annotations (`jakarta.persistence.Entity`, `Table`,
 `Column`, ...) or the Spring Data / Hibernate mapping annotations. Every other
-domain class fails ArchUnit if it imports them. The inventory is 37 classes and
+domain class fails ArchUnit if it imports them. The inventory is 38 classes and
 the exception expires on **2027-06-30**; the migration plan is in ADR-0007.
+
+The 38th entry is `com.awap.notification.domain.NotificationSuppression` (issue
+#204): the bounce/complaint suppression list is a tenant-scoped, append-only
+projection that the adapter writes and the dispatcher reads, so it is a durable
+domain record rather than a transport detail.
 
 The architecture gate therefore forbids **persistence machinery** in the domain
 instead of all mapping annotations:

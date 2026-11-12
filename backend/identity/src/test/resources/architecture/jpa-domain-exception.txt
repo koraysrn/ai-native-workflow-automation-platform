@@ -29,6 +29,7 @@ com.awap.identity.domain.Tenant
 com.awap.identity.domain.User
 com.awap.notification.domain.NotificationDelivery
 com.awap.notification.domain.NotificationTemplate
+com.awap.notification.domain.NotificationSuppression
 com.awap.notification.domain.NotificationTemplateVersion
 com.awap.organization.domain.Company
 com.awap.organization.domain.Department

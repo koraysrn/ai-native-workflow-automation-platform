@@ -47,6 +47,10 @@ matrix lives in `NotificationEventMatrix`; the built-in fallbacks are in
 
 ## Failure behaviour
 
+The delivery transports themselves — SMTP, SMS gateway and push — plus their error classification,
+provider ids and bounce suppression are documented in
+[notification-providers.md](notification-providers.md).
+
 - No recipient: logged, counted (`awap.notification.producer.missing-recipient`) and skipped. The
   task/workflow transaction still commits — a notification problem never fails the business action.
 - Missing template override: the built-in English template renders; if the body cannot be rendered

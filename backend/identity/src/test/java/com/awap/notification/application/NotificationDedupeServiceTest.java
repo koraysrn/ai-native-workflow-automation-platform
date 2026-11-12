@@ -225,7 +225,7 @@ class NotificationDedupeServiceTest {
     service(new NotificationDedupeProperties())
         .send(
             tenantId,
-            "a@example.com",
+            recipient(channel),
             channel,
             templateKey,
             "en",
@@ -233,6 +233,16 @@ class NotificationDedupeServiceTest {
             explicitKey,
             businessKey,
             eventType);
+  }
+
+  /** A channel-appropriate recipient: the dispatcher validates the format before the provider. */
+  private static String recipient(NotificationChannel channel) {
+    return switch (channel) {
+      case EMAIL -> "a@example.com";
+      case SMS -> "+905551234567";
+      case PUSH -> "cJk3m9-abcdefghijklmnop_1234567890";
+      case WEB, WEBHOOK -> "user-1";
+    };
   }
 
   private NotificationService service(NotificationDedupeProperties properties) {
@@ -269,8 +279,9 @@ class NotificationDedupeServiceTest {
     }
 
     @Override
-    public void dispatch(NotificationMessage message) {
+    public String dispatch(NotificationMessage message) {
       invocations.incrementAndGet();
+      return null;
     }
   }
 

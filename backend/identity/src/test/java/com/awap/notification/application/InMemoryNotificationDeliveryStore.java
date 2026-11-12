@@ -33,6 +33,7 @@ final class InMemoryNotificationDeliveryStore
     int attempts;
     String status;
     String lastError;
+    String providerMessageId;
     Instant leaseUntil;
     UUID leaseToken;
 
@@ -158,7 +159,7 @@ final class InMemoryNotificationDeliveryStore
 
   @Override
   public synchronized boolean markSent(
-      UUID deliveryId, UUID leaseToken, int attempts, Instant now) {
+      UUID deliveryId, UUID leaseToken, int attempts, Instant now, String providerMessageId) {
     Row row = rows.get(deliveryId);
     if (row == null || !isRetriableAndLeased(row, leaseToken)) {
       return false;
@@ -168,6 +169,7 @@ final class InMemoryNotificationDeliveryStore
     row.lastAttemptAt = now;
     row.nextAttemptAt = null;
     row.lastError = null;
+    row.providerMessageId = providerMessageId;
     row.leaseToken = null;
     row.leaseUntil = null;
     return true;

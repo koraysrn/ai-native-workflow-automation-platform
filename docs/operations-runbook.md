@@ -457,6 +457,30 @@ Rollback: the scheduler is additive; set `NOTIFICATION_RETRY_SCHEDULER_ENABLED=f
 retry loop, and revert V42 only after the migration has been released (destructive rollback drops
 the retry columns).
 
+### Transport failures (issue #204)
+
+The adapters classify provider errors before they reach this retry loop:
+
+- **Permanent** (4xx, SMTP auth failure, hard bounce, complaint, malformed recipient) — the row is
+  `FAILED` immediately and dead-lettered; retrying cannot succeed.
+- **Retryable** (timeout, 5xx, IO) — the row is scheduled here and the first attempt is bounded by
+  `awap.notification.providers.*.timeout-ms`.
+
+`awap.notification.suppressed{channel,reason}` counts deliveries dropped because the recipient is on
+the suppression list. A bounce/complaint inserts the recipient into `notification_suppressions`;
+inspect it before deleting a row (only after a verified fix or re-consent):
+
+```sql
+SET awap.tenant_id = '<tenant-uuid>';
+SELECT channel, recipient, reason, created_at
+FROM notification_suppressions
+ORDER BY created_at DESC;
+```
+
+`notification_deliveries.provider_message_id` stores the provider id returned by SMTP/HTTP, which is
+what the provider's bounce feed references. Configuration, payloads and secret handling are
+documented in [notification-providers.md](notification-providers.md).
+
 ## O12 — Notification de-duplication (TTL + business key)
 
 Every delivery row carries `dedupe_expires_at`. The `(tenant_id, dedupe_key)` unique constraint only

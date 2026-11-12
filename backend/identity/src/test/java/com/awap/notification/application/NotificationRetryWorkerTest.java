@@ -178,6 +178,108 @@ class NotificationRetryWorkerTest {
         .isEqualTo(1.0);
   }
 
+  @Test
+  void successStoresTheProviderMessageId() {
+    adapter.providerMessageId = "provider-msg-1";
+    UUID id =
+        store.addDueRow(TENANT, NotificationChannel.EMAIL, "a@example.com", NOW, 1, "RETRYING");
+    Issued issued = claim(id, NOW);
+
+    worker.deliver(issued.claim(), issued.token(), NOW);
+
+    assertThat(store.row(id).status).isEqualTo("SENT");
+    assertThat(store.row(id).providerMessageId).isEqualTo("provider-msg-1");
+  }
+
+  @Test
+  void aPermanentProviderFailureIsDeadLetteredWithoutAnotherAttempt() {
+    UUID id =
+        store.addDueRow(TENANT, NotificationChannel.EMAIL, "a@example.com", NOW, 1, "RETRYING");
+    adapter.failure = NotificationDeliveryException.permanent("SMS_REJECTED", "400 bad request");
+    Issued issued = claim(id, NOW);
+
+    worker.deliver(issued.claim(), issued.token(), NOW);
+
+    assertThat(store.row(id).status).isEqualTo("FAILED");
+    assertThat(store.row(id).nextAttemptAt).isNull();
+    assertThat(adapter.invocations.get()).isEqualTo(1);
+    verify(outbox).publish(eq(TENANT), eq("NOTIFICATION"), eq(id), eq("NOTIFICATION_DLQ"), any());
+  }
+
+  @Test
+  void aHardBounceBlocksTheRecipientAndMarksTheRowFailed() {
+    NotificationSuppressionStore suppressionStore = mock(NotificationSuppressionStore.class);
+    when(suppressionStore.suppressionReason(any(), any(), any()))
+        .thenReturn(java.util.Optional.empty());
+    NotificationRetryWorker workerWithStore = workerWith(suppressionStore);
+    UUID id =
+        store.addDueRow(TENANT, NotificationChannel.EMAIL, "a@example.com", NOW, 1, "RETRYING");
+    adapter.failure =
+        NotificationDeliveryException.blockedRecipient("SMTP_BOUNCE", "550 mailbox unavailable");
+    Issued issued = claim(id, NOW);
+
+    workerWithStore.deliver(issued.claim(), issued.token(), NOW);
+
+    assertThat(store.row(id).status).isEqualTo("FAILED");
+    verify(suppressionStore)
+        .suppress(TENANT, NotificationChannel.EMAIL, "a@example.com", "SMTP_BOUNCE");
+    assertThat(
+            registry
+                .get(NotificationRetryWorker.SUPPRESSED_METRIC)
+                .tag("channel", "EMAIL")
+                .tag("reason", "SMTP_BOUNCE")
+                .counter()
+                .count())
+        .isEqualTo(1.0);
+  }
+
+  @Test
+  void anAlreadySuppressedRecipientIsNotDispatchedAgain() {
+    NotificationSuppressionStore suppressionStore = mock(NotificationSuppressionStore.class);
+    when(suppressionStore.suppressionReason(TENANT, NotificationChannel.EMAIL, "a@example.com"))
+        .thenReturn(java.util.Optional.of("SMTP_BOUNCE"));
+    NotificationRetryWorker workerWithStore = workerWith(suppressionStore);
+    UUID id =
+        store.addDueRow(TENANT, NotificationChannel.EMAIL, "a@example.com", NOW, 1, "RETRYING");
+    Issued issued = claim(id, NOW);
+
+    workerWithStore.deliver(issued.claim(), issued.token(), NOW);
+
+    assertThat(store.row(id).status).isEqualTo("FAILED");
+    assertThat(adapter.invocations.get()).isZero();
+    verify(suppressionStore, never()).suppress(any(), any(), any(), any());
+  }
+
+  @Test
+  void aMalformedRecipientIsNotDispatchedToTheProvider() {
+    UUID id =
+        store.addDueRow(TENANT, NotificationChannel.EMAIL, "not-an-email", NOW, 1, "RETRYING");
+    Issued issued = claim(id, NOW);
+
+    worker.deliver(issued.claim(), issued.token(), NOW);
+
+    assertThat(store.row(id).status).isEqualTo("FAILED");
+    assertThat(store.row(id).lastError).contains("not a valid EMAIL address");
+    assertThat(adapter.invocations.get()).isZero();
+  }
+
+  private NotificationRetryWorker workerWith(NotificationSuppressionStore suppressionStore) {
+    KafkaTenantContext tenantContext = mock(KafkaTenantContext.class);
+    when(tenantContext.call(any(), any()))
+        .thenAnswer(invocation -> ((Supplier<?>) invocation.getArgument(1)).get());
+    return new NotificationRetryWorker(
+        List.of(adapter),
+        renderer,
+        store,
+        outbox,
+        tenantContext,
+        registry,
+        policy,
+        64,
+        Clock.fixed(NOW, ZoneOffset.UTC),
+        suppressionStore);
+  }
+
   private Issued claim(UUID id, Instant now) {
     UUID token = UUID.randomUUID();
     List<NotificationRetryClaim> claims =
@@ -193,6 +295,7 @@ class NotificationRetryWorkerTest {
   static final class CountingAdapter implements NotificationChannelAdapter {
     private final AtomicInteger invocations = new AtomicInteger();
     private RuntimeException failure;
+    private String providerMessageId;
 
     @Override
     public NotificationChannel channel() {
@@ -200,11 +303,12 @@ class NotificationRetryWorkerTest {
     }
 
     @Override
-    public void dispatch(NotificationMessage message) {
+    public String dispatch(NotificationMessage message) {
       invocations.incrementAndGet();
       if (failure != null) {
         throw failure;
       }
+      return providerMessageId;
     }
   }
 }
