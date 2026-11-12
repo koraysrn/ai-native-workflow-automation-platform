@@ -542,26 +542,31 @@ test("CI runs bash -n, shellcheck, the coverage suite and a dry run", async () =
   assert.match(workflow, /scripts\/apply-branch-protection\.sh --dry-run --repo "\$GITHUB_REPOSITORY"/);
 });
 
-test("break-glass log fully records incident #243 and its restores", async () => {
+test("break-glass log fully records incident #257 and its restores", async () => {
   const log = JSON.parse(await readFile(BREAK_GLASS_JSON, "utf8"));
-  assert.equal(log.incident, 243);
+  assert.equal(log.incident, 257);
   assert.equal(log.owner, "koraysrn");
-  assert.equal(log.expiry, "2026-11-11T23:59:59Z");
+  assert.equal(log.expiry, "2026-11-13T23:59:59Z");
   assert.equal(log.restore.approval_count_after, 1);
   assert.equal(log.restore.enforce_admins_after, true);
   assert.equal(log.post_incident.approval_count, 1);
   assert.equal(log.post_incident.enforce_admins, true);
+  assert.match(log.post_incident.main_ci_sha, /^[0-9a-f]{40}$/);
+  assert.equal(typeof log.post_incident.final_drift_success_run, "number");
   assert.match(log.scope, /only required_approving_review_count/i);
 
+  // Issue #257 covers the sequential pipeline #197-#205 plus the CI fix PR #258.
   const expected = [
-    [189, 241],
-    [190, 242],
-    [191, 245],
-    [192, 246],
-    [193, 247],
-    [194, 248],
-    [195, 249],
-    [196, 250],
+    [null, 258],
+    [197, 256],
+    [198, 260],
+    [199, 261],
+    [200, 262],
+    [201, 263],
+    [202, 264],
+    [203, 265],
+    [204, 266],
+    [205, 267],
   ];
   assert.deepEqual(
     log.merges.map((merge) => [merge.issue, merge.pr]),
@@ -580,8 +585,10 @@ test("break-glass log fully records incident #243 and its restores", async () =>
     assert.match(doc, new RegExp(`#${merge.pr}`));
     assert.ok(doc.includes(merge.merge_sha), `missing ${merge.merge_sha} in break-glass doc`);
   }
-  assert.match(doc, /Incident #243 is closed/);
+  assert.match(doc, /Incident #257 is closed/);
   assert.match(doc, /cannot authorise any\s+further merge/);
+  assert.match(doc, new RegExp(String(log.post_incident.final_drift_success_run)));
+  assert.ok(doc.includes(log.post_incident.main_ci_sha));
 
   const runbook = await readFile(RUNBOOK, "utf8");
   assert.match(runbook, /break-glass-log\.md/);

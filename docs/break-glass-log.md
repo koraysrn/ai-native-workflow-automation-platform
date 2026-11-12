@@ -1,7 +1,7 @@
-# Break-glass log — incident #243
+# Break-glass log — incident #257
 
-Incident [#243](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/243)
-authorised the single-maintainer break-glass merges for the sequential issues #189–#196.
+Incident [#257](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/257)
+authorised the single-maintainer break-glass merges for the sequential issues #197–#205.
 This page is the committed audit trail required by runbook
 [O22](operations-runbook.md#o22--branch-protection-drift-and-break-glass-issue-178).
 The machine-readable source is [`settings/break-glass-log.json`](../settings/break-glass-log.json);
@@ -11,10 +11,10 @@ the tests fail when this table and the JSON diverge.
 
 | Field | Value |
 |-------|-------|
-| Incident | #243 |
+| Incident | #257 |
 | Owner approving the exception | `@koraysrn` |
 | Reason | One maintainer; GitHub never counts a self-approval against `required_approving_review_count=1` |
-| Expiry | `2026-11-11T23:59:59Z` |
+| Expiry | `2026-11-13T23:59:59Z` |
 | Scope | Only the approval count is lowered to 0 for one merge at a time |
 | Unchanged | `enforce_admins=true`, required status checks, force-push/deletion blocks, drift workflow |
 | Restore | `scripts/apply-branch-protection.sh --apply` then `--verify` immediately after every merge |
@@ -26,14 +26,19 @@ lowered. Restore was executed immediately after the merge.
 
 | Issue | PR | Merge commit | Merged at (UTC) | Checks green | Restore `--apply` | Restore `--verify` |
 |-------|----|--------------|-----------------|--------------|-------------------|--------------------|
-| #189 | #241 | `74a74df82da0a5f101c4aaa5363ba74070ad6527` | 2026-11-10T13:38:45Z | yes | updated | matches |
-| #190 | #242 | `344cc72870fa79985c8c99c5b7abd22b745038ee` | 2026-11-10T14:31:50Z | yes | updated | matches |
-| #191 | #245 | `90323439a7befe62185dae6dec2845c06b380668` | 2026-11-10T15:14:50Z | yes | updated | matches |
-| #192 | #246 | `3c67c63e709bbf1e607ed839a1b3b8eecc131bc7` | 2026-11-10T15:44:22Z | yes | updated | matches |
-| #193 | #247 | `bc135de7d1298b8f10b1f445a3df821be9920546` | 2026-11-10T16:22:20Z | yes | updated | matches |
-| #194 | #248 | `ada3d8f765d4c6461001b54c1549e069f3f9de5a` | 2026-11-10T17:45:05Z | yes | updated | matches |
-| #195 | #249 | `cd4699294a62fb2b4d50efe4dbaca419b6f5cc8c` | 2026-11-10T18:44:06Z | yes | updated | matches |
-| #196 | #250 | `06fce80a3c3f0b3f8248e7f2e11e3fce2cd3cb71` | 2026-11-10T19:19:57Z | yes | updated | matches |
+| — (CI fix) | #258 | `8e5b408a415a8f4b56aead84f9de471834930c92` | 2026-11-11T15:47:36Z | yes | updated | matches |
+| #197 | #256 | `d8560f5dc8dc4d7a3fa8b87f91086b0e12f3846c` | 2026-11-11T16:35:03Z | yes | updated | matches |
+| #198 | #260 | `3163d070ceebcf67041a1d8567da40430857cf1d` | 2026-11-11T17:11:53Z | yes | updated | matches |
+| #199 | #261 | `556c1a3be1e508ce0ed92c68dafe5aaf38f0e682` | 2026-11-11T17:51:32Z | yes | updated | matches |
+| #200 | #262 | `0a5eb19fd8e19737d547bcb7ed52a5436bc793f6` | 2026-11-11T18:42:53Z | yes | updated | matches |
+| #201 | #263 | `d88971efc57e060f723a6d45461103ac4b1a1116` | 2026-11-11T22:15:20Z | yes | updated | matches |
+| #202 | #264 | `2c5c05a40b353f7f346cc7666ab8c342255cc7ce` | 2026-11-11T23:26:42Z | yes | updated | matches |
+| #203 | #265 | `bc01efb60fbb2eaaaa1164403d367ba116831fc4` | 2026-11-12T12:39:57Z | yes | updated | matches |
+| #204 | #266 | `f21823c96b7bb01df5674d7a4c7e942fc899a80d` | 2026-11-12T13:56:07Z | yes | updated | matches |
+| #205 | #267 | `aeed9e9a374f20174e114bce04d6901eaf9899fc` | 2026-11-12T14:29:32Z | yes | updated | matches |
+
+PR #258 (CI image build fix) carried no issue of its own but was part of the same sequential
+pipeline; it is recorded here for completeness.
 
 ## Post-incident proof
 
@@ -41,16 +46,18 @@ lowered. Restore was executed immediately after the merge.
 |-------|-------|
 | Live approval count | `1` |
 | `enforce_admins` | `true` |
-| Expected drift failure while the exception was active | run `42878185620` (restored immediately afterwards) |
-| Final drift run (green) | run `42884190955` |
-| Green `main` CI commit | `06fce80a3c3f0b3f8248e7f2e11e3fce2cd3cb71` |
+| Drift failure observed during the exception | none — every exception window was shorter than the drift schedule |
+| Last drift run inside the incident | run `43235325197` (green, `f21823c`) |
+| Final drift run (green) | run `43240412231` (green, `aeed9e9`) |
+| Green `main` CI run | run `43237731691` (green, `aeed9e9`) |
+| Green `main` CI commit | `aeed9e9a374f20174e114bce04d6901eaf9899fc` |
 
-The drift failure during the exception is expected and is documented in O22 as the reminder to
-restore protection; it is not muted or disabled.
+The previous incident [#243](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/243)
+covered issues #189–#196 and remains closed; its record is superseded by this one in the JSON log.
 
 ## Closure rule
 
-Incident #243 is closed by the governance PR that introduced this log. It cannot authorise any
+Incident #257 is closed by the governance PR that introduced this log. It cannot authorise any
 further merge. Every future single-maintainer break-glass must:
 
 1. open a **new** incident with its own reason, scope, owner and expiry;
