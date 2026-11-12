@@ -147,6 +147,31 @@ awap:
     max-body-bytes: ${NOTIFICATION_MAX_BODY_BYTES:262144}
     first-attempt-grace-ms: ${NOTIFICATION_FIRST_ATTEMPT_GRACE_MS:60000}
     retry-scheduler-enabled: ${NOTIFICATION_RETRY_SCHEDULER_ENABLED:true}
+    # Real delivery transports (issue #204). Disabled transports keep the log-only behaviour so a
+    # developer stack needs no provider credentials; enabling one without its host/endpoint/token
+    # fails fast at startup. Credentials come from env or Vault and are never logged.
+    # See docs/notification-providers.md.
+    providers:
+      email:
+        enabled: ${NOTIFICATION_EMAIL_ENABLED:false}
+        host: ${NOTIFICATION_SMTP_HOST:}
+        port: ${NOTIFICATION_SMTP_PORT:587}
+        username: ${NOTIFICATION_SMTP_USERNAME:}
+        password: ${NOTIFICATION_SMTP_PASSWORD:}
+        from: ${NOTIFICATION_EMAIL_FROM:no-reply@awap.local}
+        starttls: ${NOTIFICATION_SMTP_STARTTLS:true}
+        timeout-ms: ${NOTIFICATION_SMTP_TIMEOUT_MS:5000}
+      sms:
+        enabled: ${NOTIFICATION_SMS_ENABLED:false}
+        endpoint: ${NOTIFICATION_SMS_ENDPOINT:}
+        token: ${NOTIFICATION_SMS_TOKEN:}
+        sender: ${NOTIFICATION_SMS_SENDER:AWAP}
+        timeout-ms: ${NOTIFICATION_SMS_TIMEOUT_MS:5000}
+      push:
+        enabled: ${NOTIFICATION_PUSH_ENABLED:false}
+        endpoint: ${NOTIFICATION_PUSH_ENDPOINT:}
+        token: ${NOTIFICATION_PUSH_TOKEN:}
+        timeout-ms: ${NOTIFICATION_PUSH_TIMEOUT_MS:5000}
     # Active de-duplication window in seconds; a repeat inside it is suppressed.
     dedupe-window-seconds: ${NOTIFICATION_DEDUPE_WINDOW_SECONDS:3600}
     # Optional per-template overrides, e.g.:

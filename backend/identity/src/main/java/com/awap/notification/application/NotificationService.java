@@ -48,6 +48,9 @@ public class NotificationService {
 
   public static final String SUPPRESSED_METRIC = "awap.notification.dedupe.suppressed";
 
+  /** Deliveries dropped because the recipient was blocked by a bounce or complaint (issue #204). */
+  public static final String SUPPRESSED_RECIPIENT_METRIC = "awap.notification.suppressed";
+
   static final String DEFAULT_EVENT_TYPE = "NOTIFICATION_REQUESTED";
 
   private static final Logger log = LoggerFactory.getLogger(NotificationService.class);
@@ -64,6 +67,7 @@ public class NotificationService {
   private final MeterRegistry meterRegistry;
   private final NotificationDedupeKeyFactory dedupeKeyFactory;
   private final NotificationDedupeWindowResolver dedupeWindowResolver;
+  private final NotificationSuppressionStore suppressionStore;
 
   /** Test convenience: no persistence, default policy. */
   NotificationService(
@@ -90,6 +94,7 @@ public class NotificationService {
       NotificationDeliveryRepository deliveryRepository,
       NotificationDedupeKeyFactory dedupeKeyFactory,
       NotificationDedupeWindowResolver dedupeWindowResolver,
+      NotificationSuppressionStore suppressionStore,
       MeterRegistry meterRegistry,
       @Value("${awap.notification.retry-delays-ms:1000,5000,25000,120000,600000}")
           String retryDelays,
@@ -107,7 +112,8 @@ public class NotificationService {
         Clock.systemUTC(),
         meterRegistry,
         dedupeKeyFactory,
-        dedupeWindowResolver);
+        dedupeWindowResolver,
+        suppressionStore);
   }
 
   NotificationService(
@@ -213,6 +219,34 @@ public class NotificationService {
       MeterRegistry meterRegistry,
       NotificationDedupeKeyFactory dedupeKeyFactory,
       NotificationDedupeWindowResolver dedupeWindowResolver) {
+    this(
+        channelAdapters,
+        renderer,
+        outboxEventPublisher,
+        deliveryRepository,
+        retryPolicy,
+        maxBodyBytes,
+        firstAttemptGraceMs,
+        clock,
+        meterRegistry,
+        dedupeKeyFactory,
+        dedupeWindowResolver,
+        null);
+  }
+
+  NotificationService(
+      List<NotificationChannelAdapter> channelAdapters,
+      NotificationTemplateRenderer renderer,
+      OutboxEventPublisher outboxEventPublisher,
+      NotificationDeliveryRepository deliveryRepository,
+      NotificationRetryPolicy retryPolicy,
+      int maxBodyBytes,
+      long firstAttemptGraceMs,
+      Clock clock,
+      MeterRegistry meterRegistry,
+      NotificationDedupeKeyFactory dedupeKeyFactory,
+      NotificationDedupeWindowResolver dedupeWindowResolver,
+      NotificationSuppressionStore suppressionStore) {
     this.renderer = renderer;
     this.outboxEventPublisher = outboxEventPublisher;
     this.deliveryRepository = deliveryRepository;
@@ -223,6 +257,7 @@ public class NotificationService {
     this.meterRegistry = meterRegistry;
     this.dedupeKeyFactory = dedupeKeyFactory;
     this.dedupeWindowResolver = dedupeWindowResolver;
+    this.suppressionStore = suppressionStore;
     for (NotificationChannelAdapter adapter : channelAdapters) {
       adapters.put(adapter.channel(), adapter);
     }
@@ -349,30 +384,39 @@ public class NotificationService {
     NotificationMessage message =
         new NotificationMessage(tenantId, recipient, channel, rendered.subject(), body, recipient);
     long startedNanos = System.nanoTime();
+    String providerMessageId;
     try {
-      adapter.dispatch(message);
+      // Validation and the suppression check run before the provider call: a malformed or blocked
+      // recipient must never reach the provider and must never be retried.
+      NotificationRecipients.validate(message);
+      assertRecipientNotSuppressed(tenantId, channel, recipient);
+      providerMessageId = adapter.dispatch(message);
+    } catch (NotificationDeliveryException ex) {
+      if (ex.isPermanent()) {
+        if (ex.isRecipientBlocked()) {
+          blockRecipient(tenantId, channel, recipient, ex.getReason());
+        }
+        failPermanently(
+            delivery,
+            recipient,
+            channel,
+            effectiveKey,
+            ex.getReason(),
+            rootMessage(ex),
+            clock.instant());
+      } else {
+        retryLater(delivery, ex);
+      }
+      return;
     } catch (RuntimeException ex) {
-      Instant attemptAt = clock.instant();
-      delivery.recordAttempt(attemptAt);
-      delivery.markRetrying(
-          rootMessage(ex),
-          retryPolicy.nextAttemptAt(attemptAt, attemptAt, delivery.getAttempts()),
-          attemptAt);
-      persistExistingDelivery(delivery);
-      meterRegistry
-          .counter("awap.notification.attempts", "channel", channel.name(), "result", "failed")
-          .increment();
-      log.warn(
-          "Notification first attempt failed for channel {}; scheduled retry at {}: {}",
-          channel,
-          delivery.getNextAttemptAt(),
-          rootMessage(ex));
+      // Unclassified provider failures stay retryable for backwards compatibility.
+      retryLater(delivery, ex);
       return;
     }
 
     Instant sentAt = clock.instant();
     delivery.recordAttempt(sentAt);
-    delivery.markSent(sentAt);
+    delivery.markSent(sentAt, providerMessageId);
     persistExistingDelivery(delivery);
     outboxEventPublisher.publish(
         tenantId,
@@ -389,6 +433,64 @@ public class NotificationService {
             "attempts",
             delivery.getAttempts()));
     recordDispatchMetrics(channel, "sent", startedNanos);
+  }
+
+  /**
+   * Persists a retryable first-attempt failure; the scheduler performs the remaining attempts
+   * outside Kafka so a slow provider never blocks the consumer.
+   */
+  private void retryLater(NotificationDelivery delivery, RuntimeException ex) {
+    Instant attemptAt = clock.instant();
+    delivery.recordAttempt(attemptAt);
+    delivery.markRetrying(
+        rootMessage(ex),
+        retryPolicy.nextAttemptAt(attemptAt, attemptAt, delivery.getAttempts()),
+        attemptAt);
+    persistExistingDelivery(delivery);
+    meterRegistry
+        .counter(
+            "awap.notification.attempts",
+            "channel",
+            delivery.getChannel().name(),
+            "result",
+            "failed")
+        .increment();
+    log.warn(
+        "Notification first attempt failed for channel {}; scheduled retry at {}: {}",
+        delivery.getChannel(),
+        delivery.getNextAttemptAt(),
+        rootMessage(ex));
+  }
+
+  /** Drops a delivery whose recipient was blocked by an earlier bounce/complaint (issue #204). */
+  private void assertRecipientNotSuppressed(
+      UUID tenantId, NotificationChannel channel, String recipient) {
+    if (suppressionStore == null) {
+      return;
+    }
+    suppressionStore
+        .suppressionReason(tenantId, channel, recipient)
+        .ifPresent(
+            reason -> {
+              throw NotificationDeliveryException.alreadySuppressed(
+                  "Recipient is suppressed after " + reason + ".");
+            });
+  }
+
+  /** Records a permanent bounce/complaint so later deliveries are dropped before dispatch. */
+  private void blockRecipient(
+      UUID tenantId, NotificationChannel channel, String recipient, String reason) {
+    if (suppressionStore == null) {
+      return;
+    }
+    suppressionStore.suppress(tenantId, channel, recipient, reason);
+    meterRegistry
+        .counter(SUPPRESSED_RECIPIENT_METRIC, "channel", channel.name(), "reason", reason)
+        .increment();
+    log.warn(
+        "Recipient on channel {} was blocked after {}; future sends are suppressed.",
+        channel,
+        reason);
   }
 
   /**

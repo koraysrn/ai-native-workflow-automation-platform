@@ -81,13 +81,20 @@ function parseAttributes(fragment) {
  * Parses one or more JaCoCo XML reports into a map keyed by the package-relative
  * source path (for example `com/awap/common/api/ErrorCode.java`). The value maps
  * executable line numbers to their covered flag.
+ *
+ * A declaration-only source file (a pure interface, an annotation, a constants
+ * holder) is emitted by JaCoCo as `<sourcefile name="X.java"/>` because it has no
+ * executable lines. Such a file is recorded with an empty map: its changed lines
+ * are declarations, so they are neither covered nor uncovered. A file that is
+ * absent from the report entirely still counts as uncovered, because that means
+ * it was never executed by the test suite (see `evaluateChangedLines`).
  */
 export function parseJacocoXml(xmlText, target = new Map()) {
   for (const packageMatch of xmlText.matchAll(/<package name="([^"]+)">([\s\S]*?)<\/package>/g)) {
     const packageName = packageMatch[1];
     const packageBody = packageMatch[2];
     for (const sourceMatch of packageBody.matchAll(
-      /<sourcefile name="([^"]+)">([\s\S]*?)<\/sourcefile>/g,
+      /<sourcefile name="([^"]+)"\s*(?:\/>|>([\s\S]*?)<\/sourcefile>)/g,
     )) {
       const key = `${packageName}/${sourceMatch[1]}`;
       let lines = target.get(key);
@@ -95,7 +102,7 @@ export function parseJacocoXml(xmlText, target = new Map()) {
         lines = new Map();
         target.set(key, lines);
       }
-      for (const lineMatch of sourceMatch[2].matchAll(/<line\s+([^>]*?)\/?>/g)) {
+      for (const lineMatch of (sourceMatch[2] ?? "").matchAll(/<line\s+([^>]*?)\/?>/g)) {
         const attributes = parseAttributes(lineMatch[1]);
         const nr = Number(attributes.nr);
         const missed = Number(attributes.mi ?? 0);

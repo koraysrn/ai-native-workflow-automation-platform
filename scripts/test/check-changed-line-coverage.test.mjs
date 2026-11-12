@@ -42,6 +42,24 @@ test("parseJacocoXml maps executable lines and ignores comments", () => {
   assert.equal(demo.has(12), false);
 });
 
+test("a declaration-only interface has no executable lines and is skipped", () => {
+  const xml = `<report name="awap">
+  <package name="com/awap/demo">
+    <sourcefile name="Api.java"/>
+    <class name="com/awap/demo/Api"/>
+  </package>
+</report>`;
+  const coverage = parseJacocoXml(xml);
+  assert.deepEqual([...coverage.get("com/awap/demo/Api.java").keys()], []);
+
+  const path = "backend/identity/src/main/java/com/awap/demo/Api.java";
+  const changed = new Map([[path, new Set([4, 5, 6])]]);
+  const result = evaluateChangedLines(changed, coverage, 100);
+  assert.equal(result.passed, true);
+  assert.equal(result.executable, 0);
+  assert.equal(result.files.length, 0);
+});
+
 test("parseDiff collects added lines for relevant Java files only", () => {
   const path = "backend/identity/src/main/java/com/awap/demo/Demo.java";
   const changed = parseDiff(diffFor(path, 10, 3));

@@ -21,7 +21,8 @@ public class WebChannelAdapter implements NotificationChannelAdapter {
   }
 
   @Override
-  public void dispatch(NotificationMessage message) {
+  public String dispatch(NotificationMessage message) {
     log.info("WEB -> {} bytes={}", message.recipient(), message.body().length());
+    return null;
   }
 }

@@ -87,6 +87,17 @@
             <artifactId>spring-boot-starter-json</artifactId>
         </dependency>
         <dependency>
+            <!-- Issue #204: real SMTP delivery through Jakarta Mail (angus-mail). -->
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+        <dependency>
+            <!-- SMTP reply codes are only exposed by the Jakarta Mail implementation that the
+                 starter already ships; the version is managed by the Boot BOM. -->
+            <groupId>org.eclipse.angus</groupId>
+            <artifactId>angus-mail</artifactId>
+        </dependency>
+        <dependency>
             <groupId>org.aspectj</groupId>
             <artifactId>aspectjweaver</artifactId>
         </dependency>
@@ -215,6 +226,13 @@
         <dependency>
             <groupId>org.springframework.kafka</groupId>
             <artifactId>spring-kafka-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <!-- Issue #204: asserts the real SMTP wire payload (subject, body, Message-ID). -->
+            <groupId>com.icegreen</groupId>
+            <artifactId>greenmail-junit5</artifactId>
+            <version>2.1.15</version>
             <scope>test</scope>
         </dependency>
         <dependency>

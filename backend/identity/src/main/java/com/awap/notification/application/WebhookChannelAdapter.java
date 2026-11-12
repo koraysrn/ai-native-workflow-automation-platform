@@ -31,7 +31,7 @@ public class WebhookChannelAdapter implements NotificationChannelAdapter {
   }
 
   @Override
-  public void dispatch(NotificationMessage message) {
+  public String dispatch(NotificationMessage message) {
     if (message.webhookUrl() == null || message.webhookUrl().isBlank()) {
       throw new AwapException(
           ErrorCode.GENERIC_INTERNAL_ERROR,
@@ -39,6 +39,8 @@ public class WebhookChannelAdapter implements NotificationChannelAdapter {
           "Webhook notification is missing a target URL.");
     }
     webhookClient.post(message.webhookUrl(), toJson(message));
+    // The receiver does not return an id; the webhook_deliveries row is the provider record.
+    return null;
   }
 
   private String toJson(NotificationMessage message) {

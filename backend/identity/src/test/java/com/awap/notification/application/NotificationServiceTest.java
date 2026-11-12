@@ -253,6 +253,129 @@ class NotificationServiceTest {
         .isInstanceOf(AwapException.class);
   }
 
+  @Test
+  void theProviderMessageIdIsPersistedOnSuccess() {
+    adapter.providerMessageId = "<abc@awap.test>";
+
+    service.send(
+        TENANT, "a@example.com", NotificationChannel.EMAIL, "welcome", "en", null, "dedupe-1");
+
+    assertThat(lastSaved.get().getStatus()).isEqualTo("SENT");
+    assertThat(lastSaved.get().getProviderMessageId()).isEqualTo("<abc@awap.test>");
+  }
+
+  @Test
+  void aMalformedRecipientIsRejectedBeforeTheProviderCall() {
+    service.send(
+        TENANT, "not-an-email", NotificationChannel.EMAIL, "welcome", "en", null, "dedupe-1");
+
+    NotificationDelivery delivery = lastSaved.get();
+    assertThat(delivery.getStatus()).isEqualTo("FAILED");
+    assertThat(delivery.getLastError()).contains("not a valid EMAIL address");
+    assertThat(adapter.invocations).isZero();
+    verify(outbox)
+        .publish(
+            eq(TENANT), eq("NOTIFICATION"), eq(delivery.getId()), eq("NOTIFICATION_DLQ"), any());
+  }
+
+  @Test
+  void aSuppressedRecipientIsDroppedBeforeTheProviderCall() {
+    NotificationSuppressionStore store = mock(NotificationSuppressionStore.class);
+    when(store.suppressionReason(TENANT, NotificationChannel.EMAIL, "a@example.com"))
+        .thenReturn(Optional.of("SMTP_BOUNCE"));
+
+    serviceWith(store)
+        .send(
+            TENANT, "a@example.com", NotificationChannel.EMAIL, "welcome", "en", null, "dedupe-1");
+
+    NotificationDelivery delivery = lastSaved.get();
+    assertThat(delivery.getStatus()).isEqualTo("FAILED");
+    assertThat(delivery.getLastError()).contains("suppressed");
+    assertThat(adapter.invocations).isZero();
+    verify(store, never()).suppress(any(), any(), any(), any());
+  }
+
+  @Test
+  void aHardBounceRecordsASuppressionAndCountsIt() {
+    NotificationSuppressionStore store = mock(NotificationSuppressionStore.class);
+    when(store.suppressionReason(any(), any(), any())).thenReturn(Optional.empty());
+    adapter.failure =
+        NotificationDeliveryException.blockedRecipient("SMTP_BOUNCE", "550 mailbox unavailable");
+
+    serviceWith(store)
+        .send(
+            TENANT, "a@example.com", NotificationChannel.EMAIL, "welcome", "en", null, "dedupe-1");
+
+    assertThat(lastSaved.get().getStatus()).isEqualTo("FAILED");
+    verify(store).suppress(TENANT, NotificationChannel.EMAIL, "a@example.com", "SMTP_BOUNCE");
+    assertThat(
+            meterRegistry
+                .get(NotificationService.SUPPRESSED_RECIPIENT_METRIC)
+                .tag("channel", "EMAIL")
+                .tag("reason", "SMTP_BOUNCE")
+                .counter()
+                .count())
+        .isEqualTo(1.0d);
+  }
+
+  @Test
+  void aPermanentProviderRejectionIsNotRetried() {
+    NotificationSuppressionStore store = mock(NotificationSuppressionStore.class);
+    when(store.suppressionReason(any(), any(), any())).thenReturn(Optional.empty());
+    adapter.failure = NotificationDeliveryException.permanent("SMS_REJECTED", "400 bad request");
+
+    serviceWith(store)
+        .send(
+            TENANT, "a@example.com", NotificationChannel.EMAIL, "welcome", "en", null, "dedupe-1");
+
+    NotificationDelivery delivery = lastSaved.get();
+    assertThat(delivery.getStatus()).isEqualTo("FAILED");
+    assertThat(delivery.getNextAttemptAt()).isNull();
+    verify(store, never()).suppress(any(), any(), any(), any());
+    verify(outbox)
+        .publish(
+            eq(TENANT), eq("NOTIFICATION"), eq(delivery.getId()), eq("NOTIFICATION_DLQ"), any());
+  }
+
+  @Test
+  void aBounceWithoutASuppressionStoreStillFailsPermanently() {
+    adapter.failure =
+        NotificationDeliveryException.blockedRecipient("SMTP_BOUNCE", "550 mailbox unavailable");
+
+    service.send(
+        TENANT, "a@example.com", NotificationChannel.EMAIL, "welcome", "en", null, "dedupe-1");
+
+    assertThat(lastSaved.get().getStatus()).isEqualTo("FAILED");
+  }
+
+  @Test
+  void aRetryableProviderErrorIsScheduledForRetry() {
+    adapter.failure = NotificationDeliveryException.retryable("SMTP_IO", "read timed out");
+
+    service.send(
+        TENANT, "a@example.com", NotificationChannel.EMAIL, "welcome", "en", null, "dedupe-1");
+
+    NotificationDelivery delivery = lastSaved.get();
+    assertThat(delivery.getStatus()).isEqualTo("RETRYING");
+    assertThat(delivery.getNextAttemptAt()).isEqualTo(NOW.plusSeconds(1));
+  }
+
+  private NotificationService serviceWith(NotificationSuppressionStore store) {
+    return new NotificationService(
+        List.of(adapter),
+        renderer,
+        outbox,
+        repository,
+        NotificationRetryPolicy.defaults(),
+        64,
+        60_000L,
+        Clock.fixed(NOW, ZoneOffset.UTC),
+        meterRegistry,
+        new NotificationDedupeKeyFactory(),
+        new NotificationDedupeWindowResolver(new NotificationDedupeProperties(), renderer),
+        store);
+  }
+
   private String dedupeKey(String explicitKey) {
     return new NotificationDedupeKeyFactory()
         .build(
@@ -278,6 +401,7 @@ class NotificationServiceTest {
   private static final class CountingAdapter implements NotificationChannelAdapter {
     private int invocations;
     private RuntimeException failure;
+    private String providerMessageId;
 
     @Override
     public NotificationChannel channel() {
@@ -285,11 +409,12 @@ class NotificationServiceTest {
     }
 
     @Override
-    public void dispatch(NotificationMessage message) {
+    public String dispatch(NotificationMessage message) {
       invocations++;
       if (failure != null) {
         throw failure;
       }
+      return providerMessageId;
     }
   }
 }

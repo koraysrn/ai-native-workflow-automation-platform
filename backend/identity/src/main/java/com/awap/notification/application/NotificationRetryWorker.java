@@ -34,6 +34,7 @@ public class NotificationRetryWorker {
   public static final String PERMANENT_FAILURES_METRIC =
       "awap.notification.retry.permanent.failures";
   public static final String DLQ_METRIC = "awap.notification.retry.dlq";
+  public static final String SUPPRESSED_METRIC = "awap.notification.suppressed";
 
   private static final Logger log = LoggerFactory.getLogger(NotificationRetryWorker.class);
 
@@ -47,6 +48,7 @@ public class NotificationRetryWorker {
   private final NotificationRetryPolicy retryPolicy;
   private final int maxBodyBytes;
   private final Clock clock;
+  private final NotificationSuppressionStore suppressionStore;
 
   @Autowired
   public NotificationRetryWorker(
@@ -55,6 +57,7 @@ public class NotificationRetryWorker {
       NotificationDeliveryStateStore stateStore,
       OutboxEventPublisher outboxEventPublisher,
       KafkaTenantContext tenantContext,
+      NotificationSuppressionStore suppressionStore,
       MeterRegistry meterRegistry,
       @Value("${awap.notification.retry-delays-ms:1000,5000,25000,120000,600000}")
           String retryDelays,
@@ -69,7 +72,8 @@ public class NotificationRetryWorker {
         meterRegistry,
         NotificationRetryPolicy.fromCommaSeparated(retryDelays, maxAttempts),
         maxBodyBytes,
-        Clock.systemUTC());
+        Clock.systemUTC(),
+        suppressionStore);
   }
 
   NotificationRetryWorker(
@@ -82,6 +86,30 @@ public class NotificationRetryWorker {
       NotificationRetryPolicy retryPolicy,
       int maxBodyBytes,
       Clock clock) {
+    this(
+        channelAdapters,
+        renderer,
+        stateStore,
+        outboxEventPublisher,
+        tenantContext,
+        meterRegistry,
+        retryPolicy,
+        maxBodyBytes,
+        clock,
+        null);
+  }
+
+  NotificationRetryWorker(
+      List<NotificationChannelAdapter> channelAdapters,
+      NotificationTemplateRenderer renderer,
+      NotificationDeliveryStateStore stateStore,
+      OutboxEventPublisher outboxEventPublisher,
+      KafkaTenantContext tenantContext,
+      MeterRegistry meterRegistry,
+      NotificationRetryPolicy retryPolicy,
+      int maxBodyBytes,
+      Clock clock,
+      NotificationSuppressionStore suppressionStore) {
     this.renderer = renderer;
     this.stateStore = stateStore;
     this.outboxEventPublisher = outboxEventPublisher;
@@ -90,6 +118,7 @@ public class NotificationRetryWorker {
     this.retryPolicy = retryPolicy;
     this.maxBodyBytes = maxBodyBytes;
     this.clock = clock;
+    this.suppressionStore = suppressionStore;
     for (NotificationChannelAdapter adapter : channelAdapters) {
       adapters.put(adapter.channel(), adapter);
     }
@@ -138,8 +167,25 @@ public class NotificationRetryWorker {
             body,
             claim.recipient());
     int attempts = claim.attempts() + 1;
+    String providerMessageId;
     try {
-      adapter.dispatch(message);
+      // A retry must not re-send to a recipient that was blocked by a bounce or complaint, and a
+      // malformed recipient can never succeed, so both are rejected before the provider call.
+      NotificationRecipients.validate(message);
+      assertRecipientNotSuppressed(claim);
+      providerMessageId = adapter.dispatch(message);
+    } catch (NotificationDeliveryException ex) {
+      counter(ATTEMPTS_METRIC).increment();
+      counter(FAILURES_METRIC).increment();
+      if (ex.isPermanent()) {
+        if (ex.isRecipientBlocked()) {
+          blockRecipient(claim, ex.getReason());
+        }
+        failPermanently(claim, leaseToken, ex.getReason(), rootMessage(ex));
+      } else {
+        handleFailure(claim, leaseToken, attempts, rootMessage(ex), now);
+      }
+      return;
     } catch (RuntimeException ex) {
       counter(ATTEMPTS_METRIC).increment();
       counter(FAILURES_METRIC).increment();
@@ -153,7 +199,8 @@ public class NotificationRetryWorker {
         tenantContext.call(
             claim.tenantId(),
             () -> {
-              boolean updated = stateStore.markSent(claim.id(), leaseToken, attempts, sentAt);
+              boolean updated =
+                  stateStore.markSent(claim.id(), leaseToken, attempts, sentAt, providerMessageId);
               if (updated) {
                 outboxEventPublisher.publish(
                     claim.tenantId(),
@@ -276,6 +323,35 @@ public class NotificationRetryWorker {
         claim.tenantId(), "NOTIFICATION", claim.id(), "NOTIFICATION_FAILED", payload);
     outboxEventPublisher.publish(
         claim.tenantId(), "NOTIFICATION", claim.id(), "NOTIFICATION_DLQ", payload);
+  }
+
+  /** Drops a retry whose recipient was blocked by a bounce/complaint (issue #204). */
+  private void assertRecipientNotSuppressed(NotificationRetryClaim claim) {
+    if (suppressionStore == null) {
+      return;
+    }
+    suppressionStore
+        .suppressionReason(claim.tenantId(), claim.channel(), claim.recipient())
+        .ifPresent(
+            reason -> {
+              throw NotificationDeliveryException.alreadySuppressed(
+                  "Recipient is suppressed after " + reason + ".");
+            });
+  }
+
+  /** Records a permanent bounce/complaint so later deliveries are dropped before dispatch. */
+  private void blockRecipient(NotificationRetryClaim claim, String reason) {
+    if (suppressionStore == null) {
+      return;
+    }
+    suppressionStore.suppress(claim.tenantId(), claim.channel(), claim.recipient(), reason);
+    meterRegistry
+        .counter(SUPPRESSED_METRIC, "channel", claim.channel().name(), "reason", reason)
+        .increment();
+    log.warn(
+        "Recipient on channel {} was blocked after {}; future sends are suppressed.",
+        claim.channel(),
+        reason);
   }
 
   private void conflict(String detail, NotificationRetryClaim claim) {

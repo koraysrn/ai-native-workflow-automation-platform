@@ -29,8 +29,9 @@ public class JpaNotificationDeliveryStateStore implements NotificationDeliverySt
   }
 
   @Override
-  public boolean markSent(UUID deliveryId, UUID leaseToken, int attempts, Instant now) {
-    return repository.applySent(deliveryId, leaseToken, attempts, now) == 1;
+  public boolean markSent(
+      UUID deliveryId, UUID leaseToken, int attempts, Instant now, String providerMessageId) {
+    return repository.applySent(deliveryId, leaseToken, attempts, now, providerMessageId) == 1;
   }
 
   @Override
