@@ -68,9 +68,9 @@ abstract class HttpProviderAdapter implements NotificationChannelAdapter {
       this.target = null;
       return;
     }
-    requireConfigured(providerName, endpoint, token);
+    String configuredEndpoint = requireConfigured(providerName, endpoint, token);
     try {
-      this.target = URI.create(endpoint.trim());
+      this.target = URI.create(configuredEndpoint);
     } catch (IllegalArgumentException ex) {
       throw new IllegalStateException(
           "awap.notification.providers."
@@ -172,7 +172,8 @@ abstract class HttpProviderAdapter implements NotificationChannelAdapter {
     return null;
   }
 
-  private static void requireConfigured(String providerName, String endpoint, String token) {
+  /** Returns the trimmed endpoint or fails fast; never returns null. */
+  private static String requireConfigured(String providerName, String endpoint, String token) {
     if (endpoint == null || endpoint.isBlank() || token == null || token.isBlank()) {
       throw new IllegalStateException(
           "awap.notification.providers."
@@ -180,5 +181,6 @@ abstract class HttpProviderAdapter implements NotificationChannelAdapter {
               + " is enabled but endpoint/token are missing; supply them from the environment or"
               + " Vault.");
     }
+    return endpoint.trim();
   }
 }
