@@ -267,6 +267,10 @@ public class OutboxRelayService {
       case "WORKFLOW_INSTANCE_STATE" -> "workflow.instance.events";
       case "SUB_PROCESS_COMPLETED" -> "workflow.subprocess.events";
       case "NOTIFICATION_REQUESTED" -> "notification.send";
+      // Issue #205: an exhausted or permanently failed delivery goes to its own dead-letter
+      // topic, which the anchored *.dlq subscription already consumes. Before this mapping both
+      // events fell through to workflow.events and were silently lost to DLQ operators.
+      case "NOTIFICATION_FAILED", "NOTIFICATION_DLQ" -> "notification.send.dlq";
       case "DOCUMENT_CHANGED" -> "document.events";
       case "ANALYTICS_EVENT" -> "analytics.events";
       case "SAGA_COMPENSATION_DLQ" -> "workflow.saga.events.dlq";

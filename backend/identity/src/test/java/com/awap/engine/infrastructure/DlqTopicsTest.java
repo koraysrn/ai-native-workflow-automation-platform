@@ -24,6 +24,16 @@ class DlqTopicsTest {
   }
 
   @Test
+  void theNotificationDeadLetterTopicIsCoveredAndTagged() {
+    DlqTopicSubscription subscription =
+        new DlqTopicSubscription(true, DlqTopics.LEGACY_TOPIC, DlqTopics.PER_TOPIC_PATTERN);
+
+    assertThat(subscription.matches("notification.send.dlq")).isTrue();
+    assertThat(DlqTopics.metricTag("notification.send.dlq", DlqTopics.DEFAULT_KNOWN_TOPICS))
+        .isEqualTo("notification.send.dlq");
+  }
+
+  @Test
   void disablingTheLegacyFlagKeepsThePerTopicPathWorking() {
     DlqTopicSubscription subscription =
         new DlqTopicSubscription(false, DlqTopics.LEGACY_TOPIC, DlqTopics.PER_TOPIC_PATTERN);

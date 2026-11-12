@@ -220,6 +220,20 @@ groups:
           description: "{{ $value }} render failure(s) in the last 5 minutes; a tenant template has a malformed or unknown placeholder."
           runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#notification-templates-cache-and-rendering-metrics"
 
+      # Issue #205: exhausted and permanently failed deliveries are published to
+      # notification.send.dlq and counted by the anchored *.dlq consumer. A single transient failure
+      # (1-3 records in 15m) is expected and must not page anyone; the alert needs a real backlog.
+      - alert: AwapNotificationDlqGrowth
+        expr: |
+          sum(increase(awap_dlq_messages_total{topic="notification.send.dlq"}[15m])) > 3
+        for: 10m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Notification dead-letter topic is growing"
+          description: "{{ $value }} notification deliveries were dead-lettered in 15 minutes; follow runbook O11 to inspect and replay them."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o11--notification-retries-issue-119"
+
   - name: awap-outbox
     rules:
       # A stale claim means a relay died between claiming and publishing (#121). Reconciliation

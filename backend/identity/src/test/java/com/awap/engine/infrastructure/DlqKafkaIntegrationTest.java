@@ -69,11 +69,13 @@ class DlqKafkaIntegrationTest {
           "workflow.instance.events.dlq",
           "backlog.events.dlq",
           "legacy.copy.source.dlq",
+          "notification.send.dlq",
           "not-a-dlq-topic",
           "awap.legacy.dlq");
 
   private static final String KNOWN_TOPICS =
-      "workflow.task.events,workflow.instance.events,analytics.events,backlog.events";
+      "workflow.task.events,workflow.instance.events,analytics.events,backlog.events,"
+          + "notification.send";
 
   @TempDir Path tempDir;
 
@@ -221,12 +223,36 @@ class DlqKafkaIntegrationTest {
     }
   }
 
+  @Test
+  @Order(6)
+  void notificationDeadLettersAreConsumedByTheAnchoredPattern() throws Exception {
+    SimpleMeterRegistry registry = new SimpleMeterRegistry();
+    DlqMessageHandler handler = handler(registry, tempDir.resolve("q/notification.jsonl"));
+
+    try (RunningListener listener = listener(handler, true)) {
+      produce(
+          "notification.send.dlq",
+          "{\"deliveryId\":\"11111111-1111-1111-1111-111111111111\",\"dedupeKey\":\"k-1\","
+              + "\"channel\":\"EMAIL\",\"attempts\":5,\"reason\":\"EXHAUSTED\"}");
+
+      await(
+          "notification dlq counter",
+          Duration.ofSeconds(20),
+          () -> received(registry, "notification.send.dlq") == 1.0);
+
+      assertThat(quarantined(registry, "notification.send.dlq")).isZero();
+      assertThat(endOffset("notification.send.dlq")).isEqualTo(1L);
+      assertThat(listener.isRunning()).isTrue();
+    }
+  }
+
   private DlqMessageHandler handler(MeterRegistry registry, Path quarantine) {
     return new DlqMessageHandler(
         new DlqMetrics(registry, KNOWN_TOPICS),
         new DlqMessageInspector(new ObjectMapper()),
         new DlqQuarantineStore(quarantine),
-        new DlqMessageDeduplicator());
+        new DlqMessageDeduplicator(),
+        new DlqNotificationCorrelation(new ObjectMapper()));
   }
 
   private RunningListener listener(DlqMessageHandler handler, boolean legacyEnabled) {

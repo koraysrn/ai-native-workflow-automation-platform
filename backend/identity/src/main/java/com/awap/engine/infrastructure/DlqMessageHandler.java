@@ -23,16 +23,19 @@ public class DlqMessageHandler {
   private final DlqMessageInspector inspector;
   private final DlqQuarantineStore quarantineStore;
   private final DlqMessageDeduplicator deduplicator;
+  private final DlqNotificationCorrelation correlation;
 
   public DlqMessageHandler(
       DlqMetrics metrics,
       DlqMessageInspector inspector,
       DlqQuarantineStore quarantineStore,
-      DlqMessageDeduplicator deduplicator) {
+      DlqMessageDeduplicator deduplicator,
+      DlqNotificationCorrelation correlation) {
     this.metrics = metrics;
     this.inspector = inspector;
     this.quarantineStore = quarantineStore;
     this.deduplicator = deduplicator;
+    this.correlation = correlation;
   }
 
   public void handle(ConsumerRecord<String, String> record) {
@@ -62,6 +65,10 @@ public class DlqMessageHandler {
         record.partition(),
         record.offset(),
         record.value() == null ? 0 : record.value().length());
+    // A notification dead letter is correlated with its delivery row (issue #205): the record key
+    // is the delivery id and the payload carries the dedupe key, channel, attempts and reason.
+    correlation.logCorrelation(
+        topic, record.partition(), record.offset(), record.key(), record.value());
   }
 
   private void quarantine(String topic, ConsumerRecord<String, String> record, String reason) {

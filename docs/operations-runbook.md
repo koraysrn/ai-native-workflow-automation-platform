@@ -481,6 +481,65 @@ ORDER BY created_at DESC;
 what the provider's bounce feed references. Configuration, payloads and secret handling are
 documented in [notification-providers.md](notification-providers.md).
 
+### Dead letters and safe replay (issue #205)
+
+`NOTIFICATION_FAILED` and `NOTIFICATION_DLQ` are published to **`notification.send.dlq`** (the
+delivery request stays on `notification.send`). The topic matches the anchored `*.dlq` pattern, so
+`DlqConsumer` records it:
+
+| Signal | Meaning |
+|---|---|
+| `awap.dlq.messages{topic="notification.send.dlq"}` | dead letters consumed (the alert uses this) |
+| `awap.dlq.quarantined{topic="notification.send.dlq"}` | payloads that could not be parsed |
+| `awap.dlq.duplicates{topic="notification.send.dlq"}` | redelivered offsets (idempotent skip) |
+| `awap.notification.retry.dlq` | deliveries that exhausted retries or failed permanently |
+
+`AwapNotificationDlqGrowth` fires only above **3 records in 15 minutes held for 10 minutes**, so a
+single transient failure never pages anyone.
+
+Every record carries the correlation fields the producer wrote: `deliveryId` (also the Kafka record
+key), `dedupeKey`, `channel`, `attempts`, `reason`, `lastError`. The consumer logs them with the
+record's own `topic`/`partition`/`offset`, and never republishes (a poison record is quarantined,
+not rethrown), so the DLQ cannot loop.
+
+Inspect a dead letter:
+
+```sh
+kubectl -n awap exec -it kafka-0 -- kafka-console-consumer.sh \
+  --bootstrap-server localhost:9092 --topic notification.send.dlq --from-beginning \
+  --property print.key=true --max-messages 10
+```
+
+Export it as JSON lines (`{"topic","partition","offset","key","value"}`) and export the delivery
+rows the payloads reference, then rehearse with the replay tool:
+
+```sh
+# 1. Export the DLQ records to dlq.jsonl and the delivery rows to rows.json
+#    (rows: [{"id": "<deliveryId>", "status": "FAILED", "providerMessageId": null}], one per record).
+# 2. Dry run - prints the plan and writes nothing.
+node scripts/notification-dlq-replay.mjs --export dlq.jsonl --delivery-rows rows.json \
+  --out replay.jsonl --dry-run
+
+# 3. Replay for real: one `notification.send` command per safe record plus a ledger entry.
+node scripts/notification-dlq-replay.mjs --export dlq.jsonl --delivery-rows rows.json \
+  --out replay.jsonl --ledger replay.jsonl.ledger.jsonl
+```
+
+The tool suppresses, and never resends:
+
+- a record that is not on `notification.send.dlq`;
+- a payload that is not a JSON object, or a record without a delivery id (written to
+  `replay.jsonl.quarantine.jsonl`, exit code stays 0 so the rest of the batch continues);
+- a delivery row that is `SENT` or already has `providerMessageId` (already delivered);
+- a missing delivery row, or an unexpected status;
+- a record it already replayed (the ledger holds a SHA-256 idempotency key of
+  `deliveryId:dedupeKey`), so re-running the command cannot double-send.
+
+Feed `replay.jsonl` back through the producer path (or the outbox) only after the root cause is
+fixed: a dead letter is usually an unrenderable template, an oversized body, a permanent provider
+rejection or an exhausted retry budget. A suppressed/bounced recipient stays suppressed - clear the
+`notification_suppressions` row deliberately only after a verified fix or re-consent.
+
 ## O12 — Notification de-duplication (TTL + business key)
 
 Every delivery row carries `dedupe_expires_at`. The `(tenant_id, dedupe_key)` unique constraint only

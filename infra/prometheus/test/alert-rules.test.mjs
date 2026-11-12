@@ -37,11 +37,24 @@ test("new workflow, notification, webhook and outbox alerts exist", async () => 
     "AwapWorkflowFailureRateHigh",
     "AwapNotificationRetryLagHigh",
     "AwapNotificationTemplateRenderFailures",
+    "AwapNotificationDlqGrowth",
     "AwapWebhookDeadGrowth",
     "AwapOutboxBacklogStuck",
   ]) {
     assert.ok(yaml.includes(`- alert: ${alert}`), `missing alert ${alert}`);
   }
+});
+
+test("the notification DLQ alert ignores a single transient failure", async () => {
+  const block = alertBlocks(await ruleFile()).find((candidate) =>
+    candidate.includes("- alert: AwapNotificationDlqGrowth"),
+  );
+  assert.ok(block, "missing the notification DLQ growth alert");
+  // More than three dead letters in fifteen minutes, held for ten minutes.
+  assert.match(block, /> 3\b/);
+  assert.match(block, /\[15m\]/);
+  assert.match(block, /for: 10m/);
+  assert.match(block, /topic="notification\.send\.dlq"/);
 });
 
 test("alert expressions only reference catalogued metrics", async () => {

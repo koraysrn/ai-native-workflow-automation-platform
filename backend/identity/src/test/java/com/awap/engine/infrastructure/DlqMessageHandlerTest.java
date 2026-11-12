@@ -32,10 +32,11 @@ class DlqMessageHandlerTest {
     quarantinePath = tempDir.resolve("quarantine/legacy-dlq.jsonl");
     handler =
         new DlqMessageHandler(
-            new DlqMetrics(registry, "workflow.task.events,analytics.events"),
+            new DlqMetrics(registry, "workflow.task.events,analytics.events,notification.send"),
             new DlqMessageInspector(new ObjectMapper()),
             new DlqQuarantineStore(quarantinePath),
-            new DlqMessageDeduplicator());
+            new DlqMessageDeduplicator(),
+            new DlqNotificationCorrelation(new ObjectMapper()));
   }
 
   @Test
@@ -103,11 +104,38 @@ class DlqMessageHandlerTest {
             new DlqMetrics(registry, "workflow.task.events"),
             new DlqMessageInspector(new ObjectMapper()),
             new DlqQuarantineStore(notADirectory.resolve("quarantine.jsonl")),
-            new DlqMessageDeduplicator());
+            new DlqMessageDeduplicator(),
+            new DlqNotificationCorrelation(new ObjectMapper()));
 
     assertThatNoException()
         .isThrownBy(() -> failingHandler.handle(record(DlqTopics.LEGACY_TOPIC, 0, 0L, "")));
     assertThat(received(DlqTopics.LEGACY_TOPIC)).isEqualTo(1.0);
+  }
+
+  @Test
+  void anExhaustedNotificationIsCountedOnItsOwnDeadLetterTopic() {
+    handler.handle(
+        record(
+            DlqNotificationCorrelation.TOPIC,
+            0,
+            0L,
+            "{\"deliveryId\":\"d-1\",\"dedupeKey\":\"k-1\",\"channel\":\"EMAIL\","
+                + "\"attempts\":5,\"reason\":\"EXHAUSTED\",\"recipient\":\"a@example.com\"}"));
+
+    assertThat(received(DlqNotificationCorrelation.TOPIC)).isEqualTo(1.0);
+    assertThat(quarantined(DlqNotificationCorrelation.TOPIC)).isZero();
+    assertThat(Files.exists(quarantinePath)).isFalse();
+  }
+
+  @Test
+  void aPoisonNotificationDeadLetterIsQuarantinedAndTheConsumerKeepsGoing() {
+    handler.handle(record(DlqNotificationCorrelation.TOPIC, 0, 0L, "{\"broken\":"));
+    handler.handle(record(DlqNotificationCorrelation.TOPIC, 0, 1L, "{\"deliveryId\":\"d-2\"}"));
+
+    assertThat(received(DlqNotificationCorrelation.TOPIC)).isEqualTo(2.0);
+    assertThat(quarantined(DlqNotificationCorrelation.TOPIC)).isEqualTo(1.0);
+    assertThat(quarantineLines()).hasSize(1);
+    assertThat(quarantineLines().get(0)).contains("invalid-json");
   }
 
   @Test
