@@ -252,6 +252,7 @@ public class WorkflowEngineService implements WorkflowEnginePort {
     instance.transitionTo(WorkflowState.STARTED);
     log(instance, null, null, "INSTANCE_STARTED", "Workflow instance started.");
     publishAnalytics(instance, "WORKFLOW_STARTED", null, 0L);
+    publishLifecycle(instance, "WORKFLOW_STARTED");
 
     nodeExecutor.executeStartNode(instance);
     return engineMapper.toResponse(instance);
@@ -520,8 +521,7 @@ public class WorkflowEngineService implements WorkflowEnginePort {
     WorkflowInstance instance = find(tenantId, id);
     guarded(instance::pause);
     log(instance, null, null, "WORKFLOW_PAUSED", "Workflow instance paused.");
-    outboxEventPublisher.publish(
-        tenantId, "WORKFLOW", instance.getId(), "WORKFLOW_PAUSED", Map.of("state", "PAUSED"));
+    publishLifecycle(instance, "WORKFLOW_PAUSED");
     return engineMapper.toResponse(instance);
   }
 
@@ -530,8 +530,7 @@ public class WorkflowEngineService implements WorkflowEnginePort {
     WorkflowInstance instance = find(tenantId, id);
     guarded(instance::resume);
     log(instance, null, null, "WORKFLOW_RESUMED", "Workflow instance resumed.");
-    outboxEventPublisher.publish(
-        tenantId, "WORKFLOW", instance.getId(), "WORKFLOW_RESUMED", Map.of("state", "RUNNING"));
+    publishLifecycle(instance, "WORKFLOW_RESUMED");
     // Re-drive completed nodes whose outgoing transitions were skipped while the
     // instance was paused, so resume actually continues execution instead of
     // leaving the workflow stuck in RUNNING.
@@ -687,8 +686,27 @@ public class WorkflowEngineService implements WorkflowEnginePort {
           target == WorkflowState.COMPLETED ? "WORKFLOW_COMPLETED" : "WORKFLOW_FAILED",
           null,
           durationMs);
+      // Terminal state: the notification producer turns this into a durable request. It runs in
+      // this transaction, so the outbox row commits with the state change.
+      publishLifecycle(
+          instance, target == WorkflowState.COMPLETED ? "WORKFLOW_COMPLETED" : "WORKFLOW_FAILED");
       notifyParent(instance, target == WorkflowState.COMPLETED);
     }
+  }
+
+  /** Writes the workflow lifecycle fact for the notification producer (issue #203). */
+  private void publishLifecycle(WorkflowInstance instance, String eventType) {
+    outboxEventPublisher.publish(
+        instance.getTenantId(),
+        "WORKFLOW",
+        instance.getId(),
+        eventType,
+        new WorkflowLifecycleEvent(
+            instance.getTenantId(),
+            instance.getId(),
+            instance.getWorkflowDefinitionId(),
+            eventType,
+            instance.getState().name()));
   }
 
   private void notifyParent(WorkflowInstance instance, boolean success) {

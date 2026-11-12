@@ -51,25 +51,62 @@ public class NotificationTemplateRenderer {
   private static final String DEFAULT_SUBJECT = "Notification";
 
   private static final Map<String, Map<String, String>> TEMPLATES =
-      Map.of(
-          "welcome",
-          Map.of(
-              "en", "Hello {{name}}, welcome to AWAP.",
-              "tr", "Merhaba {{name}}, AWAP'a hoş geldiniz."),
-          "task-assigned",
-          Map.of(
-              "en", "You have a new task: {{title}}.",
-              "tr", "Yeni bir göreviniz var: {{title}}."),
-          "approval-requested",
-          Map.of(
-              "en", "Approval requested for {{title}}.",
-              "tr", "{{title}} için onay talep edildi."),
-          "workflow-completed",
-          Map.of(
-              "en", "Workflow {{name}} completed.",
-              "tr", "{{name}} süreci tamamlandı."),
-          "notification",
-          Map.of("en", "{{message}}", "tr", "{{message}}"));
+      Map.ofEntries(
+          Map.entry(
+              "welcome",
+              Map.of(
+                  "en", "Hello {{name}}, welcome to AWAP.",
+                  "tr", "Merhaba {{name}}, AWAP'a hoş geldiniz.")),
+          Map.entry(
+              "task-assigned",
+              Map.of(
+                  "en", "You have a new task: {{title}}.",
+                  "tr", "Yeni bir göreviniz var: {{title}}.")),
+          Map.entry(
+              "task-approved",
+              Map.of("en", "Task approved: {{title}}.", "tr", "Görev onaylandı: {{title}}.")),
+          Map.entry(
+              "task-rejected",
+              Map.of("en", "Task rejected: {{title}}.", "tr", "Görev reddedildi: {{title}}.")),
+          Map.entry(
+              "task-completed",
+              Map.of("en", "Task completed: {{title}}.", "tr", "Görev tamamlandı: {{title}}.")),
+          Map.entry(
+              "task-escalated",
+              Map.of(
+                  "en", "Task escalated: {{title}}.",
+                  "tr", "Görev üst birime iletildi: {{title}}.")),
+          Map.entry(
+              "approval-requested",
+              Map.of(
+                  "en", "Approval requested for {{title}}.",
+                  "tr", "{{title}} için onay talep edildi.")),
+          Map.entry(
+              "workflow-started",
+              Map.of(
+                  "en", "Workflow {{workflowInstanceId}} started.",
+                  "tr", "{{workflowInstanceId}} süreci başladı.")),
+          Map.entry(
+              "workflow-completed",
+              Map.of(
+                  "en", "Workflow {{name}} completed.",
+                  "tr", "{{name}} süreci tamamlandı.")),
+          Map.entry(
+              "workflow-failed",
+              Map.of(
+                  "en", "Workflow {{workflowInstanceId}} failed.",
+                  "tr", "{{workflowInstanceId}} süreci başarısız oldu.")),
+          Map.entry(
+              "workflow-paused",
+              Map.of(
+                  "en", "Workflow {{workflowInstanceId}} paused.",
+                  "tr", "{{workflowInstanceId}} süreci duraklatıldı.")),
+          Map.entry(
+              "workflow-resumed",
+              Map.of(
+                  "en", "Workflow {{workflowInstanceId}} resumed.",
+                  "tr", "{{workflowInstanceId}} süreci devam etti.")),
+          Map.entry("notification", Map.of("en", "{{message}}", "tr", "{{message}}")));
 
   private final ObjectMapper objectMapper;
   private final NotificationTemplateRepository templateRepository;

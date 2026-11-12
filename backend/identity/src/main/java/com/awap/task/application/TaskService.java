@@ -58,6 +58,9 @@ public class TaskService {
             request.description(),
             request.assigneeId());
     taskRepository.save(task);
+    if (task.getAssigneeId() != null) {
+      publishLifecycle(task, "TASK_ASSIGNED", null);
+    }
     return taskMapper.toResponse(task);
   }
 
@@ -77,6 +80,7 @@ public class TaskService {
   public TaskResponse assign(UUID tenantId, UUID id, TaskAssignRequest request) {
     Task task = find(tenantId, id);
     runGuarded(() -> task.assign(request.assigneeId()));
+    publishLifecycle(task, "TASK_ASSIGNED", null);
     return taskMapper.toResponse(task);
   }
 
@@ -84,6 +88,7 @@ public class TaskService {
   public TaskResponse reassign(UUID tenantId, UUID id, TaskAssignRequest request) {
     Task task = find(tenantId, id);
     runGuarded(() -> task.reassign(request.assigneeId()));
+    publishLifecycle(task, "TASK_ASSIGNED", null);
     return taskMapper.toResponse(task);
   }
 
@@ -91,6 +96,7 @@ public class TaskService {
   public TaskResponse claim(UUID tenantId, UUID id, UUID userId) {
     Task task = find(tenantId, id);
     runGuarded(() -> task.claim(userId));
+    publishLifecycle(task, "TASK_ASSIGNED", userId);
     return taskMapper.toResponse(task);
   }
 
@@ -102,6 +108,7 @@ public class TaskService {
     runGuarded(() -> task.approve(comment));
     publishCompleted(task, "{\"decision\":\"APPROVED\"}");
     publishAnalytics(task, "APPROVAL_COMPLETED");
+    publishLifecycle(task, "TASK_APPROVED", actorId);
     recordDecision("APPROVED");
     recordUsage(task);
     return taskMapper.toResponse(task);
@@ -115,6 +122,7 @@ public class TaskService {
     runGuarded(() -> task.reject(comment));
     publishCompleted(task, "{\"decision\":\"REJECTED\"}");
     publishAnalytics(task, "APPROVAL_COMPLETED");
+    publishLifecycle(task, "TASK_REJECTED", actorId);
     recordDecision("REJECTED");
     recordUsage(task);
     return taskMapper.toResponse(task);
@@ -126,6 +134,7 @@ public class TaskService {
     runGuarded(task::complete);
     publishCompleted(task, "{\"decision\":\"COMPLETED\"}");
     publishAnalytics(task, "TASK_COMPLETED");
+    publishLifecycle(task, "TASK_COMPLETED", null);
     return taskMapper.toResponse(task);
   }
 
@@ -133,7 +142,29 @@ public class TaskService {
   public TaskResponse escalate(UUID tenantId, UUID id, TaskAssignRequest request) {
     Task task = find(tenantId, id);
     runGuarded(() -> task.escalate(request.assigneeId(), Instant.now().plusSeconds(3600)));
+    publishLifecycle(task, "TASK_ESCALATED", null);
     return taskMapper.toResponse(task);
+  }
+
+  /**
+   * Writes the task lifecycle fact to the outbox; in-process listeners (the notification producer)
+   * run inside this transaction so the notification request commits with the task change.
+   */
+  private void publishLifecycle(Task task, String eventType, UUID actorId) {
+    outboxEventPublisher.publish(
+        task.getTenantId(),
+        "TASK",
+        task.getId(),
+        eventType,
+        new TaskLifecycleEvent(
+            task.getTenantId(),
+            task.getId(),
+            eventType,
+            task.getTitle(),
+            task.getAssigneeId(),
+            task.getCreatedBy(),
+            actorId,
+            task.getWorkflowInstanceId()));
   }
 
   private void recordDecision(String decision) {
