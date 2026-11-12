@@ -125,6 +125,56 @@ class OutboxRelayServiceTest {
   }
 
   @Test
+  void notificationFailuresGoToTheNotificationDeadLetterTopic() {
+    when(kafkaTemplateProvider.getIfAvailable()).thenReturn(kafkaTemplate);
+    UUID aggregateId = UUID.randomUUID();
+    UUID token = UUID.randomUUID();
+    OutboxClaimStore.ClaimedOutboxEvent failed =
+        claimed("NOTIFICATION_FAILED", "{\"deliveryId\":\"d-1\"}", aggregateId, token);
+    OutboxClaimStore.ClaimedOutboxEvent dlq =
+        claimed("NOTIFICATION_DLQ", "{\"deliveryId\":\"d-2\"}", aggregateId, token);
+    when(claimStore.claimBatch(100, LEASE, MAX_ATTEMPTS)).thenReturn(List.of(failed, dlq));
+    when(kafkaTemplate.send(
+            org.mockito.ArgumentMatchers
+                .<org.apache.kafka.clients.producer.ProducerRecord<String, String>>any()))
+        .thenAnswer(ignored -> sent());
+    when(claimStore.markPublished(any(), any())).thenReturn(true);
+
+    service.relayEvents();
+
+    ArgumentCaptor<ProducerRecord<String, String>> captor =
+        ArgumentCaptor.forClass(ProducerRecord.class);
+    verify(kafkaTemplate, times(2)).send(captor.capture());
+    assertThat(captor.getAllValues())
+        .extracting(ProducerRecord::topic)
+        .containsExactly("notification.send.dlq", "notification.send.dlq");
+  }
+
+  @Test
+  void notificationRequestsStayOnTheDeliveryTopic() {
+    when(kafkaTemplateProvider.getIfAvailable()).thenReturn(kafkaTemplate);
+    OutboxClaimStore.ClaimedOutboxEvent event =
+        claimed(
+            "NOTIFICATION_REQUESTED",
+            "{\"recipient\":\"a@example.com\"}",
+            UUID.randomUUID(),
+            UUID.randomUUID());
+    when(claimStore.claimBatch(100, LEASE, MAX_ATTEMPTS)).thenReturn(List.of(event));
+    when(kafkaTemplate.send(
+            org.mockito.ArgumentMatchers
+                .<org.apache.kafka.clients.producer.ProducerRecord<String, String>>any()))
+        .thenReturn(sent());
+    when(claimStore.markPublished(any(), any())).thenReturn(true);
+
+    service.relayEvents();
+
+    ArgumentCaptor<ProducerRecord<String, String>> captor =
+        ArgumentCaptor.forClass(ProducerRecord.class);
+    verify(kafkaTemplate).send(captor.capture());
+    assertThat(captor.getValue().topic()).isEqualTo("notification.send");
+  }
+
+  @Test
   void failedSendReleasesClaimAndIncrementsAttempts() {
     when(kafkaTemplateProvider.getIfAvailable()).thenReturn(kafkaTemplate);
     OutboxClaimStore.ClaimedOutboxEvent event =

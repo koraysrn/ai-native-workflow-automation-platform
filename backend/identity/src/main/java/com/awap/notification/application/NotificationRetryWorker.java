@@ -307,6 +307,10 @@ public class NotificationRetryWorker {
       NotificationRetryClaim claim, int attempts, String reason, String detail) {
     Map<String, Object> payload =
         Map.of(
+            // The delivery id is also the record key; carrying it in the payload lets the DLQ
+            // consumer and the replay tool correlate the dead letter with the delivery row.
+            "deliveryId",
+            claim.id().toString(),
             "recipient",
             claim.recipient(),
             "channel",

@@ -528,6 +528,9 @@ public class NotificationService {
     persistExistingDelivery(delivery);
     Map<String, Object> payload =
         Map.of(
+            // The delivery id is also the Kafka record key; the payload copy lets the DLQ
+            // consumer and the replay tool correlate the dead letter with the delivery row.
+            "deliveryId", delivery.getId().toString(),
             "recipient", recipient,
             "channel", channel.name(),
             "dedupeKey", dedupeKey,

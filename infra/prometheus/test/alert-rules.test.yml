@@ -114,6 +114,33 @@ tests:
         alertname: AwapWebhookDeadGrowth
         exp_alerts: []
 
+  # ------------------------------------------------- notification DLQ growth (issue #205)
+  # Six exhausted deliveries in 15m, held for 10m -> the notification DLQ alert fires.
+  - interval: 1m
+    input_series:
+      - series: 'awap_dlq_messages_total{topic="notification.send.dlq",legacy="false"}'
+        values: '0 0 0 0 0 0 0 0 0 0 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6 6'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: AwapNotificationDlqGrowth
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              summary: "Notification dead-letter topic is growing"
+              description: "6 notification deliveries were dead-lettered in 15 minutes; follow runbook O11 to inspect and replay them."
+              runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o11--notification-retries-issue-119"
+
+  # A single transient failure (one dead letter, then nothing) must not page anyone.
+  - interval: 1m
+    input_series:
+      - series: 'awap_dlq_messages_total{topic="notification.send.dlq",legacy="false"}'
+        values: '0 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1 1'
+    alert_rule_test:
+      - eval_time: 20m
+        alertname: AwapNotificationDlqGrowth
+        exp_alerts: []
+
   # ------------------------------------------------------------------ outbox stuck backlog
   # 1,500 pending rows for 15m -> the relay is not draining.
   - interval: 1m
