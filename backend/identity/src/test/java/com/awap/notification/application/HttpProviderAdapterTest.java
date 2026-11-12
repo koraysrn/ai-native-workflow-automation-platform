@@ -338,6 +338,24 @@ class HttpProviderAdapterTest {
         .hasMessageContaining("not a valid URI");
   }
 
+  @Test
+  void anInterruptedCallStaysRetryableAndRestoresTheInterruptFlag() {
+    Thread.currentThread().interrupt();
+    try {
+      assertThatThrownBy(() -> sms(smsSettings()).dispatch(smsMessage()))
+          .isInstanceOfSatisfying(
+              NotificationDeliveryException.class,
+              ex -> {
+                assertThat(ex.getReason()).isEqualTo("SMS_INTERRUPTED");
+                assertThat(ex.isPermanent()).isFalse();
+              });
+      assertThat(Thread.currentThread().isInterrupted()).isTrue();
+    } finally {
+      // Clear the flag so the fake server can shut down.
+      Thread.interrupted();
+    }
+  }
+
   private static void sleep(long millis) {
     try {
       Thread.sleep(millis);

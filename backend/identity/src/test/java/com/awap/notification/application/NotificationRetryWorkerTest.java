@@ -263,6 +263,33 @@ class NotificationRetryWorkerTest {
     assertThat(adapter.invocations.get()).isZero();
   }
 
+  @Test
+  void aRetryableProviderFailureSchedulesAnotherAttempt() {
+    UUID id =
+        store.addDueRow(TENANT, NotificationChannel.EMAIL, "a@example.com", NOW, 1, "RETRYING");
+    adapter.failure = NotificationDeliveryException.retryable("SMTP_IO", "read timed out");
+    Issued issued = claim(id, NOW);
+
+    worker.deliver(issued.claim(), issued.token(), NOW);
+
+    assertThat(store.row(id).status).isEqualTo("RETRYING");
+    assertThat(store.row(id).nextAttemptAt).isEqualTo(NOW.plusSeconds(5));
+  }
+
+  @Test
+  void aBounceWithoutASuppressionStoreStillFailsPermanently() {
+    UUID id =
+        store.addDueRow(TENANT, NotificationChannel.EMAIL, "a@example.com", NOW, 1, "RETRYING");
+    adapter.failure =
+        NotificationDeliveryException.blockedRecipient("SMTP_BOUNCE", "550 mailbox unavailable");
+    Issued issued = claim(id, NOW);
+
+    worker.deliver(issued.claim(), issued.token(), NOW);
+
+    assertThat(store.row(id).status).isEqualTo("FAILED");
+    assertThat(adapter.invocations.get()).isEqualTo(1);
+  }
+
   private NotificationRetryWorker workerWith(NotificationSuppressionStore suppressionStore) {
     KafkaTenantContext tenantContext = mock(KafkaTenantContext.class);
     when(tenantContext.call(any(), any()))

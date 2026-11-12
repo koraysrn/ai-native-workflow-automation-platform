@@ -148,15 +148,12 @@ abstract class HttpProviderAdapter implements NotificationChannelAdapter {
   }
 
   private static boolean mentionsBlockedRecipient(String body) {
-    if (body == null) {
-      return false;
-    }
     String normalized = body.toLowerCase(Locale.ROOT);
     return BLOCKED_RECIPIENT_MARKERS.stream().anyMatch(normalized::contains);
   }
 
   private String providerMessageId(String body) {
-    if (body == null || body.isBlank()) {
+    if (body.isBlank()) {
       return null;
     }
     JsonNode node;
