@@ -47,6 +47,37 @@ must never be published on `workflow.task.events`: that listener deserializes ev
 `NodeCompletedEvent`, which caused retries and DLQ noise before issue #207. Every consumed topic has
 a matching `<topic>.dlq` provisioned by `infra/docker-compose.yml` (`kafka-init`).
 
+### Document event contract (issue #208)
+
+Every `DOCUMENT_REGISTERED`, `DOCUMENT_VERSION_CREATED`, `DOCUMENT_ARCHIVED` and
+`DOCUMENT_DELETED` record is published on `document.events` with this JSON shape:
+
+```json
+{
+  "tenantId": "uuid",
+  "eventType": "DOCUMENT_VERSION_CREATED",
+  "fileId": "uuid",
+  "version": 2,
+  "size": 2048,
+  "format": "pdf",
+  "objectKey": "<fileId>/v2"
+}
+```
+
+The consumer (`DocumentEventListener`) restores the tenant context from `tenantId`, verifies that
+the file belongs to that tenant (`file_records.tenant_id`) and then applies the fact through
+`DocumentService.applyEvent`:
+
+- `DOCUMENT_REGISTERED` / `DOCUMENT_VERSION_CREATED` create the `(file_id, version)` row only when it
+  does not exist; a duplicate delivery is counted as `outcome=duplicate` and writes nothing.
+- `DOCUMENT_ARCHIVED` / `DOCUMENT_DELETED` re-apply the terminal state of an existing row; a missing
+  version row is counted as `outcome=missing_version` and does not crash the consumer.
+- The consumer never republishes, so a `DOCUMENT_VERSION_CREATED` record cannot create another
+  version (the old self-triggered loop).
+- A foreign tenant, unknown file, malformed JSON or missing required field is rejected; parse
+  failures continue to `document.events.dlq` through the shared error handler and increment
+  `awap.document.event.failures`.
+
 ## Operations
 
 - The Schema Registry must be reachable at startup; a registry outage blocks producing/consuming

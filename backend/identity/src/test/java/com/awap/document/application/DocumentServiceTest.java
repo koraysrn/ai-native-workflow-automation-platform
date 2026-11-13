@@ -10,6 +10,7 @@ import com.awap.document.domain.DocumentStatus;
 import com.awap.document.domain.DocumentVersion;
 import com.awap.document.infrastructure.DocumentVersionRepository;
 import com.awap.engine.application.OutboxEventPublisher;
+import com.awap.file.infrastructure.FileRecordRepository;
 import com.awap.usage.application.InMemoryUsageCounterStore;
 import com.awap.usage.application.UsageMeteringService;
 import com.awap.usage.domain.UsageMetric;
@@ -27,8 +28,14 @@ class DocumentServiceTest {
   private final DocumentVersionRepository repository = mock(DocumentVersionRepository.class);
   private final OutboxEventPublisher outbox = mock(OutboxEventPublisher.class);
   private final UsageMeteringService usageMeteringService = mock(UsageMeteringService.class);
+  private final FileRecordRepository fileRecordRepository = mock(FileRecordRepository.class);
   private final DocumentService service =
-      new DocumentService(repository, outbox, usageMeteringService);
+      new DocumentService(
+          repository,
+          outbox,
+          usageMeteringService,
+          fileRecordRepository,
+          new SimpleMeterRegistry());
 
   @Test
   void createVersionStartsAtOneWhenNoPreviousVersion() {
@@ -101,7 +108,9 @@ class DocumentServiceTest {
     InMemoryUsageCounterStore store = new InMemoryUsageCounterStore();
     UsageMeteringService metering =
         new UsageMeteringService(store, new SimpleMeterRegistry(), false, Clock.systemUTC());
-    DocumentService meteredService = new DocumentService(repository, outbox, metering);
+    DocumentService meteredService =
+        new DocumentService(
+            repository, outbox, metering, fileRecordRepository, new SimpleMeterRegistry());
 
     meteredService.createVersion(tenant, file, 2048L, "pdf", "k");
 
