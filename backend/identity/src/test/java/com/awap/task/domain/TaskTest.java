@@ -52,4 +52,16 @@ class TaskTest {
     assertThat(task.isEscalated()).isTrue();
     assertThat(task.getAssigneeId()).isEqualTo(userA);
   }
+
+  @Test
+  void escalationAppliedIsADurableIdempotencyGuard() {
+    Task task = new Task(tenantId, null, null, "Task", null, userA);
+    assertThat(task.isEscalationApplied()).isFalse();
+
+    task.markEscalationApplied(java.time.Instant.parse("2026-06-01T10:00:00Z"));
+
+    assertThat(task.isEscalationApplied()).isTrue();
+    assertThat(task.getEscalationAppliedAt())
+        .isEqualTo(java.time.Instant.parse("2026-06-01T10:00:00Z"));
+  }
 }

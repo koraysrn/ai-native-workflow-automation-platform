@@ -53,6 +53,10 @@ public class Task {
   @Column(name = "escalate_at")
   private Instant escalateAt;
 
+  /** Set by the escalation consumer once the reassignment and its notification are committed. */
+  @Column(name = "escalation_applied_at")
+  private Instant escalationAppliedAt;
+
   @Column(name = "completed_at")
   private Instant completedAt;
 
@@ -190,6 +194,19 @@ public class Task {
     this.updatedAt = Instant.now();
   }
 
+  /**
+   * Records that the escalation event was applied (reassignment + notification request committed).
+   * The durable timestamp is the idempotency guard against duplicate Kafka records.
+   */
+  public void markEscalationApplied(Instant appliedAt) {
+    this.escalationAppliedAt = appliedAt;
+    this.updatedAt = Instant.now();
+  }
+
+  public boolean isEscalationApplied() {
+    return escalationAppliedAt != null;
+  }
+
   private void requireOpenForDecision() {
     if (status != TaskStatus.IN_PROGRESS && status != TaskStatus.ASSIGNED) {
       throw new IllegalStateException("Task cannot be decided in status " + status);
@@ -239,6 +256,10 @@ public class Task {
 
   public Instant getEscalateAt() {
     return escalateAt;
+  }
+
+  public Instant getEscalationAppliedAt() {
+    return escalationAppliedAt;
   }
 
   public Instant getCompletedAt() {

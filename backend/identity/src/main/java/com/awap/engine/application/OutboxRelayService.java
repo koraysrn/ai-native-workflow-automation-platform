@@ -262,7 +262,10 @@ public class OutboxRelayService {
   /** Maps outbox event types to the spec'd Kafka topics. */
   private String topicFor(String eventType) {
     return switch (eventType) {
-      case "TASK_COMPLETED", "TASK_ESCALATION_DUE" -> "workflow.task.events";
+      case "TASK_COMPLETED" -> "workflow.task.events";
+      // Issue #207: escalation facts have their own consumer. Routing them to
+      // workflow.task.events made NodeCompletedEventListener parse them as node completions.
+      case "TASK_ESCALATION_DUE" -> "task.escalation.events";
       case "FORM_SUBMITTED" -> "workflow.instance.events";
       case "WORKFLOW_INSTANCE_STATE" -> "workflow.instance.events";
       case "SUB_PROCESS_COMPLETED" -> "workflow.subprocess.events";

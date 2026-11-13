@@ -1,5 +1,6 @@
 package com.awap.task.application;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -18,6 +19,7 @@ import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -39,9 +41,18 @@ class TaskEscalationSchedulerTest {
 
     scheduler.escalateOverdueTasks();
 
+    ArgumentCaptor<TaskEscalationDue> captor = ArgumentCaptor.forClass(TaskEscalationDue.class);
     verify(outboxEventPublisher)
         .publish(
-            eq(task.getTenantId()), eq("TASK"), eq(task.getId()), eq("TASK_ESCALATION_DUE"), any());
+            eq(task.getTenantId()),
+            eq("TASK"),
+            eq(task.getId()),
+            eq("TASK_ESCALATION_DUE"),
+            captor.capture());
+    assertThat(captor.getValue().tenantId()).isEqualTo(task.getTenantId());
+    assertThat(captor.getValue().taskId()).isEqualTo(task.getId());
+    assertThat(captor.getValue().assigneeId()).isEqualTo(task.getAssigneeId());
+    assertThat(task.isEscalated()).isTrue();
   }
 
   @Test

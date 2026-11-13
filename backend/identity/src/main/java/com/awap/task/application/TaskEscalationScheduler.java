@@ -47,7 +47,7 @@ public class TaskEscalationScheduler {
           "TASK",
           task.getId(),
           "TASK_ESCALATION_DUE",
-          new TaskEscalationDue(task.getId(), task.getAssigneeId()));
+          new TaskEscalationDue(task.getTenantId(), task.getId(), task.getAssigneeId()));
     }
   }
 
@@ -57,7 +57,4 @@ public class TaskEscalationScheduler {
         .map(instance -> instance.getState() == WorkflowState.PAUSED)
         .orElse(false);
   }
-
-  /** Payload published when a task escalates. */
-  public record TaskEscalationDue(java.util.UUID taskId, java.util.UUID assigneeId) {}
 }
