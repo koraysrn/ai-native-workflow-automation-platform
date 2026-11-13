@@ -472,6 +472,8 @@ services:
       # The fake webhook is an in-network private target; trust only that host so the local stack can
       # deliver while every other private/loopback target stays blocked by the SSRF guard.
       WEBHOOK_SSRF_TRUSTED_HOSTS: ${WEBHOOK_SSRF_TRUSTED_HOSTS:-fake-webhook}
+      # Actuator keeps health component details hidden unless a stack opts in (the E2E job does).
+      HEALTH_SHOW_DETAILS: ${HEALTH_SHOW_DETAILS:-never}
       OUTBOX_RELAY_INTERVAL_MS: ${OUTBOX_RELAY_INTERVAL_MS:-5000}
       OUTBOX_RELAY_INITIAL_DELAY_MS: ${OUTBOX_RELAY_INITIAL_DELAY_MS:-5000}
       # Issue #201: the 1000-tenant seed logs in from one host, so the per-IP auth budget must be
