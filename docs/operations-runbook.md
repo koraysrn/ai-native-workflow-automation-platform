@@ -109,6 +109,27 @@ Operating procedure for `AwapNodeRetryExhausted`:
 5. Raise `maxAttempts`/`delaysMs` in the node's `retryPolicy` only after confirming the error is
    transient; the values are validated at definition save time.
 
+## O3.3 — Crash and dependency-failure recovery (issue #211)
+
+The fault-injection suite is tagged `chaos` and excluded from the normal build so PR runs stay
+deterministic. It runs in the dedicated `Chaos Recovery` workflow
+([`chaos.yml`](../.github/workflows/chaos.yml), PR + nightly) or locally with
+`cd backend && ./mvnw -B -Pchaos test`.
+
+| Scenario | Test | Expected recovery |
+|---|---|---|
+| The engine crashes mid-node | `EngineRecoveryChaosTest` | The last `COMPLETED` node is not re-run; the `RUNNING` node is reset and re-driven. |
+| A replay reaches an external call | `EngineRecoveryChaosTest` | The call is suppressed (`NODE_REPLAY_SKIPPED`), the recorded output is reused or the instance fails visibly. |
+| The outbox relay dies between claim and publish | `OutboxCrashChaosTest` | The lease is released; reconciliation makes the row claimable and the next relay publishes it exactly once. |
+| PostgreSQL is frozen | `PostgresOutageChaosTest` | The claim fails with a bounded `DataAccessException`; after recovery the backlog drains from the same data directory. |
+| Kafka is unavailable | `KafkaRestartChaosTest` | A produce fails in bounded time during the outage; committed events survive and duplicate deliveries are deduplicated by business key. |
+| A recovery timer fires for a paused workflow | `EngineRecoveryChaosTest` | The paused instance is not advanced and no node side effect runs. |
+
+On a failure, inspect `NODE_RETRY_STARTED`, `NODE_REPLAYED` and `NODE_REPLAY_SKIPPED` execution-log
+rows and re-drive the instance with the retry/recover endpoints once the dependency is healthy.
+The workflow uploads `backend/identity/target/surefire-reports` (and JVM dumps) as failure
+artifacts.
+
 ## O4 — Backup & disaster recovery
 
 - PostgreSQL: nightly logical dumps (`pg_dump`) via
