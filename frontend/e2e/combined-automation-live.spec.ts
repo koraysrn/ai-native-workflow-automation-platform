@@ -130,7 +130,7 @@ async function postJson<T>(
 /** Switches the fake webhook behaviour before a scenario; /reset clears the request log. */
 async function controlWebhook(
   ctx: APIRequestContext,
-  overrides: { failureRate?: number; failureStatus?: number; latencyMs?: number },
+  overrides: { failureRate?: number; failureStatus?: number },
 ): Promise<void> {
   const response = await ctx.post(`${WEBHOOK_URL}/control`, { data: overrides });
   expect(response.ok(), await response.text()).toBeTruthy();
@@ -309,7 +309,7 @@ test("runs the combined automation scenario end to end", async ({ context }) => 
   test.setTimeout(420_000);
   const plan = seedPlan(process.env.E2E_SEED_SUFFIX ?? "local");
   const me = await login(context.request, plan);
-  await controlWebhook(context.request, { failureRate: 0, failureStatus: 500, latencyMs: 10 });
+  await controlWebhook(context.request, { failureRate: 0, failureStatus: 500 });
 
   // Real document pipeline: a clean PDF is promoted and becomes downloadable.
   const fileId = await uploadDocument(
@@ -454,7 +454,7 @@ test("a webhook retry exhaustion dead-letters the delivery and fails the workflo
   test.setTimeout(240_000);
   const plan = seedPlan(process.env.E2E_SEED_SUFFIX ?? "local");
   const me = await login(context.request, plan);
-  await controlWebhook(context.request, { failureRate: 1, failureStatus: 500, latencyMs: 10 });
+  await controlWebhook(context.request, { failureRate: 1, failureStatus: 500 });
 
   try {
     const definition = await publishWorkflow(context.request, me, `Retry DLQ ${Date.now()}`, {
@@ -506,7 +506,7 @@ test("a webhook retry exhaustion dead-letters the delivery and fails the workflo
     const entries = await logs(context.request, me, instance.id);
     expect(entries.some((entry) => entry.action === "NODE_FAILED")).toBe(true);
   } finally {
-    await controlWebhook(context.request, { failureRate: 0, failureStatus: 500, latencyMs: 10 });
+    await controlWebhook(context.request, { failureRate: 0, failureStatus: 500 });
   }
 });
 

@@ -1,5 +1,6 @@
-// Local-only fake webhook target with configurable latency and failure rate.
-// Never point the load test at an external host: this server is the allowlisted target.
+// Local-only fake webhook target with a startup-configured latency and a runtime-controllable
+// failure rate/status. Never point the load test at an external host: this server is the
+// allowlisted target.
 //
 // Usage:
 //   FAILURE_RATE=0.3 FAILURE_STATUS=500 LATENCY_MS=50 node load-test/fake-webhook.mjs
@@ -8,13 +9,16 @@
 // The E2E combined scenario (issue #212) uses the control endpoints to switch the behaviour per
 // test and to assert the exact requests the backend delivered:
 //   GET  /requests        -> every received /webhook request (method, headers, body, status)
-//   POST /control         -> {"failureRate":0,"failureStatus":500,"latencyMs":10}
+//   POST /control         -> {"failureRate":0,"failureStatus":500}
 //   POST /reset           -> clear the request log
+//
+// Latency is intentionally fixed at startup: exposing it through /control would let a caller choose
+// an arbitrary timer duration on this local server.
 import http from "node:http";
 import { shouldFail } from "./lib/webhook-model.mjs";
 
 const port = Number.parseInt(process.env.PORT ?? "9099", 10);
-let latencyMs = Number.parseInt(process.env.LATENCY_MS ?? "25", 10);
+const latencyMs = Number.parseInt(process.env.LATENCY_MS ?? "25", 10);
 let failureRate = Number.parseFloat(process.env.FAILURE_RATE ?? "0.3");
 let failureStatus = Number.parseInt(process.env.FAILURE_STATUS ?? "500", 10);
 const retryAfterSeconds = Number.parseInt(process.env.RETRY_AFTER_SECONDS ?? "1", 10);
@@ -63,9 +67,6 @@ const server = http.createServer(async (request, response) => {
       }
       if (Number.isFinite(overrides.failureStatus)) {
         failureStatus = Number(overrides.failureStatus);
-      }
-      if (Number.isFinite(overrides.latencyMs)) {
-        latencyMs = Math.max(0, Number(overrides.latencyMs));
       }
       json(response, 200, { failureRate, failureStatus, latencyMs });
     } catch {
