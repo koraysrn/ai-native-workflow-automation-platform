@@ -332,6 +332,10 @@ jobs:
           done
           docker compose -f infra/docker-compose.yml logs --tail=300 minio clamav
           exit 1
+      - name: Provision MinIO buckets
+        # Re-run the idempotent provisioner in the foreground: `up -d` does not fail when the
+        # one-shot init container errors, and an absent bucket would surface only as a 404 PUT.
+        run: docker compose -f infra/docker-compose.yml run --rm --no-deps minio-init
       - name: Wait for frontend
         run: |
           for attempt in $(seq 1 60); do
@@ -378,7 +382,9 @@ jobs:
           retention-days: 14
       - name: Dump Compose logs on failure
         if: failure()
-        run: docker compose -f infra/docker-compose.yml logs --tail=2000 backend kafka minio clamav
+        run: >-
+          docker compose -f infra/docker-compose.yml logs --tail=2000
+          backend kafka minio minio-init clamav
       - name: Stop Compose stack
         if: always()
         run: docker compose -f infra/docker-compose.yml down -v

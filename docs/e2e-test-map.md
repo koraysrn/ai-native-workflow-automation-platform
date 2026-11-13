@@ -9,10 +9,11 @@ The suite lives in [`frontend/e2e`](../frontend/e2e) and runs in two modes:
 - **Stack mode** (`E2E_LIVE_STACK=1`, the CI `e2e` job): `docker compose` provides Postgres/Kafka,
   MinIO, ClamAV, the built backend and the frontend; `e2e/global-setup.ts` waits for
   `GET /actuator/health` and the frontend, then seeds a tenant through `POST /api/v1/tenants`. The
-  job sets `KAFKA_ENABLED=true` so the outbox relay delivers analytics, `CLAMAV_ENABLED=true` and
-  `FILE_MANAGE_BUCKETS=true` for the real scan pipeline, `MINIO_PUBLIC_ENDPOINT=http://localhost:9000`
-  so presigned URLs point at the host-published port, and `FILE_SCAN_INTERVAL_MS=1000` so a scan
-  completes within the test budget.
+  job sets `KAFKA_ENABLED=true` so the outbox relay delivers analytics, `CLAMAV_ENABLED=true` for
+  the real scan pipeline, `MINIO_PUBLIC_ENDPOINT=http://localhost:9000` so presigned URLs point at
+  the host-published port, and `FILE_SCAN_INTERVAL_MS=1000` so a scan completes within the test
+  budget. Buckets are created by the `minio-init` provisioner (re-run in the foreground before the
+  suite), so the backend keeps `FILE_MANAGE_BUCKETS=false`.
 
 Both modes use one worker (fixtures stay deterministic) and retry once on CI with traces,
 screenshots and video retained on failure.

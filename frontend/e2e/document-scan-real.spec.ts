@@ -68,12 +68,10 @@ async function apiHeaders(
 }
 
 async function login(ctx: APIRequestContext, plan: SeedPlan): Promise<Me> {
-  const headers = {
-    "Content-Type": "application/json",
-    "X-XSRF-TOKEN": await csrfToken(ctx),
-  };
+  // /auth/login is explicitly CSRF-ignored and unauthenticated; requesting an XSRF token first
+  // would hit the authenticated /auth/csrf endpoint and return 401.
   const response = await ctx.post(`${API_URL}/api/v1/auth/login`, {
-    headers,
+    headers: { "Content-Type": "application/json" },
     data: {
       tenantSlug: plan.slug,
       email: plan.adminEmail,
