@@ -274,7 +274,15 @@ public class OutboxRelayService {
       // topic, which the anchored *.dlq subscription already consumes. Before this mapping both
       // events fell through to workflow.events and were silently lost to DLQ operators.
       case "NOTIFICATION_FAILED", "NOTIFICATION_DLQ" -> "notification.send.dlq";
-      case "DOCUMENT_CHANGED" -> "document.events";
+      // Issue #208: every document lifecycle event belongs on document.events. Before this mapping
+      // registration, version, archive and delete fell through to workflow.events and the consumer
+      // never saw them.
+      case "DOCUMENT_REGISTERED",
+          "DOCUMENT_VERSION_CREATED",
+          "DOCUMENT_ARCHIVED",
+          "DOCUMENT_DELETED",
+          "DOCUMENT_CHANGED" ->
+          "document.events";
       case "ANALYTICS_EVENT" -> "analytics.events";
       case "SAGA_COMPENSATION_DLQ" -> "workflow.saga.events.dlq";
       default -> "workflow.events";

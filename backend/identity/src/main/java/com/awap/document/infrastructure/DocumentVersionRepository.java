@@ -11,6 +11,10 @@ public interface DocumentVersionRepository extends JpaRepository<DocumentVersion
 
   Optional<DocumentVersion> findTopByFileIdOrderByVersionDesc(UUID fileId);
 
+  /** Tenant-scoped lookup used by the idempotent {@code document.events} consumer. */
+  Optional<DocumentVersion> findByTenantIdAndFileIdAndVersion(
+      UUID tenantId, UUID fileId, int version);
+
   List<DocumentVersion> findByFileIdAndDeletedFalseOrderByVersionAsc(UUID fileId);
 
   List<DocumentVersion> findByTenantIdAndFileIdAndDeletedFalseOrderByVersionAsc(
