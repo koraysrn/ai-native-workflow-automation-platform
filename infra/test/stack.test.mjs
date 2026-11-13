@@ -3,6 +3,7 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { pathToFileURL } from "node:url";
 
 import {
   DEFAULT_PORTS,
@@ -10,6 +11,7 @@ import {
   assertPortsFree,
   down,
   findPortConflicts,
+  isEntryPoint,
   parseArgs,
   provisionStack,
   reset,
@@ -36,6 +38,16 @@ async function traceFile() {
   const directory = await mkdtemp(join(tmpdir(), "awap-stack-"));
   return join(directory, "trace.txt");
 }
+
+test("isEntryPoint matches paths with spaces and rejects other modules", () => {
+  // Regression: a workspace path with spaces made the raw file:// comparison fail, so `make up`
+  // printed the command and exited 0 without starting anything.
+  const spaced = "/home/dev/AI-Native Workflow Automation Platform/infra/scripts/stack.mjs";
+  assert.equal(isEntryPoint(pathToFileURL(spaced).href, spaced), true);
+  assert.equal(isEntryPoint(pathToFileURL(spaced).href, "/tmp/other.mjs"), false);
+  assert.equal(isEntryPoint("file:///x", undefined), false);
+  assert.equal(isEntryPoint("file:///x", ""), false);
+});
 
 test("findPortConflicts ignores this project's own containers and reports foreign ports", () => {
   const output = [

@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
+import { spawnSync } from "node:child_process";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   REQUIRED_BRANCHES,
@@ -37,4 +39,13 @@ test("checkTrace fails with the unexercised branch names", async () => {
   const file = join(directory, "trace.txt");
   await writeFile(file, "up:start\n", "utf8");
   await assert.rejects(() => checkTrace(file), /Unexercised provisioning branches: up:dry-run/);
+});
+
+test("the script runs as an entry point from a workspace path with spaces", () => {
+  // Regression: the old raw `file://${process.argv[1]}` comparison silently skipped main() when
+  // the checkout path contained spaces, so CI-only validation could no-op locally.
+  const script = fileURLToPath(new URL("../scripts/check-provision-trace.mjs", import.meta.url));
+  const result = spawnSync(process.execPath, [script], { encoding: "utf8" });
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /Usage: node infra\/scripts\/check-provision-trace/);
 });

@@ -8,6 +8,7 @@
 
 import { readFile } from "node:fs/promises";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 
 export const REQUIRED_BRANCHES = [
   "up:start",
@@ -51,7 +52,7 @@ async function main(argv = process.argv.slice(2)) {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   main().then((code) => {
     process.exitCode = code;
   });

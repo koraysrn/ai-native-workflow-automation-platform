@@ -312,6 +312,9 @@ management:
         include: health,info,prometheus,httpexchanges
   endpoint:
     health:
+      # Component details stay hidden by default; the E2E stack sets HEALTH_SHOW_DETAILS=always so
+      # it can assert the backend-to-AI-layer health component explicitly.
+      show-details: ${HEALTH_SHOW_DETAILS:never}
       probes:
         enabled: true
   tracing:

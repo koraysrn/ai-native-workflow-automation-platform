@@ -88,11 +88,15 @@ test("the full profile turns on Kafka, MinIO, ClamAV, the AI layer and OpenSearc
   assert.equal(env.KAFKA_ENABLED, "${KAFKA_ENABLED:-true}");
   assert.equal(env.CLAMAV_ENABLED, "${CLAMAV_ENABLED:-true}");
   assert.equal(env.AI_NODE_ENABLED, "${AI_NODE_ENABLED:-true}");
+  // The AI layer service is full-profile only; `make up` and the E2E job set this explicitly.
+  assert.equal(env.AI_LAYER_ENABLED, "${AI_LAYER_ENABLED:-false}");
   assert.equal(env.OPENSEARCH_ENABLED, "${OPENSEARCH_ENABLED:-true}");
   assert.equal(env.FILE_MANAGE_BUCKETS, "${FILE_MANAGE_BUCKETS:-true}");
   assert.equal(env.AI_LAYER_URL, "${AI_LAYER_URL:-http://ai-layer:8000}");
   assert.equal(env.MINIO_ENDPOINT, "${MINIO_ENDPOINT:-http://minio:9000}");
   assert.equal(env.CLAMAV_HOST, "clamav");
+  // The E2E job turns this on so it can assert the aiLayer health component.
+  assert.equal(env.HEALTH_SHOW_DETAILS, "${HEALTH_SHOW_DETAILS:-never}");
 });
 
 test("the bucket and topic provisioners are idempotent", async () => {

@@ -91,9 +91,9 @@ make up
 `make up` runs the `full` Compose profile, which starts **every** runtime
 dependency and application: PostgreSQL, Redis, Kafka + Schema Registry, MinIO,
 ClamAV, OpenSearch, Vault, Prometheus, Grafana, the OpenTelemetry collector, the
-backend, the frontend and the AI layer. MinIO, ClamAV and the AI layer are
-enabled by this profile, and the backend enables Kafka, MinIO, ClamAV,
-OpenSearch and AI integrations. The command then:
+fake webhook used by the E2E suite, the backend, the frontend and the AI layer.
+MinIO, ClamAV and the AI layer are enabled by this profile, and the backend
+enables Kafka, MinIO, ClamAV, OpenSearch and AI integrations. The command then:
 
 1. fails early on a host-port conflict;
 2. waits for every healthcheck with bounded retries and a named error;
@@ -116,6 +116,7 @@ OpenSearch and AI integrations. The command then:
 | Frontend | http://localhost:3000 |
 | Backend (REST + actuator) | http://localhost:8080 |
 | AI layer | http://localhost:8000/api/v1/health |
+| Fake webhook (E2E control/requests) | http://localhost:9099 |
 | MinIO (API / console) | http://localhost:9000 / http://localhost:9001 |
 | Grafana | http://localhost:3001 |
 | Prometheus | http://localhost:9090 |

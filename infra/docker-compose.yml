@@ -447,6 +447,9 @@ services:
       CLAMAV_HOST: clamav
       CLAMAV_PORT: "3310"
       AI_NODE_ENABLED: ${AI_NODE_ENABLED:-true}
+      # The AI layer service only exists in the `full` profile, so the backend keeps the indicator
+      # off unless the profile (or the E2E job) enables it explicitly. This keeps stacks that start
+      # the backend without the AI layer healthy.
       AI_LAYER_ENABLED: ${AI_LAYER_ENABLED:-false}
       AI_LAYER_URL: ${AI_LAYER_URL:-http://ai-layer:8000}
       OPENSEARCH_ENABLED: ${OPENSEARCH_ENABLED:-true}
@@ -469,6 +472,8 @@ services:
       # The fake webhook is an in-network private target; trust only that host so the local stack can
       # deliver while every other private/loopback target stays blocked by the SSRF guard.
       WEBHOOK_SSRF_TRUSTED_HOSTS: ${WEBHOOK_SSRF_TRUSTED_HOSTS:-fake-webhook}
+      # Actuator keeps health component details hidden unless a stack opts in (the E2E job does).
+      HEALTH_SHOW_DETAILS: ${HEALTH_SHOW_DETAILS:-never}
       OUTBOX_RELAY_INTERVAL_MS: ${OUTBOX_RELAY_INTERVAL_MS:-5000}
       OUTBOX_RELAY_INITIAL_DELAY_MS: ${OUTBOX_RELAY_INITIAL_DELAY_MS:-5000}
       # Issue #201: the 1000-tenant seed logs in from one host, so the per-IP auth budget must be

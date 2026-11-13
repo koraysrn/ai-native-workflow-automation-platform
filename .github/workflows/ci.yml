@@ -299,6 +299,9 @@ jobs:
           KAFKA_ENABLED: "true"
           CLAMAV_ENABLED: "true"
           AI_NODE_ENABLED: "false"
+          # Issue #213: the full profile runs the AI layer, so the backend must health-check it.
+          AI_LAYER_ENABLED: "true"
+          HEALTH_SHOW_DETAILS: "always"
           OPENSEARCH_ENABLED: "false"
           FILE_MANAGE_BUCKETS: "false"
           FILE_SCAN_INTERVAL_MS: "1000"
@@ -318,21 +321,23 @@ jobs:
           done
           docker compose -f infra/docker-compose.yml logs --tail=200 backend
           exit 1
-      - name: Wait for MinIO, ClamAV and the fake webhook
+      - name: Wait for MinIO, ClamAV, the AI layer and the fake webhook
         # Issue #209: a real scan must never run against a half-started service. ClamAV downloads
         # its signature database on first start, so allow a bounded but generous budget.
         # Issue #212: the combined scenario also needs the in-network fake webhook.
+        # Issue #213: the backend health check requires the AI layer to be reachable.
         run: |
           for attempt in $(seq 1 120); do
             if curl -fsS http://localhost:9000/minio/health/live >/dev/null \
+              && curl -fsS http://localhost:8000/api/v1/health >/dev/null \
               && curl -fsS http://localhost:9099/health >/dev/null \
               && docker compose -f infra/docker-compose.yml exec -T clamav clamdcheck.sh >/dev/null 2>&1; then
-              echo "MinIO, ClamAV and fake webhook ready after $attempt attempt(s)."
+              echo "MinIO, ClamAV, AI layer and fake webhook ready after $attempt attempt(s)."
               exit 0
             fi
             sleep 5
           done
-          docker compose -f infra/docker-compose.yml logs --tail=300 minio clamav fake-webhook
+          docker compose -f infra/docker-compose.yml logs --tail=300 minio clamav ai-layer fake-webhook
           exit 1
       - name: Provision MinIO buckets
         # Re-run the idempotent provisioner in the foreground: `up -d` does not fail when the
@@ -386,7 +391,7 @@ jobs:
         if: failure()
         run: >-
           docker compose -f infra/docker-compose.yml logs --tail=2000
-          backend kafka minio minio-init clamav fake-webhook
+          backend kafka minio minio-init clamav ai-layer fake-webhook
       - name: Stop Compose stack
         if: always()
         run: docker compose -f infra/docker-compose.yml down -v
