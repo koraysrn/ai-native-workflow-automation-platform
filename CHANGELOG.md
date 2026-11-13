@@ -5,6 +5,29 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0](https://github.com/koraysrn/ai-native-workflow-automation-platform/compare/v1.1.1...v1.2.0) (2026-11-13)
+
+
+### Features
+
+* **designer:** palette drag-and-drop, history and graph validation ([#198](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/198)) ([#260](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/260)) ([3163d07](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/3163d070ceebcf67041a1d8567da40430857cf1d))
+* **engine:** add generic per-node retry policies with node DLQ ([#210](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/210)) ([#273](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/273)) ([249194c](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/249194c9927c887750a55e01b09214e0d95baca3))
+* **forms:** link FILE fields to scanned document uploads ([#200](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/200)) ([#262](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/262)) ([0a5eb19](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/0a5eb19fd8e19737d547bcb7ed52a5436bc793f6))
+* **frontend:** standardize server state on TanStack Query ([#202](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/202)) ([#264](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/264)) ([2c5c05a](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/2c5c05a40b353f7f346cc7666ab8c342255cc7ce))
+* **load-test:** prove 1000-tenant isolation, races and SLOs ([#201](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/201)) ([#263](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/263)) ([d88971e](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/d88971efc57e060f723a6d45461103ac4b1a1116))
+* **local-stack:** make the default profile runnable and fully provisioned ([#213](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/213)) ([#276](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/276)) ([0eacd71](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/0eacd7139d66cea1d49f897d3b67e83788f712a8))
+* **notification:** publish requests from task and workflow events ([#203](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/203)) ([#265](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/265)) ([bc01efb](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/bc01efb60fbb2eaaaa1164403d367ba116831fc4))
+* **notification:** real email, SMS and push delivery transports ([#204](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/204)) ([#266](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/266)) ([f21823c](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/f21823c96b7bb01df5674d7a4c7e942fc899a80d))
+* **notification:** route failures to the notification DLQ with alert and replay ([#205](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/205)) ([#267](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/267)) ([aeed9e9](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/aeed9e9a374f20174e114bce04d6901eaf9899fc))
+
+
+### Bug Fixes
+
+* **ci:** build images without the Ubuntu archive ([#258](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/258)) ([8e5b408](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/8e5b408a415a8f4b56aead84f9de471834930c92))
+* **document:** route document lifecycle events to the document topic ([#208](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/208)) ([#271](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/271)) ([4c381b3](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/4c381b3d756ca2a5ea00c064b398f27d31378302))
+* **notification:** align retry budget with the specified policy ([#206](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/206)) ([#269](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/269)) ([fd851c3](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/fd851c32e957350dc31281f5e29842d5b7885ade))
+* **task:** route escalation events to a dedicated consumer ([#207](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/207)) ([#270](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/270)) ([e90de16](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/e90de16035613dc5ea61f851a01e7f7b74c17c6f))
+
 ## [1.1.1](https://github.com/koraysrn/ai-native-workflow-automation-platform/compare/v1.1.0...v1.1.1) (2026-11-10)
 
 
