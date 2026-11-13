@@ -293,14 +293,17 @@ jobs:
         env:
           # Issue #189: run the suite against the one-command full stack.
           # Issue #209: the document scan journey needs the real MinIO and ClamAV services, a fast
-          # scanner tick and a host-reachable presigned endpoint.
+          # scanner tick and a host-reachable presigned endpoint. Buckets are provisioned by
+          # minio-init (the same provisioners production uses), so the backend must not try to
+          # re-create them; the single-IP suite also needs the auth rate limit lifted.
           KAFKA_ENABLED: "true"
           CLAMAV_ENABLED: "true"
           AI_NODE_ENABLED: "false"
           OPENSEARCH_ENABLED: "false"
-          FILE_MANAGE_BUCKETS: "true"
+          FILE_MANAGE_BUCKETS: "false"
           FILE_SCAN_INTERVAL_MS: "1000"
           MINIO_PUBLIC_ENDPOINT: "http://localhost:9000"
+          AUTH_RATE_LIMIT_ENABLED: "false"
           OUTBOX_RELAY_INTERVAL_MS: "1000"
           OUTBOX_RELAY_INITIAL_DELAY_MS: "1000"
         run: docker compose -f infra/docker-compose.yml --profile full up -d --build
@@ -375,7 +378,7 @@ jobs:
           retention-days: 14
       - name: Dump Compose logs on failure
         if: failure()
-        run: docker compose -f infra/docker-compose.yml logs --tail=2000 backend kafka
+        run: docker compose -f infra/docker-compose.yml logs --tail=2000 backend kafka minio clamav
       - name: Stop Compose stack
         if: always()
         run: docker compose -f infra/docker-compose.yml down -v

@@ -53,7 +53,10 @@ async function csrfToken(ctx: APIRequestContext): Promise<string> {
     return decodeURIComponent(cookie.value);
   }
   const response = await ctx.get(`${API_URL}/api/v1/auth/csrf`);
-  expect(response.ok(), "the backend must issue an XSRF token").toBeTruthy();
+  expect(
+    response.ok(),
+    `the backend must issue an XSRF token (status ${response.status()}): ${await response.text()}`,
+  ).toBeTruthy();
   return ((await response.json()) as { token: string }).token;
 }
 

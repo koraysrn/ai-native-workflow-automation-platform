@@ -1,7 +1,6 @@
 package com.awap.file.infrastructure;
 
 import io.minio.MinioClient;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -10,8 +9,8 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class MinioConfig {
 
+  /** Bean name is the method name, which is also the qualifier used by the object store. */
   @Bean
-  @Qualifier("minioClient")
   public MinioClient minioClient(
       @Value("${awap.minio.endpoint:http://localhost:9000}") String endpoint,
       @Value("${awap.minio.access-key:awapadmin}") String accessKey,
@@ -30,7 +29,6 @@ public class MinioConfig {
    * endpoint is reused, so single-host deployments are unchanged.
    */
   @Bean
-  @Qualifier("minioPresignClient")
   public MinioClient minioPresignClient(
       @Value("${awap.minio.public-endpoint:}") String publicEndpoint,
       @Value("${awap.minio.endpoint:http://localhost:9000}") String endpoint,
