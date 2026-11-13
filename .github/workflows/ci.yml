@@ -386,7 +386,7 @@ jobs:
         if: failure()
         run: >-
           docker compose -f infra/docker-compose.yml logs --tail=2000
-          backend kafka minio minio-init clamav
+          backend kafka minio minio-init clamav fake-webhook
       - name: Stop Compose stack
         if: always()
         run: docker compose -f infra/docker-compose.yml down -v

@@ -66,19 +66,19 @@ class WebhookClientNegativeTest {
 
   @Test
   void ssrfGuardRejectsMalformedUrl() {
-    SsrfGuard guard = new SsrfGuard();
+    SsrfGuard guard = new SsrfGuard("");
     assertThatThrownBy(() -> guard.assertSafe("not-a-url")).isInstanceOf(AwapException.class);
   }
 
   @Test
   void ssrfGuardRejectsUrlWithoutHost() {
-    SsrfGuard guard = new SsrfGuard();
+    SsrfGuard guard = new SsrfGuard("");
     assertThatThrownBy(() -> guard.assertSafe("http:///hook")).isInstanceOf(AwapException.class);
   }
 
   @Test
   void ssrfGuardRejectsUnresolvableHost() {
-    SsrfGuard guard = new SsrfGuard();
+    SsrfGuard guard = new SsrfGuard("");
     assertThatThrownBy(() -> guard.assertSafe("http://this-host-does-not-exist.invalid/hook"))
         .isInstanceOf(AwapException.class);
   }

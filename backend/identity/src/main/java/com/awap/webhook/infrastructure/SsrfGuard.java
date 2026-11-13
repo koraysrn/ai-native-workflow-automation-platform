@@ -36,11 +36,6 @@ public class SsrfGuard {
             .collect(Collectors.toUnmodifiableSet());
   }
 
-  /** Guard without trusted hosts, used by callers that are not Spring-managed (tests). */
-  public SsrfGuard() {
-    this("");
-  }
-
   public void assertSafe(String url) {
     final String host;
     try {
