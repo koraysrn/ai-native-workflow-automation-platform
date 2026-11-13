@@ -88,6 +88,7 @@ test("the full profile turns on Kafka, MinIO, ClamAV, the AI layer and OpenSearc
   assert.equal(env.KAFKA_ENABLED, "${KAFKA_ENABLED:-true}");
   assert.equal(env.CLAMAV_ENABLED, "${CLAMAV_ENABLED:-true}");
   assert.equal(env.AI_NODE_ENABLED, "${AI_NODE_ENABLED:-true}");
+  assert.equal(env.AI_LAYER_ENABLED, "${AI_LAYER_ENABLED:-true}");
   assert.equal(env.OPENSEARCH_ENABLED, "${OPENSEARCH_ENABLED:-true}");
   assert.equal(env.FILE_MANAGE_BUCKETS, "${FILE_MANAGE_BUCKETS:-true}");
   assert.equal(env.AI_LAYER_URL, "${AI_LAYER_URL:-http://ai-layer:8000}");

@@ -309,6 +309,16 @@ test("runs the combined automation scenario end to end", async ({ context }) => 
   test.setTimeout(420_000);
   const plan = seedPlan(process.env.E2E_SEED_SUFFIX ?? "local");
   const me = await login(context.request, plan);
+
+  // Issue #213: the default local profile starts the AI layer and the backend health check
+  // exercises it. This is the real backend-to-AI-layer reachability assertion.
+  const health = await context.request.get(`${API_URL}/actuator/health`);
+  expect(health.ok(), await health.text()).toBeTruthy();
+  const healthBody = (await health.json()) as {
+    components?: Record<string, { status?: string }>;
+  };
+  expect(healthBody.components?.aiLayer?.status).toBe("UP");
+
   await controlWebhook(context.request, {
     failureRate: 0,
     failureStatus: 500,

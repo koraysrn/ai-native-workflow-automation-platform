@@ -21,6 +21,7 @@ import { randomBytes } from "node:crypto";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -523,7 +524,7 @@ async function main(argv = process.argv.slice(2)) {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   main().then((code) => {
     process.exitCode = code;
   });

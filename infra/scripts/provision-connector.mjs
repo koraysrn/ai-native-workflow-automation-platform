@@ -19,6 +19,7 @@
 import { readFile } from "node:fs/promises";
 import { appendFile } from "node:fs/promises";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 
 const CONNECTOR_NAME = "awap-outbox-connector";
 const DEFAULT_CONNECT_URL = "http://localhost:8083";
@@ -160,7 +161,7 @@ async function main(argv = process.argv.slice(2)) {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
   main().then((code) => {
     process.exitCode = code;
   });

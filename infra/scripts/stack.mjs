@@ -14,6 +14,7 @@
 import { execFile } from "node:child_process";
 import { appendFile } from "node:fs/promises";
 import process from "node:process";
+import { pathToFileURL } from "node:url";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -319,6 +320,15 @@ export async function reset({ exec, composeFile, profile = "full", dryRun = fals
   await trace(traceFile, "reset:complete");
 }
 
+/**
+ * True when this module is the process entry point. Comparing raw strings breaks when the
+ * workspace path contains spaces or unicode (the URL is percent-encoded), which silently makes
+ * `make up`/`down`/`reset`/`seed` a no-op; pathToFileURL normalises both sides.
+ */
+export function isEntryPoint(metaUrl, entryPath) {
+  return Boolean(entryPath) && pathToFileURL(entryPath).href === metaUrl;
+}
+
 export function parseArgs(argv) {
   const options = {
     command: argv[0] ?? "help",
@@ -389,7 +399,7 @@ export async function main(argv = process.argv.slice(2)) {
   }
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+if (isEntryPoint(import.meta.url, process.argv[1])) {
   main()
     .then((code) => {
       process.exitCode = code;
