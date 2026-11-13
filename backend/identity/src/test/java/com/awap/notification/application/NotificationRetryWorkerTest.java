@@ -106,14 +106,14 @@ class NotificationRetryWorkerTest {
   @Test
   void exhaustionMarksFailedAndPublishesDlq() {
     UUID id =
-        store.addDueRow(TENANT, NotificationChannel.EMAIL, "a@example.com", NOW, 4, "RETRYING");
+        store.addDueRow(TENANT, NotificationChannel.EMAIL, "a@example.com", NOW, 3, "RETRYING");
     adapter.failure = new IllegalStateException("provider 500");
     Issued issued = claim(id, NOW);
 
     worker.deliver(issued.claim(), issued.token(), NOW);
 
     assertThat(store.row(id).status).isEqualTo("FAILED");
-    assertThat(store.row(id).attempts).isEqualTo(5);
+    assertThat(store.row(id).attempts).isEqualTo(4);
     assertThat(store.row(id).nextAttemptAt).isNull();
     verify(outbox)
         .publish(eq(TENANT), eq("NOTIFICATION"), eq(id), eq("NOTIFICATION_FAILED"), any());
@@ -277,6 +277,43 @@ class NotificationRetryWorkerTest {
   }
 
   @Test
+  void theDefaultPolicySchedulesOneFiveAndTwentyFiveSecondsThenExhausts() {
+    UUID id =
+        store.addDueRow(TENANT, NotificationChannel.EMAIL, "a@example.com", NOW, 0, "PENDING");
+    adapter.failure = new IllegalStateException("provider 500");
+
+    Issued first = claim(id, NOW, Duration.ZERO);
+    worker.deliver(first.claim(), first.token(), NOW);
+    assertThat(store.row(id).attempts).isEqualTo(1);
+    Instant afterFirst = NOW.plusSeconds(1);
+    assertThat(store.row(id).nextAttemptAt).isEqualTo(afterFirst);
+
+    Issued second = claim(id, afterFirst, Duration.ZERO);
+    worker.deliver(second.claim(), second.token(), afterFirst);
+    assertThat(store.row(id).attempts).isEqualTo(2);
+    Instant afterSecond = afterFirst.plusSeconds(5);
+    assertThat(store.row(id).nextAttemptAt).isEqualTo(afterSecond);
+
+    Issued third = claim(id, afterSecond, Duration.ZERO);
+    worker.deliver(third.claim(), third.token(), afterSecond);
+    assertThat(store.row(id).attempts).isEqualTo(3);
+    Instant afterThird = afterSecond.plusSeconds(25);
+    assertThat(store.row(id).nextAttemptAt).isEqualTo(afterThird);
+
+    Issued fourth = claim(id, afterThird, Duration.ZERO);
+    worker.deliver(fourth.claim(), fourth.token(), afterThird);
+
+    assertThat(store.row(id).status).isEqualTo("FAILED");
+    assertThat(store.row(id).attempts).isEqualTo(4);
+    assertThat(store.row(id).lastAttemptAt).isEqualTo(afterThird);
+    verify(outbox).publish(eq(TENANT), eq("NOTIFICATION"), eq(id), eq("NOTIFICATION_DLQ"), any());
+    assertThat(
+            store.claimDue(
+                afterThird.plusSeconds(600), UUID.randomUUID(), Duration.ofSeconds(1), 10, 10))
+        .isEmpty();
+  }
+
+  @Test
   void aBounceWithoutASuppressionStoreStillFailsPermanently() {
     UUID id =
         store.addDueRow(TENANT, NotificationChannel.EMAIL, "a@example.com", NOW, 1, "RETRYING");
@@ -308,9 +345,12 @@ class NotificationRetryWorkerTest {
   }
 
   private Issued claim(UUID id, Instant now) {
+    return claim(id, now, Duration.ofSeconds(120));
+  }
+
+  private Issued claim(UUID id, Instant now, Duration lease) {
     UUID token = UUID.randomUUID();
-    List<NotificationRetryClaim> claims =
-        store.claimDue(now, token, Duration.ofSeconds(120), 10, 10);
+    List<NotificationRetryClaim> claims = store.claimDue(now, token, lease, 10, 10);
     NotificationRetryClaim claim =
         claims.stream().filter(candidate -> candidate.id().equals(id)).findFirst().orElseThrow();
     return new Issued(claim, token);

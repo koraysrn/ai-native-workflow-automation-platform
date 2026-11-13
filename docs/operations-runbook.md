@@ -419,8 +419,8 @@ losing it.
 | Setting | Default | Meaning |
 |---|---|---|
 | `awap.notification.retry-interval-ms` | 5000 | scheduler tick |
-| `awap.notification.retry-delays-ms` | 1000,5000,25000,120000,600000 | backoff per failed attempt |
-| `awap.notification.max-attempts` | 5 | attempts before `FAILED` + dead letter |
+| `awap.notification.retry-delays-ms` | 1000,5000,25000 | backoff per failed retry (issue #206) |
+| `awap.notification.max-attempts` | 3 | retries after the initial attempt before `FAILED` + dead letter |
 | `awap.notification.retry-lease-seconds` | 120 | claim window before another replica may take over |
 | `awap.notification.retry-batch-size` | 50 | rows per tick |
 | `awap.notification.retry-per-tenant-limit` | 5 | fairness cap per tenant per tick |
@@ -437,9 +437,17 @@ Operational behaviour:
 - **Crash recovery**: if a replica dies after claiming, the lease expires and another replica claims
   the row. A replica that lost its lease cannot write SENT/RETRYING/FAILED because every update is
   guarded by `lease_token` and the retriable status.
-- **Exhaustion**: at `max-attempts` the row becomes `FAILED`, `NOTIFICATION_FAILED` and
-  `NOTIFICATION_DLQ` are written to the outbox and the relay publishes to `notification.send.dlq`.
-  The `awap-dlq` consumer counts it and the alerts below fire.
+- **Retry budget** (issue #206): the shipped policy is one initial provider attempt plus three
+  retries. The first failure schedules `last_attempt_at + 1s`, the second `+5s` and the third
+  `+25s`; every delay is persisted in `next_attempt_at` and every failure records `last_attempt_at`.
+  A wall-clock rollback can never move `next_attempt_at` behind the last attempt.
+- **Configuration validation**: delays must be strictly positive and `max-attempts` must be at least
+  one. A malformed `NOTIFICATION_RETRY_DELAYS_MS`/`NOTIFICATION_MAX_ATTEMPTS` fails bean creation,
+  so a misconfigured replica refuses to start instead of silently retrying forever.
+- **Exhaustion**: once the initial attempt plus `max-attempts` retries have failed the row becomes
+  `FAILED`, `NOTIFICATION_FAILED` and `NOTIFICATION_DLQ` are written to the outbox and the relay
+  publishes to `notification.send.dlq`. The `awap-dlq` consumer counts it and the alerts below
+  fire. A retry that is already scheduled after exhaustion is never created.
 - **Permanent failures** (unrenderable template, oversized body, missing adapter) are `FAILED`
   immediately with no retry, and are dead-lettered for inspection.
 - **Metrics**: `awap.notification.retry.lag` (timer), `awap.notification.retry.claims`,

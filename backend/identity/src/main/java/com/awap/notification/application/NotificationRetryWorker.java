@@ -59,9 +59,8 @@ public class NotificationRetryWorker {
       KafkaTenantContext tenantContext,
       NotificationSuppressionStore suppressionStore,
       MeterRegistry meterRegistry,
-      @Value("${awap.notification.retry-delays-ms:1000,5000,25000,120000,600000}")
-          String retryDelays,
-      @Value("${awap.notification.max-attempts:5}") int maxAttempts,
+      @Value("${awap.notification.retry-delays-ms:1000,5000,25000}") String retryDelays,
+      @Value("${awap.notification.max-attempts:3}") int maxAttempts,
       @Value("${awap.notification.max-body-bytes:262144}") int maxBodyBytes) {
     this(
         channelAdapters,

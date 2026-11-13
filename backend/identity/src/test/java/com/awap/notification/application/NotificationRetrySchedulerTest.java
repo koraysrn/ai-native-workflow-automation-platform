@@ -104,14 +104,14 @@ class NotificationRetrySchedulerTest {
   @Test
   void exhaustedDeliveryIsDeadLetteredAndNeverRetriedAgain() {
     UUID id =
-        store.addDueRow(TENANT_A, NotificationChannel.EMAIL, "a@example.com", NOW, 4, "RETRYING");
+        store.addDueRow(TENANT_A, NotificationChannel.EMAIL, "a@example.com", NOW, 3, "RETRYING");
     adapter.failure = new IllegalStateException("provider unavailable");
 
     scheduler.processDueRetries();
     scheduler.processDueRetries();
 
     assertThat(store.row(id).status).isEqualTo("FAILED");
-    assertThat(store.row(id).attempts).isEqualTo(5);
+    assertThat(store.row(id).attempts).isEqualTo(4);
     assertThat(adapter.invocations.get()).isEqualTo(1);
     assertThat(registry.get(NotificationRetryWorker.DLQ_METRIC).counter().count()).isEqualTo(1.0);
   }
