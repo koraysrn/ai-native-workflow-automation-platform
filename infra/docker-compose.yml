@@ -113,7 +113,7 @@ services:
     command:
       - |
         set -euo pipefail
-        topics="workflow.task.events workflow.instance.events workflow.subprocess.events workflow.saga.events analytics.events document.events notification.send notification.requested.events"
+        topics="workflow.task.events workflow.instance.events workflow.subprocess.events workflow.saga.events task.escalation.events analytics.events document.events notification.send notification.requested.events"
         for topic in $$topics; do
           kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists \
             --topic "$$topic" --partitions 3 --replication-factor 1
