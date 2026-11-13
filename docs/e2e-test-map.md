@@ -6,12 +6,13 @@ The suite lives in [`frontend/e2e`](../frontend/e2e) and runs in two modes:
   mocked per spec, no database is required. Fast and deterministic. The live journey spec is
   ignored by [`playwright.config.ts`](../frontend/playwright.config.ts) unless
   `E2E_LIVE_STACK=1`.
-- **Stack mode** (`E2E_LIVE_STACK=1`, the CI `e2e` job): `docker compose` provides Postgres/Kafka
-  plus the built backend and frontend; `e2e/global-setup.ts` waits for `GET /actuator/health` and
-  the frontend, then seeds a tenant through `POST /api/v1/tenants`. The job also sets
-  `KAFKA_ENABLED=true` so the outbox relay delivers the analytics events, and
-  `FILE_MANAGE_BUCKETS=false` because MinIO is an opt-in profile. `FILE_SCAN_INTERVAL_MS` is
-  raised so the document assertion sees the real `QUARANTINED` projection instead of a timed scan.
+- **Stack mode** (`E2E_LIVE_STACK=1`, the CI `e2e` job): `docker compose` provides Postgres/Kafka,
+  MinIO, ClamAV, the built backend and the frontend; `e2e/global-setup.ts` waits for
+  `GET /actuator/health` and the frontend, then seeds a tenant through `POST /api/v1/tenants`. The
+  job sets `KAFKA_ENABLED=true` so the outbox relay delivers analytics, `CLAMAV_ENABLED=true` and
+  `FILE_MANAGE_BUCKETS=true` for the real scan pipeline, `MINIO_PUBLIC_ENDPOINT=http://localhost:9000`
+  so presigned URLs point at the host-published port, and `FILE_SCAN_INTERVAL_MS=1000` so a scan
+  completes within the test budget.
 
 Both modes use one worker (fixtures stay deterministic) and retry once on CI with traces,
 screenshots and video retained on failure.
@@ -31,7 +32,7 @@ screenshots and video retained on failure.
 | A user logs in, selects the seeded tenant and sees the dashboard counts from the real API | [`live-journey.spec.ts`](../frontend/e2e/live-journey.spec.ts) — `dashboard` | stack |
 | A published workflow starts and the instance reaches COMPLETED | `live-journey.spec.ts` — `workflow` | stack |
 | A task is approved and the API status becomes APPROVED | `live-journey.spec.ts` — `task` | stack |
-| A new document is QUARANTINED and download stays disabled | `live-journey.spec.ts` — `document` | stack |
+| A new document is uploaded, scanned and PROMOTED before download is enabled | `live-journey.spec.ts` — `document` | stack |
 | Analytics aggregates include WORKFLOW_COMPLETED and the page renders the real count | `live-journey.spec.ts` — `analytics` | stack |
 | A DECISION node gets two conditional edges through the inspector | [`workflow-designer-conditions.spec.ts`](../frontend/e2e/workflow-designer-conditions.spec.ts) — `branches` | mocked |
 | Save is blocked while an edge condition is invalid | `workflow-designer-conditions.spec.ts` — `guard` | mocked |
@@ -39,6 +40,9 @@ screenshots and video retained on failure.
 | An upload flows through live status to PROMOTED and enables download | [`document-scan-live.spec.ts`](../frontend/e2e/document-scan-live.spec.ts) — `uploads` | mocked |
 | Scan status updates rows without a refresh and gates download on PROMOTED | `document-scan-live.spec.ts` — `updates` | mocked |
 | INFECTED shows an alert, an aria-live announcement and keeps download disabled | `document-scan-live.spec.ts` — `announces` | mocked |
+| A clean PDF traverses QUARANTINED → SCANNING → CLEAN → PROMOTED (real MinIO + ClamAV), the SSE stream reports every transition and the presigned GET works only after promotion | [`document-scan-real.spec.ts`](../frontend/e2e/document-scan-real.spec.ts) — `clean` | stack |
+| EICAR reaches INFECTED and the download is forbidden (real ClamAV) | `document-scan-real.spec.ts` — `infected` | stack |
+| 500 MB and unsupported formats are rejected with 413/415 and tenant B cannot download tenant A's file | `document-scan-real.spec.ts` — `limits` | stack |
 
 ## Conventions
 

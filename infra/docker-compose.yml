@@ -428,6 +428,9 @@ services:
       OPENSEARCH_ENABLED: ${OPENSEARCH_ENABLED:-true}
       OPENSEARCH_ENDPOINT: ${OPENSEARCH_ENDPOINT:-http://opensearch:9200}
       MINIO_ENDPOINT: ${MINIO_ENDPOINT:-http://minio:9000}
+      # Presigned upload/download URLs must point at the port published to the host, not at the
+      # container-internal minio hostname (issue #209).
+      MINIO_PUBLIC_ENDPOINT: ${MINIO_PUBLIC_ENDPOINT:-http://localhost:9000}
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-awapadmin}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-awapadmin123}
       OTLP_ENDPOINT: ${OTLP_ENDPOINT:-http://otel-collector:4318/v1/traces}

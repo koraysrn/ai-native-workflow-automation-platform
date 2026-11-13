@@ -221,10 +221,14 @@ test("completes the live product journey against the real API", async ({ page })
     )
     .toBe("APPROVED");
 
-  // 5. Register a document through the real API. The E2E stack runs without the opt-in MinIO
-  //    image and with bucket provisioning disabled, so the API records the real QUARANTINED scan
-  //    projection (the upload-to-PROMOTED path is covered by document-scan-live.spec.ts).
+  // 5. Register a document through the real API, upload the bytes to the presigned MinIO slot and
+  //    wait for the real ClamAV scan to promote it (issue #209 enabled MinIO/ClamAV in the E2E
+  //    stack, so a record without bytes would now legitimately end as SCAN_FAILED).
   const documentName = `live-document-${suffix}.pdf`;
+  const cleanPdf = Buffer.from(
+    "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\ntrailer\n<< /Root 1 0 R >>\n%%EOF\n",
+    "utf8",
+  );
   const document = await apiPost<{
     fileId: string;
     uploadUrl: string;
@@ -232,22 +236,41 @@ test("completes the live product journey against the real API", async ({ page })
   }>(page, "/api/v1/documents", tenantId, {
     name: documentName,
     contentType: "application/pdf",
-    size: 128,
+    size: cleanPdf.length,
   });
   expect(document.version.scanStatus).toBe("QUARANTINED");
   expect(document.version.downloadable).toBe(false);
 
+  const uploadResponse = await page.request.put(document.uploadUrl, {
+    headers: { "Content-Type": "application/pdf" },
+    data: cleanPdf,
+  });
+  expect(uploadResponse.ok(), "the presigned MinIO upload must succeed").toBeTruthy();
+
+  await expect
+    .poll(
+      async () =>
+        (await apiGet<DocumentVersionDto[]>(page, "/api/v1/documents", tenantId)).find(
+          (entry) => entry.fileId === document.fileId,
+        )?.scanStatus,
+      { timeout: 180_000, intervals: [1_000, 2_000] },
+    )
+    .toBe("PROMOTED");
+
   const documents = await apiGet<DocumentVersionDto[]>(page, "/api/v1/documents", tenantId);
   const listedDocument = documents.find((entry) => entry.fileId === document.fileId);
-  expect(listedDocument?.scanStatus).toBe("QUARANTINED");
-  expect(listedDocument?.downloadable).toBe(false);
+  expect(listedDocument?.scanStatus).toBe("PROMOTED");
+  expect(listedDocument?.downloadable).toBe(true);
 
   await page.goto("/documents");
   await expect(page.getByRole("heading", { name: "Documents" })).toBeVisible();
   const documentRow = page.getByTestId(`document-row-${document.fileId}`);
   await expect(documentRow).toBeVisible({ timeout: 30_000 });
-  await expect(page.getByTestId(`scan-status-${document.fileId}`)).toHaveText("Quarantined");
-  await expect(documentRow.getByRole("button", { name: "Download" })).toBeDisabled();
+  await expect(page.getByTestId(`scan-status-${document.fileId}`)).toHaveText(
+    "Ready to download",
+    { timeout: 60_000 },
+  );
+  await expect(documentRow.getByRole("button", { name: "Download" })).toBeEnabled();
 
   // 6. The completed workflow must reach the analytics aggregate and the analytics page must
   //    render that real value. The Compose job enables Kafka/outbox delivery for this assertion.

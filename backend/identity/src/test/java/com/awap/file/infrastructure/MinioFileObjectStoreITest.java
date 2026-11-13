@@ -59,7 +59,7 @@ class MinioFileObjectStoreITest {
             .endpoint("http://" + MINIO.getHost() + ":" + MINIO.getMappedPort(9000))
             .credentials("minioadmin", "minioadmin")
             .build();
-    store = new MinioFileObjectStore(client);
+    store = new MinioFileObjectStore(client, client);
   }
 
   @AfterAll
