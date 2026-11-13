@@ -318,19 +318,21 @@ jobs:
           done
           docker compose -f infra/docker-compose.yml logs --tail=200 backend
           exit 1
-      - name: Wait for MinIO and ClamAV
+      - name: Wait for MinIO, ClamAV and the fake webhook
         # Issue #209: a real scan must never run against a half-started service. ClamAV downloads
         # its signature database on first start, so allow a bounded but generous budget.
+        # Issue #212: the combined scenario also needs the in-network fake webhook.
         run: |
           for attempt in $(seq 1 120); do
             if curl -fsS http://localhost:9000/minio/health/live >/dev/null \
+              && curl -fsS http://localhost:9099/health >/dev/null \
               && docker compose -f infra/docker-compose.yml exec -T clamav clamdcheck.sh >/dev/null 2>&1; then
-              echo "MinIO and ClamAV ready after $attempt attempt(s)."
+              echo "MinIO, ClamAV and fake webhook ready after $attempt attempt(s)."
               exit 0
             fi
             sleep 5
           done
-          docker compose -f infra/docker-compose.yml logs --tail=300 minio clamav
+          docker compose -f infra/docker-compose.yml logs --tail=300 minio clamav fake-webhook
           exit 1
       - name: Provision MinIO buckets
         # Re-run the idempotent provisioner in the foreground: `up -d` does not fail when the
@@ -384,7 +386,7 @@ jobs:
         if: failure()
         run: >-
           docker compose -f infra/docker-compose.yml logs --tail=2000
-          backend kafka minio minio-init clamav
+          backend kafka minio minio-init clamav fake-webhook
       - name: Stop Compose stack
         if: always()
         run: docker compose -f infra/docker-compose.yml down -v

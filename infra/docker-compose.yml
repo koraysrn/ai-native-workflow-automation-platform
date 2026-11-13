@@ -172,6 +172,30 @@ services:
           echo "Bucket $$bucket ready."
         done
 
+  # Controllable local webhook target for the combined E2E scenario (issue #212). It lives inside
+  # the Compose network so the backend container can reach it, and exposes its control/requests
+  # endpoints on the host for Playwright assertions.
+  fake-webhook:
+    image: ${NODE_IMAGE:-node:24-alpine}
+    profiles: ["full"]
+    working_dir: /app
+    command: ["node", "load-test/fake-webhook.mjs"]
+    environment:
+      PORT: "9099"
+      FAILURE_RATE: "0"
+      FAILURE_STATUS: "500"
+      LATENCY_MS: "10"
+    volumes:
+      - ../load-test:/app/load-test:ro
+    ports:
+      - "9099:9099"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9099/health >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 5s
+
   clamav:
     image: clamav/clamav:1.4
     profiles: ["full"]
@@ -438,6 +462,13 @@ services:
       FILE_QUARANTINE_BUCKET: ${FILE_QUARANTINE_BUCKET:-awap-quarantine}
       FILE_PROMOTED_BUCKET: ${FILE_PROMOTED_BUCKET:-awap-files}
       FILE_SCAN_INTERVAL_MS: ${FILE_SCAN_INTERVAL_MS:-60000}
+      # The combined E2E scenario delivers to the in-network fake webhook; deployed environments
+      # must keep an explicit allowlist and secret.
+      WEBHOOK_SECRET: ${WEBHOOK_SECRET:-local-dev-webhook-secret}
+      WEBHOOK_ALLOWED_HOSTS: ${WEBHOOK_ALLOWED_HOSTS:-fake-webhook,localhost}
+      # The fake webhook is an in-network private target; trust only that host so the local stack can
+      # deliver while every other private/loopback target stays blocked by the SSRF guard.
+      WEBHOOK_SSRF_TRUSTED_HOSTS: ${WEBHOOK_SSRF_TRUSTED_HOSTS:-fake-webhook}
       OUTBOX_RELAY_INTERVAL_MS: ${OUTBOX_RELAY_INTERVAL_MS:-5000}
       OUTBOX_RELAY_INITIAL_DELAY_MS: ${OUTBOX_RELAY_INITIAL_DELAY_MS:-5000}
       # Issue #201: the 1000-tenant seed logs in from one host, so the per-IP auth budget must be

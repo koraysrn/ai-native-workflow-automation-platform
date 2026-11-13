@@ -38,7 +38,7 @@ class WebhookSecurityTest {
 
   @Test
   void ssrfGuardBlocksLoopback() {
-    SsrfGuard guard = new SsrfGuard();
+    SsrfGuard guard = new SsrfGuard("");
     assertThatThrownBy(() -> guard.assertSafe("http://127.0.0.1/hook"))
         .isInstanceOf(AwapException.class);
     assertThatThrownBy(() -> guard.assertSafe("http://localhost/hook"))
@@ -47,7 +47,7 @@ class WebhookSecurityTest {
 
   @Test
   void ssrfGuardBlocksPrivateRanges() {
-    SsrfGuard guard = new SsrfGuard();
+    SsrfGuard guard = new SsrfGuard("");
     assertThatThrownBy(() -> guard.assertSafe("http://10.0.0.5/hook"))
         .isInstanceOf(AwapException.class);
     assertThatThrownBy(() -> guard.assertSafe("http://192.168.1.10/hook"))
@@ -57,8 +57,22 @@ class WebhookSecurityTest {
   }
 
   @Test
+  void ssrfGuardAllowsOnlyTheExplicitlyTrustedHost() {
+    // The opt-in exists for receivers that legitimately live on a private network (and for the
+    // local Compose fake webhook); it must not widen to any other loopback/private target.
+    SsrfGuard guard = new SsrfGuard(" fake-webhook , Internal.Example ");
+    guard.assertSafe("http://fake-webhook:9099/webhook");
+    guard.assertSafe("http://internal.example/hook");
+
+    assertThatThrownBy(() -> guard.assertSafe("http://127.0.0.1/hook"))
+        .isInstanceOf(AwapException.class);
+    assertThatThrownBy(() -> guard.assertSafe("http://10.0.0.5/hook"))
+        .isInstanceOf(AwapException.class);
+  }
+
+  @Test
   void ssrfGuardBlocksIpv4MappedIpv6() {
-    SsrfGuard guard = new SsrfGuard();
+    SsrfGuard guard = new SsrfGuard("");
     assertThatThrownBy(() -> guard.assertSafe("http://[::ffff:127.0.0.1]/hook"))
         .isInstanceOf(AwapException.class);
     assertThatThrownBy(() -> guard.assertSafe("http://[::ffff:10.0.0.5]/hook"))
@@ -108,6 +122,38 @@ class WebhookSecurityTest {
             signer,
             mock(SsrfGuard.class),
             mock(OutboundAllowlist.class),
+            "s3cret",
+            HttpClient.newHttpClient());
+
+    String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/hook";
+    String response = client.post(url, "hello");
+
+    assertThat(response).isEqualTo("hello");
+    assertThat(capturedSignature.get()).matches("^[0-9a-f]{64}$");
+  }
+
+  @Test
+  void aTrustedLoopbackHostReachesTheReceiverThroughTheRealGuardAndAllowlist() throws Exception {
+    AtomicReference<String> capturedSignature = new AtomicReference<>();
+    server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext(
+        "/hook",
+        exchange -> {
+          capturedSignature.set(exchange.getRequestHeaders().getFirst("X-Awap-Signature"));
+          byte[] body = exchange.getRequestBody().readAllBytes();
+          exchange.sendResponseHeaders(200, body.length);
+          exchange.getResponseBody().write(body);
+          exchange.close();
+        });
+    server.start();
+
+    // Same wiring the local Compose stack uses: only the explicitly trusted host is exempt from
+    // the private-range block, and the allowlist still has to contain it.
+    WebhookClient client =
+        new WebhookClient(
+            new WebhookSigner(),
+            new SsrfGuard("127.0.0.1"),
+            new OutboundAllowlist("127.0.0.1"),
             "s3cret",
             HttpClient.newHttpClient());
 

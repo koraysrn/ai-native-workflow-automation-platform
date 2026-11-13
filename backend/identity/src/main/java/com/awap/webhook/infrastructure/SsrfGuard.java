@@ -4,15 +4,37 @@ import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
 import java.net.InetAddress;
 import java.net.URI;
+import java.util.Arrays;
+import java.util.Locale;
+import java.util.Set;
+import java.util.stream.Collectors;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 /**
  * Blocks webhook targets that resolve to loopback, link-local, site-local or any-local addresses
  * (SSRF protection).
+ *
+ * <p>The guard is fail-closed: with no configuration every private or loopback target is rejected.
+ * A deployment whose receivers legitimately live on a private network can name those hosts in
+ * {@code awap.webhook.ssrf.trusted-hosts} (comma separated). Those exact hosts skip only the
+ * private-range check; the outbound allowlist, the HMAC signature and the per-attempt re-check
+ * still apply. The local Compose stack uses this for the in-network fake webhook.
  */
 @Component
 public class SsrfGuard {
+
+  private final Set<String> trustedHosts;
+
+  public SsrfGuard(@Value("${awap.webhook.ssrf.trusted-hosts:}") String trustedHosts) {
+    this.trustedHosts =
+        Arrays.stream(trustedHosts.split(","))
+            .map(String::trim)
+            .map(host -> host.toLowerCase(Locale.ROOT))
+            .filter(host -> !host.isEmpty())
+            .collect(Collectors.toUnmodifiableSet());
+  }
 
   public void assertSafe(String url) {
     final String host;
@@ -23,6 +45,9 @@ public class SsrfGuard {
     }
     if (host == null) {
       throw forbidden(url);
+    }
+    if (trustedHosts.contains(host.toLowerCase(Locale.ROOT))) {
+      return;
     }
     try {
       InetAddress[] addresses = InetAddress.getAllByName(host);

@@ -174,7 +174,7 @@ class WebhookClientAttemptTest {
     WebhookClient client =
         new WebhookClient(
             new WebhookSigner(),
-            new SsrfGuard(),
+            new SsrfGuard(""),
             new OutboundAllowlist("hooks.example.com"),
             "s3cret",
             HttpClient.newHttpClient());
