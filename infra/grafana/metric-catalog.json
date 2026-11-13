@@ -34,6 +34,10 @@
       "source": "DlqConsumer (awap.dlq.messages counter)"
     },
     {
+      "name": "awap_node_retry_exhausted_total",
+      "source": "NodeExecutor (awap.node.retry.exhausted counter, tags nodeType/reason)"
+    },
+    {
       "name": "awap_document_sse_connections",
       "source": "DocumentScanMetrics (awap.document.sse.connections gauge)"
     },

@@ -98,6 +98,17 @@ groups:
           description: "{{ $value }} node executions exhausted their retry budget after a timeout."
           runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o31--node-timeouts"
 
+      # Generic per-node retry policy (issue #210): any terminal node failure is dead-lettered.
+      - alert: AwapNodeRetryExhausted
+        expr: sum(increase(awap_node_retry_exhausted_total[10m])) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Workflow nodes reached the node DLQ"
+          description: "{{ $value }} node execution(s) were exhausted or permanently failed in 10 minutes; inspect workflow.node.dlq."
+          runbook_url: "https://github.com/koraysrn/ai-native-workflow-automation-platform/blob/main/docs/operations-runbook.md#o32--per-node-retry-policies-issue-210"
+
       # A worker that swallows the interrupt keeps a thread alive past its budget; this is the
       # thread-leak alert for the node timeout executor.
       - alert: AwapNodeTimeoutAbandonedWorkers

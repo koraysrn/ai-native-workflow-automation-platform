@@ -19,11 +19,16 @@ import com.awap.webhook.application.WebhookDeliveryService;
 import com.awap.webhook.domain.WebhookDelivery;
 import com.awap.workflow.application.WorkflowDefinitionService;
 import com.awap.workflow.domain.NodeDefinition;
+import com.awap.workflow.domain.NodeRetryPolicy;
 import com.awap.workflow.domain.NodeType;
 import com.awap.workflow.domain.TransitionDefinition;
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.Metrics;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
@@ -42,6 +47,8 @@ final class NodeExecutor {
 
   private static final Logger log = LoggerFactory.getLogger(NodeExecutor.class);
 
+  static final String RETRY_EXHAUSTED_METRIC = "awap.node.retry.exhausted";
+
   private final NodeExecutionRepository nodeExecutionRepository;
   private final WorkflowDefinitionService workflowDefinitionService;
   private final NodeConfigReader configReader;
@@ -53,6 +60,7 @@ final class NodeExecutor {
   private final WebhookDeliveryService webhookDeliveryService;
   private final AiNodeService aiNodeService;
   private final ScriptNodeService scriptNodeService;
+  private final OutboxEventPublisher outboxEventPublisher;
 
   /** Test/backward-compatible constructor: WEBHOOK/AI/SCRIPT nodes fail closed without adapters. */
   NodeExecutor(
@@ -69,6 +77,7 @@ final class NodeExecutor {
         taskService,
         userRepository,
         port,
+        null,
         null,
         null,
         null,
@@ -95,6 +104,7 @@ final class NodeExecutor {
         null,
         null,
         null,
+        null,
         null);
   }
 
@@ -116,6 +126,7 @@ final class NodeExecutor {
         port,
         webhookInvoker,
         timeoutGuard,
+        null,
         null,
         null,
         null);
@@ -141,6 +152,7 @@ final class NodeExecutor {
         null,
         webhookDeliveryService,
         null,
+        null,
         null);
   }
 
@@ -155,7 +167,8 @@ final class NodeExecutor {
       NodeTimeoutGuard timeoutGuard,
       WebhookDeliveryService webhookDeliveryService,
       AiNodeService aiNodeService,
-      ScriptNodeService scriptNodeService) {
+      ScriptNodeService scriptNodeService,
+      OutboxEventPublisher outboxEventPublisher) {
     this.nodeExecutionRepository = nodeExecutionRepository;
     this.workflowDefinitionService = workflowDefinitionService;
     this.configReader = configReader;
@@ -167,6 +180,7 @@ final class NodeExecutor {
     this.webhookDeliveryService = webhookDeliveryService;
     this.aiNodeService = aiNodeService;
     this.scriptNodeService = scriptNodeService;
+    this.outboxEventPublisher = outboxEventPublisher;
   }
 
   /** Locates the START node and executes it, kicking off the workflow. */
@@ -603,37 +617,78 @@ final class NodeExecutor {
       RuntimeException ex,
       boolean replayMode) {
     execution.fail(ex.getMessage());
-    int maxAttempts = configReader.readMaxAttempts(node);
-    boolean retryable = isRetryable(ex);
-    if (!replayMode && retryable && execution.getAttempt() < maxAttempts) {
-      long backoffMs = configReader.readRetryBackoffMs(node);
-      execution.scheduleResume(Instant.now().plusMillis(Math.max(1, backoffMs)));
+    NodeRetryPolicy policy = retryPolicyOf(node);
+    boolean retryable = policy.isRetryable(ex);
+    if (!replayMode && retryable && policy.allowsAnotherAttempt(execution.getAttempt())) {
+      Instant nextAttemptAt = policy.nextAttemptAt(Instant.now(), execution.getAttempt());
+      execution.scheduleResume(nextAttemptAt);
       nodeExecutionRepository.save(execution);
       port.log(
           instance,
           node.getNodeId(),
           node.getNodeType().name(),
           "NODE_RETRY_SCHEDULED",
-          "attempt=" + execution.getAttempt() + " maxAttempts=" + maxAttempts);
+          "attempt="
+              + execution.getAttempt()
+              + " "
+              + policy.describe()
+              + " nextAttemptAt="
+              + nextAttemptAt
+              + " idempotencyKey="
+              + execution.idempotencyKey());
       return;
     }
+    String reason = !retryable ? "PERMANENT" : replayMode ? "REPLAY_SUPPRESSED" : "EXHAUSTED";
+    deadLetter(instance, node, execution, ex.getMessage(), reason, policy);
     nodeExecutionRepository.save(execution);
     port.log(instance, node.getNodeId(), node.getNodeType().name(), "NODE_FAILED", ex.getMessage());
     port.transition(instance, WorkflowState.FAILED, "NODE_FAILED");
   }
 
-  private boolean isRetryable(RuntimeException ex) {
-    if (ex instanceof AwapException awap) {
-      ErrorCode code = awap.errorCode();
-      return code != ErrorCode.WORKFLOW_INVALID_DEFINITION
-          && code != ErrorCode.VALIDATION_FAILED
-          && code != ErrorCode.FORBIDDEN
-          && code != ErrorCode.WORKFLOW_VERSION_INVALID
-          && code != ErrorCode.WORKFLOW_VERSION_NOT_FOUND
-          && code != ErrorCode.WORKFLOW_VERSION_NOT_PUBLISHED
-          && code != ErrorCode.WORKFLOW_VERSION_ARCHIVED;
+  private NodeRetryPolicy retryPolicyOf(NodeDefinition node) {
+    try {
+      return configReader.readRetryPolicy(node);
+    } catch (AwapException ex) {
+      // The definition save path rejects malformed policies, so this is a tampered/legacy row:
+      // fail closed with the safe default instead of escaping the failure handler.
+      log.warn("Node {} has an unreadable retryPolicy; using defaults.", node.getNodeId(), ex);
+      return NodeRetryPolicy.defaults();
     }
-    return true;
+  }
+
+  /** Publishes the node DLQ fact and counts the terminal retry outcome (issue #210). */
+  private void deadLetter(
+      WorkflowInstance instance,
+      NodeDefinition node,
+      NodeExecution execution,
+      String error,
+      String reason,
+      NodeRetryPolicy policy) {
+    Map<String, Object> payload = new LinkedHashMap<>();
+    payload.put("tenantId", instance.getTenantId().toString());
+    payload.put("workflowInstanceId", instance.getId().toString());
+    payload.put("nodeId", node.getNodeId());
+    payload.put("nodeType", node.getNodeType().name());
+    payload.put("attempts", execution.getAttempt());
+    payload.put("maxAttempts", policy.maxAttempts());
+    payload.put("reason", reason);
+    payload.put("error", error);
+    payload.put("idempotencyKey", execution.idempotencyKey());
+    if (outboxEventPublisher != null) {
+      outboxEventPublisher.publish(
+          instance.getTenantId(), "WORKFLOW", instance.getId(), "NODE_DLQ", payload);
+    }
+    Counter.builder(RETRY_EXHAUSTED_METRIC)
+        .tag("nodeType", node.getNodeType().name())
+        .tag("reason", reason)
+        .register(Metrics.globalRegistry)
+        .increment();
+    log.warn(
+        "Node {} ({}) moved to the node DLQ after {} attempt(s): {}",
+        node.getNodeId(),
+        node.getNodeType(),
+        execution.getAttempt(),
+        error);
   }
 
   void resumeFailedNodes(WorkflowInstance instance) {

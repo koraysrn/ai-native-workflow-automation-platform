@@ -87,6 +87,28 @@ Operating procedure for `AwapNodeTimeouts` / `AwapNodeTimeoutFailures`:
 Daemon workers idle out after 30s and the executor is drained on shutdown, so a normal restart
 does not leave `awap-node-timeout-*` threads behind.
 
+## O3.2 — Per-node retry policies (issue #210)
+
+Every executable node has a configurable `config.retryPolicy` (attempts, delayed backoff, jitter
+and retryable error classes); the full contract is in
+[`node-retries.md`](../docs/node-retries.md).
+
+Operating procedure for `AwapNodeRetryExhausted`:
+
+1. Identify the affected node types and reasons:
+   `sum by (nodeType, reason) (increase(awap_node_retry_exhausted_total[10m]))`.
+2. Inspect the node DLQ record (`workflow.node.dlq`) or the `NODE_DLQ` outbox row; it carries
+   `workflowInstanceId`, `nodeId`, `attempts`, `maxAttempts`, `reason`, `error` and
+   `idempotencyKey`.
+3. `reason="PERMANENT"` means the failure was classified as non-retryable (validation,
+   authorization, invalid definition/version) or did not match the configured
+   `retryableErrorClasses`; fix the definition/input instead of raising attempts.
+4. `reason="EXHAUSTED"` means the attempt budget was spent. Check the dependency, then re-drive the
+   instance with the workflow retry/recover endpoint (the same execution row and idempotency key are
+   reused, so a retry cannot duplicate the side effect).
+5. Raise `maxAttempts`/`delaysMs` in the node's `retryPolicy` only after confirming the error is
+   transient; the values are validated at definition save time.
+
 ## O4 — Backup & disaster recovery
 
 - PostgreSQL: nightly logical dumps (`pg_dump`) via

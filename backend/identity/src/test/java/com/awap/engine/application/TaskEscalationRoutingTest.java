@@ -71,6 +71,35 @@ class TaskEscalationRoutingTest {
   }
 
   @Test
+  void anExhaustedNodeGoesToTheNodeDlqTopic() {
+    OutboxRelayService service =
+        new OutboxRelayService(
+            kafkaTemplateProvider,
+            claimStore,
+            new ObjectMapper(),
+            new OutboxMetrics(new SimpleMeterRegistry()),
+            100,
+            LEASE,
+            5);
+    UUID token = UUID.randomUUID();
+    OutboxClaimStore.ClaimedOutboxEvent event =
+        new OutboxClaimStore.ClaimedOutboxEvent(
+            UUID.randomUUID(), "NODE_DLQ", UUID.randomUUID(), "{\"nodeId\":\"x\"}", token, null);
+    when(kafkaTemplateProvider.getIfAvailable()).thenReturn(kafkaTemplate);
+    when(claimStore.claimBatch(100, LEASE, 5)).thenReturn(List.of(event));
+    when(kafkaTemplate.send(any(ProducerRecord.class)))
+        .thenReturn(CompletableFuture.completedFuture(new SendResult<>(null, null)));
+    when(claimStore.markPublished(event.id(), token)).thenReturn(true);
+
+    service.relayEvents();
+
+    ArgumentCaptor<ProducerRecord<String, String>> captor =
+        ArgumentCaptor.forClass(ProducerRecord.class);
+    verify(kafkaTemplate).send(captor.capture());
+    assertThat(captor.getValue().topic()).isEqualTo("workflow.node.dlq");
+  }
+
+  @Test
   void theNodeCompletionListenerNoLongerSubscribesToTheEscalationTopic() throws Exception {
     KafkaListener annotation =
         NodeCompletedEventListener.class

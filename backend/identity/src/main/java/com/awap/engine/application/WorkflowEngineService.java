@@ -211,7 +211,8 @@ public class WorkflowEngineService implements WorkflowEnginePort {
             timeoutGuard,
             webhookDeliveryService,
             aiNodeService,
-            scriptNodeService);
+            scriptNodeService,
+            outboxEventPublisher);
   }
 
   @Transactional

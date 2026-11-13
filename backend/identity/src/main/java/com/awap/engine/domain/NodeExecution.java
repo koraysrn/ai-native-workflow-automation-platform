@@ -138,6 +138,14 @@ public class NodeExecution {
     this.mergedBranchCount = getMergedBranchCount() + 1;
   }
 
+  /**
+   * Deterministic idempotency key for the node's side effect (issue #210). A retry reuses the same
+   * execution row, so the key is stable across attempts and can be attached to external calls.
+   */
+  public String idempotencyKey() {
+    return workflowInstanceId + ":" + nodeId;
+  }
+
   public String getJoinNodeId() {
     return joinNodeId;
   }

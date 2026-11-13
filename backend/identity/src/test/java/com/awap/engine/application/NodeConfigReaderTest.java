@@ -34,6 +34,36 @@ class NodeConfigReaderTest {
   }
 
   @Test
+  void readRetryPolicyParsesTheConfiguredBlock() {
+    var policy =
+        reader.readRetryPolicy(
+            node(
+                "{\"retryPolicy\":{\"maxAttempts\":4,\"delaysMs\":[1000,5000],\"jitterRatio\":0.1}}"));
+
+    assertThat(policy.maxAttempts()).isEqualTo(4);
+    assertThat(policy.delaysMs()).containsExactly(1_000L, 5_000L);
+    assertThat(policy.jitterRatio()).isEqualTo(0.1);
+  }
+
+  @Test
+  void readRetryPolicyFallsBackToLegacyValues() {
+    var policy = reader.readRetryPolicy(node("{\"maxAttempts\":5,\"retryBackoffMs\":2500}"));
+
+    assertThat(policy.maxAttempts()).isEqualTo(5);
+    assertThat(policy.delaysMs()).containsExactly(2_500L);
+  }
+
+  @Test
+  void readRetryPolicyRejectsATamperedBlock() {
+    assertThatThrownBy(() -> reader.readRetryPolicy(node("{\"retryPolicy\":{\"maxAttempts\":0}}")))
+        .isInstanceOf(AwapException.class)
+        .satisfies(
+            error ->
+                assertThat(((AwapException) error).errorCode())
+                    .isEqualTo(ErrorCode.WORKFLOW_INVALID_DEFINITION));
+  }
+
+  @Test
   void readDelaySecondsDefaultsToZeroWhenMissing() {
     assertThat(reader.readDelaySeconds(node("{}"))).isZero();
   }

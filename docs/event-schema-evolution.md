@@ -38,6 +38,7 @@ ignored.
 | `TASK_ESCALATION_DUE` | `task.escalation.events` | `TaskEscalationEventListener` (issue #207) |
 | `FORM_SUBMITTED`, `WORKFLOW_INSTANCE_STATE` | `workflow.instance.events` | `NodeCompletedEventListener` |
 | `SUB_PROCESS_COMPLETED` | `workflow.subprocess.events` | `SubProcessCompletedEventListener` |
+| `NODE_DLQ` | `workflow.node.dlq` | `awap-dlq` consumer (alerts) |
 | `NOTIFICATION_REQUESTED` | `notification.send` | `NotificationRequestedEventListener` |
 | `DOCUMENT_*` | `document.events` | `DocumentEventListener` |
 | `ANALYTICS_EVENT` | `analytics.events` | `AnalyticsEventListener`, `UsageEventListener` |

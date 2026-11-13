@@ -35,6 +35,7 @@ public final class DlqTopics {
           "workflow.instance.events",
           "workflow.subprocess.events",
           "workflow.saga.events",
+          "workflow.node.dlq",
           "task.escalation.events",
           "analytics.events",
           "document.events",

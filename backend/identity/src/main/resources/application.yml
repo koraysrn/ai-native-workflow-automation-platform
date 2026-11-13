@@ -73,7 +73,7 @@ awap:
     dlq-group-id: ${KAFKA_DLQ_GROUP_ID:awap-dlq}
     # Bounded metric tag values. Topics not listed here are folded into "other" so a malicious
     # producer cannot create unbounded Prometheus series.
-    dlq-known-topics: ${KAFKA_DLQ_KNOWN_TOPICS:workflow.task.events,workflow.instance.events,workflow.subprocess.events,workflow.saga.events,task.escalation.events,analytics.events,document.events,notification.send,notification.requested.events}
+    dlq-known-topics: ${KAFKA_DLQ_KNOWN_TOPICS:workflow.task.events,workflow.instance.events,workflow.subprocess.events,workflow.saga.events,workflow.node.dlq,task.escalation.events,analytics.events,document.events,notification.send,notification.requested.events}
     dlq-quarantine-path: ${DLQ_QUARANTINE_PATH:target/dlq-quarantine/legacy-dlq-quarantine.jsonl}
     # Bounded poll: a large DLQ backlog is drained in chunks instead of blocking the listener.
     max-poll-records: ${KAFKA_MAX_POLL_RECORDS:50}
