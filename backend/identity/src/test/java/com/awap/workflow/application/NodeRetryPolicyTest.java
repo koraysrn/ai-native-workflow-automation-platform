@@ -133,6 +133,13 @@ class NodeRetryPolicyTest {
   }
 
   @Test
+  void validateReturnsNullOrTheReasonWithoutThrowing() throws IOException {
+    assertThat(NodeRetryPolicy.validate(json("{\"maxAttempts\":2}"))).isNull();
+    assertThat(NodeRetryPolicy.validate(json("{\"maxAttempts\":0}")))
+        .contains("maxAttempts must be between");
+  }
+
+  @Test
   void validatesEveryFieldAtDefinitionSaveTime() {
     assertInvalid("[]", "must be a JSON object");
     assertInvalid("{\"maxAttempts\":0}", "maxAttempts");

@@ -292,13 +292,12 @@ public class WorkflowDefinitionService {
         }
         JsonNode retryPolicy = node.path("config").path("retryPolicy");
         if (!retryPolicy.isMissingNode() && !retryPolicy.isNull()) {
-          try {
-            NodeRetryPolicy.fromConfig(retryPolicy);
-          } catch (IllegalArgumentException ex) {
+          String retryPolicyError = NodeRetryPolicy.validate(retryPolicy);
+          if (retryPolicyError != null) {
             throw new AwapException(
                 ErrorCode.VALIDATION_FAILED,
                 HttpStatus.BAD_REQUEST,
-                "Node '" + nodeId + "' has an invalid retryPolicy: " + ex.getMessage());
+                "Node '" + nodeId + "' has an invalid retryPolicy: " + retryPolicyError);
           }
         }
       }

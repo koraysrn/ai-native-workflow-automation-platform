@@ -81,6 +81,20 @@ public final class NodeRetryPolicy {
   }
 
   /**
+   * Validates a configured policy without throwing: returns {@code null} when it is valid, or the
+   * human-readable reason otherwise. The definition save path turns the reason into a 400 instead
+   * of letting an exception escape the transaction.
+   */
+  public static String validate(JsonNode config) {
+    try {
+      fromConfig(config);
+      return null;
+    } catch (IllegalArgumentException ex) {
+      return ex.getMessage();
+    }
+  }
+
+  /**
    * Parses and validates a {@code retryPolicy} object.
    *
    * @throws IllegalArgumentException when the policy is not an object or a value is outside its
