@@ -256,6 +256,10 @@ awap:
     secret: ${WEBHOOK_SECRET:}
     allowed-hosts: ${WEBHOOK_ALLOWED_HOSTS:}
     max-timestamp-skew-ms: ${WEBHOOK_MAX_TIMESTAMP_SKEW_MS:300000}
+    ssrf:
+      # Opt-in exception for receivers that legitimately live on a private network. Empty keeps the
+      # SSRF guard fail-closed; every other target is still blocked on every attempt.
+      trusted-hosts: ${WEBHOOK_SSRF_TRUSTED_HOSTS:}
     retry:
       enabled: ${WEBHOOK_RETRY_ENABLED:true}
       # Attempt budget per delivery (includes the synchronous first attempt, capped at 10).

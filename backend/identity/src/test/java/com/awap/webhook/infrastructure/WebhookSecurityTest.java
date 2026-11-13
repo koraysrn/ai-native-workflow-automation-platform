@@ -57,6 +57,20 @@ class WebhookSecurityTest {
   }
 
   @Test
+  void ssrfGuardAllowsOnlyTheExplicitlyTrustedHost() {
+    // The opt-in exists for receivers that legitimately live on a private network (and for the
+    // local Compose fake webhook); it must not widen to any other loopback/private target.
+    SsrfGuard guard = new SsrfGuard(" fake-webhook , Internal.Example ");
+    guard.assertSafe("http://fake-webhook:9099/webhook");
+    guard.assertSafe("http://internal.example/hook");
+
+    assertThatThrownBy(() -> guard.assertSafe("http://127.0.0.1/hook"))
+        .isInstanceOf(AwapException.class);
+    assertThatThrownBy(() -> guard.assertSafe("http://10.0.0.5/hook"))
+        .isInstanceOf(AwapException.class);
+  }
+
+  @Test
   void ssrfGuardBlocksIpv4MappedIpv6() {
     SsrfGuard guard = new SsrfGuard();
     assertThatThrownBy(() -> guard.assertSafe("http://[::ffff:127.0.0.1]/hook"))

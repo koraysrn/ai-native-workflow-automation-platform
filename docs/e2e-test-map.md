@@ -7,13 +7,15 @@ The suite lives in [`frontend/e2e`](../frontend/e2e) and runs in two modes:
   ignored by [`playwright.config.ts`](../frontend/playwright.config.ts) unless
   `E2E_LIVE_STACK=1`.
 - **Stack mode** (`E2E_LIVE_STACK=1`, the CI `e2e` job): `docker compose` provides Postgres/Kafka,
-  MinIO, ClamAV, the built backend and the frontend; `e2e/global-setup.ts` waits for
-  `GET /actuator/health` and the frontend, then seeds a tenant through `POST /api/v1/tenants`. The
-  job sets `KAFKA_ENABLED=true` so the outbox relay delivers analytics, `CLAMAV_ENABLED=true` for
-  the real scan pipeline, `MINIO_PUBLIC_ENDPOINT=http://localhost:9000` so presigned URLs point at
-  the host-published port, and `FILE_SCAN_INTERVAL_MS=1000` so a scan completes within the test
+  MinIO, ClamAV, the fake webhook, the built backend and the frontend; `e2e/global-setup.ts` waits
+  for `GET /actuator/health` and the frontend, then seeds a tenant through `POST /api/v1/tenants`.
+  The job sets `KAFKA_ENABLED=true` so the outbox relay delivers analytics, `CLAMAV_ENABLED=true`
+  for the real scan pipeline, `MINIO_PUBLIC_ENDPOINT=http://localhost:9000` so presigned URLs point
+  at the host-published port, and `FILE_SCAN_INTERVAL_MS=1000` so a scan completes within the test
   budget. Buckets are created by the `minio-init` provisioner (re-run in the foreground before the
-  suite), so the backend keeps `FILE_MANAGE_BUCKETS=false`.
+  suite), so the backend keeps `FILE_MANAGE_BUCKETS=false`. The in-network `fake-webhook` is the
+  allowlisted and SSRF-trusted target for the combined scenario; its `/control`, `/reset` and
+  `/requests` endpoints are published on port 9099 for assertions.
 
 Both modes use one worker (fixtures stay deterministic) and retry once on CI with traces,
 screenshots and video retained on failure.
@@ -44,6 +46,11 @@ screenshots and video retained on failure.
 | A clean PDF traverses QUARANTINED → SCANNING → CLEAN → PROMOTED (real MinIO + ClamAV), the SSE stream reports every transition and the presigned GET works only after promotion | [`document-scan-real.spec.ts`](../frontend/e2e/document-scan-real.spec.ts) — `clean` | stack |
 | EICAR reaches INFECTED and the download is forbidden (real ClamAV) | `document-scan-real.spec.ts` — `infected` | stack |
 | 500 MB and unsupported formats are rejected with 413/415 and tenant B cannot download tenant A's file | `document-scan-real.spec.ts` — `limits` | stack |
+| DECISION routes to PARALLEL; TASK, WEBHOOK and DELAY all report before MERGE completes; exactly one HMAC-signed webhook request, one completion notification and the completed analytics aggregate exist; a clean PDF is PROMOTED in the same run | [`combined-automation-live.spec.ts`](../frontend/e2e/combined-automation-live.spec.ts) — `combined` | stack |
+| A failed parallel branch prevents MERGE from completing and fails the workflow | `combined-automation-live.spec.ts` — `branch failure` | stack |
+| A webhook that keeps returning 5xx exhausts its attempt budget, reaches DEAD and fails the workflow | `combined-automation-live.spec.ts` — `retry DLQ` | stack |
+| An EICAR upload reaches INFECTED and stays undownloadable | `combined-automation-live.spec.ts` — `infected` | stack |
+| A paused instance does not advance on task approval until it is resumed | `combined-automation-live.spec.ts` — `paused` | stack |
 
 ## Conventions
 

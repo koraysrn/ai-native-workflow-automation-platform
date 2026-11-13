@@ -9,7 +9,13 @@ export default defineConfig({
   testDir: "./e2e",
   ...(liveStack
     ? {}
-    : { testIgnore: ["**/live-journey.spec.ts", "**/document-scan-real.spec.ts"] }),
+    : {
+        testIgnore: [
+          "**/live-journey.spec.ts",
+          "**/document-scan-real.spec.ts",
+          "**/combined-automation-live.spec.ts",
+        ],
+      }),
   fullyParallel: false,
   // One worker keeps the seeded fixtures deterministic; shard only once the suite is stable.
   workers: 1,

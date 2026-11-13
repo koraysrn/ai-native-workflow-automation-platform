@@ -231,6 +231,17 @@ WHERE id = '<delivery-id>' AND status = 'DEAD';
 4. If the target is permanently gone, cancel instead of re-queueing (`status = 'CANCELLED'`) and
    cancel the workflow instance through the API.
 
+### Private-network receivers and the SSRF guard
+
+The SSRF guard is fail-closed: loopback, link-local, site-local and any-local targets are rejected on
+every attempt, even when the outbound allowlist contains the host. A deployment whose receivers
+legitimately live on a private network (for example an internal CRM cluster) can opt those exact
+hostnames in with `WEBHOOK_SSRF_TRUSTED_HOSTS` (`awap.webhook.ssrf.trusted-hosts`, comma separated).
+Only the named hosts skip the private-range check; the allowlist, HMAC signature and per-attempt
+re-check still apply. Keep the value empty in every externally reachable deployment. The local
+Compose stack sets it to `fake-webhook` so the combined E2E scenario can deliver to the in-network
+target.
+
 ### Other operational notes
 
 - Cancelling a workflow instance marks its open deliveries `CANCELLED`; no further attempt is made.
@@ -238,7 +249,8 @@ WHERE id = '<delivery-id>' AND status = 'DEAD';
   cancelled by the scheduler sweep and can be purged with
   `DELETE FROM webhook_deliveries WHERE expires_at < now() - interval '1 day'`.
 - URL, payload, idempotency key and HMAC signing are immutable across retries; SSRF guard and
-  allowlist run on every attempt. Never disable them to "unstick" a delivery.
+  allowlist run on every attempt. Never disable them to "unstick" a delivery; use the narrow
+  `WEBHOOK_SSRF_TRUSTED_HOSTS` opt-in only for a receiver that really is private.
 ## O8 — Notification read state, retention and metrics
 
 In-app notifications are acknowledged through `notification_deliveries.read_at` (single-user per
