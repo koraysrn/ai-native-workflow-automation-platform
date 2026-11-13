@@ -84,6 +84,22 @@ async function login(ctx: APIRequestContext, plan: SeedPlan): Promise<Me> {
   return (await me.json()) as Me;
 }
 
+/** Mirrors the tenant-selection step the UI performs so protected pages know the active tenant. */
+async function activateTenant(
+  context: import("@playwright/test").BrowserContext,
+  me: Me,
+): Promise<void> {
+  await context.addCookies([
+    {
+      name: "awap_tenant",
+      value: me.tenantId,
+      url: BASE_URL,
+      sameSite: "Lax",
+      expires: Math.floor(Date.now() / 1000) + 604_800,
+    },
+  ]);
+}
+
 async function listDocuments(ctx: APIRequestContext, me: Me): Promise<DocumentDto[]> {
   const response = await ctx.get(`${API_URL}/api/v1/documents`, {
     headers: await apiHeaders(ctx, me.tenantId),
@@ -147,6 +163,7 @@ test("a clean PDF traverses QUARANTINED -> SCANNING -> CLEAN -> PROMOTED and onl
   test.setTimeout(300_000);
   const plan = seedPlan(process.env.E2E_SEED_SUFFIX ?? "local");
   const me = await login(context.request, plan);
+  await activateTenant(context, me);
   const name = `clean-${Date.now()}.pdf`;
 
   // Load the page and start recording the real tenant-wide SSE stream before the upload so every
@@ -241,6 +258,7 @@ test("EICAR reaches INFECTED and the download is forbidden", async ({ page, cont
   test.setTimeout(300_000);
   const plan = seedPlan(process.env.E2E_SEED_SUFFIX ?? "local");
   const me = await login(context.request, plan);
+  await activateTenant(context, me);
   const name = `eicar-${Date.now()}.pdf`;
 
   const created = await createSlot(context.request, me, name, "application/pdf", EICAR.length);
