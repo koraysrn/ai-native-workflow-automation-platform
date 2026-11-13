@@ -16,16 +16,22 @@ class NotificationRetryPolicyTest {
     assertThat(policy.delayAfter(1)).isEqualTo(Duration.ofSeconds(1));
     assertThat(policy.delayAfter(2)).isEqualTo(Duration.ofSeconds(5));
     assertThat(policy.delayAfter(3)).isEqualTo(Duration.ofSeconds(25));
-    assertThat(policy.delayAfter(4)).isEqualTo(Duration.ofMinutes(2));
-    assertThat(policy.delayAfter(5)).isEqualTo(Duration.ofMinutes(10));
   }
 
   @Test
-  void isExhaustedAtMaxAttempts() {
-    assertThat(policy.maxAttempts()).isEqualTo(5);
-    assertThat(policy.isExhausted(4)).isFalse();
+  void reusesTheLastDelayForAttemptsBeyondTheConfiguredSequence() {
+    assertThat(policy.delayAfter(4)).isEqualTo(Duration.ofSeconds(25));
+  }
+
+  @Test
+  void isExhaustedAfterTheRetryBudgetIsSpent() {
+    assertThat(policy.maxAttempts()).isEqualTo(3);
+    assertThat(policy.isExhausted(1)).isFalse();
+    assertThat(policy.isExhausted(2)).isFalse();
+    assertThat(policy.isExhausted(3)).isFalse();
+    // The initial attempt plus the three retries all failed: nothing may be scheduled.
+    assertThat(policy.isExhausted(4)).isTrue();
     assertThat(policy.isExhausted(5)).isTrue();
-    assertThat(policy.isExhausted(6)).isTrue();
   }
 
   @Test
@@ -36,8 +42,8 @@ class NotificationRetryPolicyTest {
     Instant next = policy.nextAttemptAt(now, lastAttemptInTheFuture, 1);
 
     assertThat(next).isEqualTo(lastAttemptInTheFuture.plusSeconds(1));
-    assertThat(Duration.between(now, next).isPositive());
-    assertThat(Duration.between(lastAttemptInTheFuture, next).isPositive());
+    assertThat(Duration.between(now, next)).isPositive();
+    assertThat(Duration.between(lastAttemptInTheFuture, next)).isPositive();
   }
 
   @Test
@@ -51,17 +57,34 @@ class NotificationRetryPolicyTest {
   @Test
   void parsesConfiguredDelays() {
     NotificationRetryPolicy parsed =
-        NotificationRetryPolicy.fromCommaSeparated("1000, 5000,25000,120000,600000", 5);
+        NotificationRetryPolicy.fromCommaSeparated("1000, 5000,25000", 3);
 
-    assertThat(parsed.delaysMs()).containsExactly(1_000L, 5_000L, 25_000L, 120_000L, 600_000L);
+    assertThat(parsed.delaysMs()).containsExactly(1_000L, 5_000L, 25_000L);
     assertThat(parsed.delayAfter(3)).isEqualTo(Duration.ofSeconds(25));
   }
 
   @Test
   void rejectsInvalidConfiguration() {
-    assertThatThrownBy(() -> new NotificationRetryPolicy(new long[0], 5))
+    assertThatThrownBy(() -> new NotificationRetryPolicy(new long[0], 3))
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> new NotificationRetryPolicy(new long[] {1_000L}, 0))
         .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> new NotificationRetryPolicy(new long[] {1_000L, 0L}, 3))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("strictly positive");
+    assertThatThrownBy(() -> new NotificationRetryPolicy(new long[] {-1L}, 3))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("strictly positive");
+  }
+
+  @Test
+  void rejectsBlankOrNonNumericDelaySpecs() {
+    assertThatThrownBy(() -> NotificationRetryPolicy.fromCommaSeparated(" ", 3))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> NotificationRetryPolicy.fromCommaSeparated(null, 3))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> NotificationRetryPolicy.fromCommaSeparated("1000,soon", 3))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("comma-separated");
   }
 }
