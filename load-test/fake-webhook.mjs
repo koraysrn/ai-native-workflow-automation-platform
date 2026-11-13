@@ -9,8 +9,12 @@
 // The E2E combined scenario (issue #212) uses the control endpoints to switch the behaviour per
 // test and to assert the exact requests the backend delivered:
 //   GET  /requests        -> every received /webhook request (method, headers, body, status)
-//   POST /control         -> {"failureRate":0,"failureStatus":500}
+//   POST /control         -> {"failureRate":0,"failureStatus":500,"forceFailure":true}
 //   POST /reset           -> clear the request log
+//
+// `failureRate` is the deterministic success rate of the shared load-test model (1 = always
+// succeed, 0.3 = every third request succeeds). `forceFailure` is the explicit "always fail"
+// switch used by the retry/DLQ E2E variant.
 //
 // Latency is intentionally fixed at startup: exposing it through /control would let a caller choose
 // an arbitrary timer duration on this local server.
@@ -21,6 +25,7 @@ const port = Number.parseInt(process.env.PORT ?? "9099", 10);
 const latencyMs = Number.parseInt(process.env.LATENCY_MS ?? "25", 10);
 let failureRate = Number.parseFloat(process.env.FAILURE_RATE ?? "0.3");
 let failureStatus = Number.parseInt(process.env.FAILURE_STATUS ?? "500", 10);
+let forceFailure = false;
 const retryAfterSeconds = Number.parseInt(process.env.RETRY_AFTER_SECONDS ?? "1", 10);
 
 let counter = 0;
@@ -43,7 +48,7 @@ function readBody(request) {
 
 const server = http.createServer(async (request, response) => {
   if (request.method === "GET" && request.url === "/health") {
-    json(response, 200, { status: "UP", failureRate, failureStatus, latencyMs });
+    json(response, 200, { status: "UP", failureRate, failureStatus, forceFailure, latencyMs });
     return;
   }
 
@@ -68,7 +73,10 @@ const server = http.createServer(async (request, response) => {
       if (Number.isFinite(overrides.failureStatus)) {
         failureStatus = Number(overrides.failureStatus);
       }
-      json(response, 200, { failureRate, failureStatus, latencyMs });
+      if (typeof overrides.forceFailure === "boolean") {
+        forceFailure = overrides.forceFailure;
+      }
+      json(response, 200, { failureRate, failureStatus, forceFailure, latencyMs });
     } catch {
       json(response, 400, { error: "invalid control payload" });
     }
@@ -82,7 +90,7 @@ const server = http.createServer(async (request, response) => {
 
   const body = await readBody(request);
   counter += 1;
-  const fail = shouldFail(counter, failureRate);
+  const fail = forceFailure || shouldFail(counter, failureRate);
   const status = fail ? failureStatus : 200;
   const headers = { "Content-Type": "application/json" };
   if (status === 429) {
