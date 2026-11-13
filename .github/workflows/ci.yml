@@ -291,14 +291,19 @@ jobs:
         working-directory: frontend
       - name: Start Compose stack
         env:
-          # Issue #189: run the suite against the one-command full stack, but keep the optional
-          # integrations that this suite does not assert disabled so the run stays deterministic.
+          # Issue #189: run the suite against the one-command full stack.
+          # Issue #209: the document scan journey needs the real MinIO and ClamAV services, a fast
+          # scanner tick and a host-reachable presigned endpoint. Buckets are provisioned by
+          # minio-init (the same provisioners production uses), so the backend must not try to
+          # re-create them; the single-IP suite also needs the auth rate limit lifted.
           KAFKA_ENABLED: "true"
-          CLAMAV_ENABLED: "false"
+          CLAMAV_ENABLED: "true"
           AI_NODE_ENABLED: "false"
           OPENSEARCH_ENABLED: "false"
           FILE_MANAGE_BUCKETS: "false"
-          FILE_SCAN_INTERVAL_MS: "3600000"
+          FILE_SCAN_INTERVAL_MS: "1000"
+          MINIO_PUBLIC_ENDPOINT: "http://localhost:9000"
+          AUTH_RATE_LIMIT_ENABLED: "false"
           OUTBOX_RELAY_INTERVAL_MS: "1000"
           OUTBOX_RELAY_INITIAL_DELAY_MS: "1000"
         run: docker compose -f infra/docker-compose.yml --profile full up -d --build
@@ -313,6 +318,24 @@ jobs:
           done
           docker compose -f infra/docker-compose.yml logs --tail=200 backend
           exit 1
+      - name: Wait for MinIO and ClamAV
+        # Issue #209: a real scan must never run against a half-started service. ClamAV downloads
+        # its signature database on first start, so allow a bounded but generous budget.
+        run: |
+          for attempt in $(seq 1 120); do
+            if curl -fsS http://localhost:9000/minio/health/live >/dev/null \
+              && docker compose -f infra/docker-compose.yml exec -T clamav clamdcheck.sh >/dev/null 2>&1; then
+              echo "MinIO and ClamAV ready after $attempt attempt(s)."
+              exit 0
+            fi
+            sleep 5
+          done
+          docker compose -f infra/docker-compose.yml logs --tail=300 minio clamav
+          exit 1
+      - name: Provision MinIO buckets
+        # Re-run the idempotent provisioner in the foreground: `up -d` does not fail when the
+        # one-shot init container errors, and an absent bucket would surface only as a 404 PUT.
+        run: docker compose -f infra/docker-compose.yml run --rm --no-deps minio-init
       - name: Wait for frontend
         run: |
           for attempt in $(seq 1 60); do
@@ -359,7 +382,9 @@ jobs:
           retention-days: 14
       - name: Dump Compose logs on failure
         if: failure()
-        run: docker compose -f infra/docker-compose.yml logs --tail=2000 backend kafka
+        run: >-
+          docker compose -f infra/docker-compose.yml logs --tail=2000
+          backend kafka minio minio-init clamav
       - name: Stop Compose stack
         if: always()
         run: docker compose -f infra/docker-compose.yml down -v

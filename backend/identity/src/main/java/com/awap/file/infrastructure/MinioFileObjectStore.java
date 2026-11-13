@@ -45,9 +45,15 @@ public class MinioFileObjectStore implements FileObjectStore {
   private static final Logger log = LoggerFactory.getLogger(MinioFileObjectStore.class);
 
   private final MinioClient minioClient;
+  private final MinioClient presignClient;
 
-  public MinioFileObjectStore(MinioClient minioClient) {
+  public MinioFileObjectStore(
+      @org.springframework.beans.factory.annotation.Qualifier("minioClient")
+          MinioClient minioClient,
+      @org.springframework.beans.factory.annotation.Qualifier("minioPresignClient")
+          MinioClient presignClient) {
     this.minioClient = minioClient;
+    this.presignClient = presignClient;
   }
 
   @Override
@@ -168,7 +174,7 @@ public class MinioFileObjectStore implements FileObjectStore {
 
   private String presign(String bucket, String objectKey, Duration ttl, Method method) {
     try {
-      return minioClient.getPresignedObjectUrl(
+      return presignClient.getPresignedObjectUrl(
           GetPresignedObjectUrlArgs.builder()
               .method(method)
               .bucket(bucket)

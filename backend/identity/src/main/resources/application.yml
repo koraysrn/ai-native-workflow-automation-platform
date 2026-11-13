@@ -275,6 +275,8 @@ awap:
     timeout-ms: ${CLAMAV_TIMEOUT_MS:10000}
   minio:
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
+    # Browser-facing endpoint used only for presigned URLs (Compose: http://localhost:9000).
+    public-endpoint: ${MINIO_PUBLIC_ENDPOINT:}
     access-key: ${MINIO_ACCESS_KEY:awapadmin}
     secret-key: ${MINIO_SECRET_KEY:awapadmin123}
     # MinIO's default region; pinning it lets presigned URLs be generated without a bucket
