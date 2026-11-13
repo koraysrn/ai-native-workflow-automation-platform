@@ -30,8 +30,9 @@ public class DlqMetrics {
       MeterRegistry meterRegistry,
       @Value(
               "${awap.kafka.dlq-known-topics:workflow.task.events,workflow.instance.events,"
-                  + "workflow.subprocess.events,task.escalation.events,analytics.events,"
-                  + "document.events,notification.send,notification.requested.events}")
+                  + "workflow.subprocess.events,workflow.saga.events,workflow.node.dlq,"
+                  + "task.escalation.events,analytics.events,document.events,notification.send,"
+                  + "notification.requested.events}")
           String knownTopics) {
     this.meterRegistry = meterRegistry;
     this.knownSourceTopics = parseKnownTopics(knownTopics);

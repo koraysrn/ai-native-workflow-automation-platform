@@ -51,6 +51,24 @@ class WorkflowDefinitionServiceNegativeTest {
   }
 
   @Test
+  void rejectsAnInvalidNodeRetryPolicy() {
+    assertInvalid(
+        "{\"nodes\":[{\"id\":\"a\",\"type\":\"TASK\","
+            + "\"config\":{\"retryPolicy\":{\"maxAttempts\":0}}},"
+            + "{\"id\":\"b\",\"type\":\"END\"}],"
+            + "\"transitions\":[{\"from\":\"a\",\"to\":\"b\"}]}");
+  }
+
+  @Test
+  void rejectsAnInvalidRetryPolicyDelay() {
+    assertInvalid(
+        "{\"nodes\":[{\"id\":\"a\",\"type\":\"WEBHOOK\","
+            + "\"config\":{\"retryPolicy\":{\"delaysMs\":[0]}}},"
+            + "{\"id\":\"b\",\"type\":\"END\"}],"
+            + "\"transitions\":[{\"from\":\"a\",\"to\":\"b\"}]}");
+  }
+
+  @Test
   void rejectsMissingNodes() {
     assertInvalid("{\"transitions\":[]}");
   }

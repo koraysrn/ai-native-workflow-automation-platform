@@ -93,6 +93,28 @@ final class NodeConfigReader {
     return readLong(node, "retryBackoffMs", 1000);
   }
 
+  /**
+   * Reads the node's generic {@code config.retryPolicy} block (issue #210). Nodes without one keep
+   * the legacy top-level {@code maxAttempts}/{@code retryBackoffMs} behaviour. A malformed block
+   * cannot reach the engine because the definition service validates it at save time; if it does
+   * (tampered row), the node fails permanently instead of retrying with an unknown policy.
+   */
+  com.awap.workflow.domain.NodeRetryPolicy readRetryPolicy(NodeDefinition node) {
+    JsonNode policy = readConfig(node).get("retryPolicy");
+    if (policy == null || policy.isNull()) {
+      return com.awap.workflow.domain.NodeRetryPolicy.legacy(
+          readMaxAttempts(node), readRetryBackoffMs(node));
+    }
+    try {
+      return com.awap.workflow.domain.NodeRetryPolicy.fromConfig(policy);
+    } catch (IllegalArgumentException ex) {
+      throw new AwapException(
+          ErrorCode.WORKFLOW_INVALID_DEFINITION,
+          HttpStatus.BAD_REQUEST,
+          "Node '" + node.getNodeId() + "' has an invalid retryPolicy: " + ex.getMessage());
+    }
+  }
+
   String readSubProcessDefinitionId(NodeDefinition node) {
     return readText(node, "workflowDefinitionId").orElse(null);
   }

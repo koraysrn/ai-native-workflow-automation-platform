@@ -269,6 +269,8 @@ public class OutboxRelayService {
       case "FORM_SUBMITTED" -> "workflow.instance.events";
       case "WORKFLOW_INSTANCE_STATE" -> "workflow.instance.events";
       case "SUB_PROCESS_COMPLETED" -> "workflow.subprocess.events";
+      // Issue #210: exhausted/permanently failed node retries go to the node DLQ.
+      case "NODE_DLQ" -> "workflow.node.dlq";
       case "NOTIFICATION_REQUESTED" -> "notification.send";
       // Issue #205: an exhausted or permanently failed delivery goes to its own dead-letter
       // topic, which the anchored *.dlq subscription already consumes. Before this mapping both

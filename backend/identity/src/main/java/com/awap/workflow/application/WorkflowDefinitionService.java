@@ -4,6 +4,7 @@ import com.awap.common.api.AwapException;
 import com.awap.common.api.ErrorCode;
 import com.awap.identity.application.QuotaService;
 import com.awap.workflow.domain.NodeDefinition;
+import com.awap.workflow.domain.NodeRetryPolicy;
 import com.awap.workflow.domain.NodeType;
 import com.awap.workflow.domain.TransitionDefinition;
 import com.awap.workflow.domain.WorkflowDefinition;
@@ -288,6 +289,17 @@ public class WorkflowDefinitionService {
         String condition = node.path("condition").asText(null);
         if (condition != null) {
           spelExpressionService.validate(condition);
+        }
+        JsonNode retryPolicy = node.path("config").path("retryPolicy");
+        if (!retryPolicy.isMissingNode() && !retryPolicy.isNull()) {
+          try {
+            NodeRetryPolicy.fromConfig(retryPolicy);
+          } catch (IllegalArgumentException ex) {
+            throw new AwapException(
+                ErrorCode.VALIDATION_FAILED,
+                HttpStatus.BAD_REQUEST,
+                "Node '" + nodeId + "' has an invalid retryPolicy: " + ex.getMessage());
+          }
         }
       }
 
