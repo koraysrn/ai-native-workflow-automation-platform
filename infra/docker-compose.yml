@@ -447,9 +447,10 @@ services:
       CLAMAV_HOST: clamav
       CLAMAV_PORT: "3310"
       AI_NODE_ENABLED: ${AI_NODE_ENABLED:-true}
-      # The full local profile starts the AI layer, so the backend health check must exercise it.
-      # `make up-minimal` and deployments without the service set this to false explicitly.
-      AI_LAYER_ENABLED: ${AI_LAYER_ENABLED:-true}
+      # The AI layer service only exists in the `full` profile, so the backend keeps the indicator
+      # off unless the profile (or the E2E job) enables it explicitly. This keeps stacks that start
+      # the backend without the AI layer healthy.
+      AI_LAYER_ENABLED: ${AI_LAYER_ENABLED:-false}
       AI_LAYER_URL: ${AI_LAYER_URL:-http://ai-layer:8000}
       OPENSEARCH_ENABLED: ${OPENSEARCH_ENABLED:-true}
       OPENSEARCH_ENDPOINT: ${OPENSEARCH_ENDPOINT:-http://opensearch:9200}

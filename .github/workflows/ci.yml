@@ -299,6 +299,9 @@ jobs:
           KAFKA_ENABLED: "true"
           CLAMAV_ENABLED: "true"
           AI_NODE_ENABLED: "false"
+          # Issue #213: the full profile runs the AI layer, so the backend must health-check it.
+          AI_LAYER_ENABLED: "true"
+          HEALTH_SHOW_DETAILS: "always"
           OPENSEARCH_ENABLED: "false"
           FILE_MANAGE_BUCKETS: "false"
           FILE_SCAN_INTERVAL_MS: "1000"
