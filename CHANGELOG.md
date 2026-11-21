@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0](https://github.com/koraysrn/ai-native-workflow-automation-platform/compare/v1.5.0...v1.6.0) (2026-11-21)
+
+
+### Features
+
+* **auth:** implement phase 2 onboarding, sign-in and tenant flows ([#347](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/347)) ([e2f98ff](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/e2f98ffa7d9b7394fa4a9bf9e63f4956f8b108b2))
+* **documents:** implement phase 7 documents, notifications and templates ([#353](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/353)) ([a9c2705](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/a9c27051dc42283b2194587830d3aca50e76145a))
+* **forms:** implement phase 6 form builder and form filling ([#352](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/352)) ([42e92cd](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/42e92cd5cbe3a13b90b6ea1ea42438d2ef2d2c05))
+* **instances:** implement phase 4 workflow catalogue and instance monitor ([#350](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/350)) ([ec082b1](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/ec082b1e0947b7b05e3cb34c203e47a1891e433c))
+* **tasks:** implement phase 3 work item inbox and 360 detail ([#348](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/348)) ([3f854ed](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/3f854edac40e214f9c4850b2842dffa46566271f))
+* **ui:** implement phase 0 stabilization, CSP hardening and measurement gates ([#344](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/344)) ([6f90cb5](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/6f90cb52958b19d0e9355bfca69069b9ac23936a))
+* **ui:** implement phase 1 design system and app shell ([#346](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/346)) ([02e55a9](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/02e55a9913c87196847e1e6ac1ed4e760905d7e8))
+* **workflows:** implement phase 5 designer parity and workflow creation ([#351](https://github.com/koraysrn/ai-native-workflow-automation-platform/issues/351)) ([028f8c3](https://github.com/koraysrn/ai-native-workflow-automation-platform/commit/028f8c32aa3d06eb0dd33f5dd11e8db135dd8d7a))
+
 ## [1.5.0](https://github.com/koraysrn/ai-native-workflow-automation-platform/compare/v1.4.0...v1.5.0) (2026-11-17)
 
 
